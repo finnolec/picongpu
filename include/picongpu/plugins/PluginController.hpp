@@ -61,8 +61,6 @@
 #    include "picongpu/plugins/IsaacPlugin.hpp"
 #endif
 
-#   include "picongpu/plugins/radiation/TransitionRadiation.hpp"
-
 #if (ENABLE_HDF5 == 1)
 #   include "picongpu/plugins/PhaseSpace/PhaseSpace.hpp"
 #   include "picongpu/plugins/particleCalorimeter/ParticleCalorimeter.hpp"
@@ -70,6 +68,8 @@
 #   include "picongpu/plugins/radiation/Radiation.hpp"
 #   include "picongpu/plugins/hdf5/HDF5Writer.hpp"
 #endif
+
+#include "picongpu/plugins/radiation/TransitionRadiation.hpp"
 
 #include "picongpu/plugins/Checkpoint.hpp"
 #include "picongpu/plugins/ResourceLog.hpp"
