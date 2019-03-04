@@ -61,6 +61,8 @@
 #    include "picongpu/plugins/IsaacPlugin.hpp"
 #endif
 
+#   include "picongpu/plugins/radiation/TransitionRadiation.hpp"
+
 #if (ENABLE_HDF5 == 1)
 #   include "picongpu/plugins/PhaseSpace/PhaseSpace.hpp"
 #   include "picongpu/plugins/particleCalorimeter/ParticleCalorimeter.hpp"
@@ -209,6 +211,7 @@ private:
 
     /* define species plugins */
     using UnspecializedSpeciesPlugins = bmpl::vector <
+        TransitionRadiation<bmpl::_1>,
         plugins::multi::Master< EnergyParticles<bmpl::_1> >,
         plugins::multi::Master< BinEnergyParticles<bmpl::_1> >,
         CountParticles<bmpl::_1>,
