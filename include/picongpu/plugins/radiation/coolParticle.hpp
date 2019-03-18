@@ -7,7 +7,7 @@ namespace picongpu
 {
     class CoolParticle
     {
-        private:
+        public:
         const vector_X momentum;
         const vector_X location;
         const picongpu::float_X charge;
@@ -25,7 +25,8 @@ namespace picongpu
             momentum(momentum_set),
             charge(charge_set),
             mass(mass_set)
-        { }
+        { 
+        }
 
         HDINLINE 
         vector_64 getMomentum(void) const
@@ -38,48 +39,25 @@ namespace picongpu
         picongpu::float_64 getU(void) const
         {
             // returns normalized momentum
-            return calc_u(getMomentum());
+            return calcU(getMomentum());
         }
 
         HDINLINE 
         picongpu::float_64 getV(void) const
         {
             // return velocity
-            return calc_velocity(getMomentum());
-        }
-
-        HDINLINE
-        picongpu::float_64 getMomPhi(void) const
-        {
-            // returns polar angle phi of velocity
-        }
-
-        HDINLINE
-        picongpu::float_64 getMomTheta(void) const
-        {
-            // returns azimuth angle theta of velocity
-            return calcMomTheta(getMomentum());
-        }
-
-        private:
-        HDINLINE 
-        picongpu::float_64 calcU(const vector_X& momentum) const
-        {
-            //returns normalized momentum u = gama * beta
-            const picongpu::float_32 gamma1 = calcGamma(momentum);
-            const picongpu::float_32 beta1 = calcBeta(momentum);
-            return gamma1 * beta1;
+            return calcVelocity(getMomentum());
         }
 
         HDINLINE 
         picongpu::float_64 calcGamma(const vector_X& momentum) const
         {
             //returns lorentz factor gamma = sqrt(1/(1-beta**2))
-            const picongpu::float_32 betaSquared = util::square<
-                vector_X, 
-                picongpu::float_32 
+            const picongpu::float_64 betaSquared = util::square<
+                picongpu::float_64, 
+                picongpu::float_64 
             > (calcBeta(momentum));
-            return sqrt( 1.0 / ( 1 - betaSquared ));
+            return picongpu::math::sqrt( 1.0 / ( 1 - betaSquared ));
         }
 
         HDINLINE 
@@ -96,22 +74,58 @@ namespace picongpu
             return std::sqrt(momentum * momentum) * (1.0 / mass);
         }
 
-        HDINLINE
-        picongpu::float_64 calcMomTheta(const vector_X& momentum) const
+        HDINLINE 
+        picongpu::float_64 calcU(const vector_X& momentum) const
         {
-            // returns azimuth angle between momentum and y-axis
-            uY = calcU(momentum.y());
-            uAbs = std::sqrt(calcU(momentum) * calcU(momentum));
-            return std::acos(uY * (1.0 / uAbs));
+            //returns normalized momentum u = gama * beta
+            const picongpu::float_64 gamma1 = calcGamma(momentum);
+            const picongpu::float_64 beta1 = calcBeta(momentum);
+            return gamma1 * beta1;
+        }
+
+        // Getters for Momentum in spherical coordinates
+        HDINLINE
+        picongpu::float_64 getMomPhi(void) const
+        {
+            //return polar angle phi of momentum
+            return calcMomPhi();
         }
 
         HDINLINE
-        picongpu::float_64 calcMomPhi(const vector_X& momentum) const
+        picongpu::float_64 getMomTheta(void) const
         {
-            // returns polar angle on perpendicular plane
-            uX = calcU(momentum.x());
-            uY = calcU(momentum.y());
-            return std::atan2(uY, uX) + picongpu::PI;
+            //return azimuth angle psi of momentum
+            return calcMomTheta();
+        }
+
+        HDINLINE
+        picongpu::float_64 getMomAbs(void) const
+        {
+            //return absolute value of momentum
+            return calcMomAbs();
+        }
+
+        private:
+        // Calculators for Momentum in spherical coordinates
+        HDINLINE
+        picongpu::float_64 calcMomPhi(void) const
+        {
+            //return polar angle phi of momentum
+            return picongpu::math::atan2(momentum.z(), momentum.x()) + picongpu::PI;
+        }
+
+        HDINLINE
+        picongpu::float_64 calcMomTheta(void) const
+        {
+            //return azimuth angle psi of momentum
+            return picongpu::math::acos(momentum.y() * (1.0 / getMomAbs()));
+        }
+
+        HDINLINE
+        picongpu::float_64 calcMomAbs(void) const
+        {
+            //return absolute value of momentum
+            return picongpu::math::sqrt(momentum * momentum);
         }
     }; // class CoolParticle
 } // namespace picongpu

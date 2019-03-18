@@ -7,63 +7,84 @@ namespace picongpu
     class TransRadCalculator
     {
         private:
-        const Particle& particle;
-        const picongpu::float_64 detectorPhi;
-        const picongpu::float_64 detectorTheta;
-
-        const picongpu::float_64 parMomSinTheta;
-        const picongpu::float_64 parMomCosTheta;
-        const picongpu::float_64 parMomSinPhi;
-        const picongpu::float_64 parMomCosPhi;
-        const picongpu::float_64 parSqrtOnePlusUSquared;
-
-        const picongpu::float_64 detSinTheta;
-        const picongpu::float_64 detCosTheta;
+        const CoolParticle& particle;
+        const vector_64 lookDirection;
 
         public: 
         HDINLINE
         TransRadCalculator(
-            const CoolParticcle& particle_set,
+            const CoolParticle& particle_set,
             const vector_64 lookDirection
         ) : 
-            particle(particle_set)
+            particle(particle_set),
+            lookDirection(lookDirection)
         { 
-            const lookPhi = std::acos( lookDirection.y() )
-            const lookTheta = atan2( lookDirection.y(), lookDirection.x() ) + picongpu::PI;
-            const parMomSinTheta = std::sin( particle.getMomTheta() );
-            const parMomCosTheta = std::cos( particle.getMomTheta() );
-            const parMomSinPhi = std::sin( particle.getMomPhi() );
-            const parMomCosPhi = std::cos( particle.getMomPhi() );
-            const parSqrtOnePlusUSquared = std::sqrt( 1 + util::square<picongpu::float_32>(particle.getU()) );
-            const lookSinTheta = std::sin( lookTheta );
-            const lookCosTheta = std::cos( lookTheta );
         }
 
         HDINLINE 
-        picongpu::float_64 calcEPerp(void)
+        picongpu::float_64 calcEPerp(void) const
         {
+            // sine and cosine calculations for spherical momentum coordinates from Particle
+            picongpu::float_64 parMomCosTheta;
+            picongpu::float_64 parMomSinTheta;
+            picongpu::math::sincos( particle.getMomTheta(), parMomSinTheta, parMomCosTheta );
+            
+            picongpu::float_64 parMomSinPhi;
+            picongpu::float_64 parMomCosPhi;
+            picongpu::math::sincos(particle.getMomPhi(), parMomSinPhi, parMomCosPhi);
+
+            const picongpu::float_64 parSqrtOnePlusUSquared = picongpu::math::sqrt( 1 + util::square<picongpu::float_32>(particle.getU()) );
+
+            // sine and cosine for detector position
+            const picongpu::float_64 detectorTheta = picongpu::math::atan2( lookDirection.y(), lookDirection.x() ) + picongpu::PI;
+            picongpu::float_64 detectorSinTheta;
+            picongpu::float_64 detectorCosTheta;
+            picongpu::math::sincos(detectorTheta, detectorSinTheta, detectorCosTheta);
+
             const picongpu::float_64 uSquared = util::square<picongpu::float_64> ( particle.getU() );
-            return uSquared * parMomCosTheta * parMomSinTheta * parMomSinPhi * lookCosTheta * (1.0 / calcDenominator);
+
+            // Denominator
+            const picongpu::float_64 x = parSqrtOnePlusUSquared - particle.getU() * parMomSinPhi * parMomCosPhi * detectorSinTheta;
+            const picongpu::float_64 y = particle.getU() * parMomSinTheta * detectorCosTheta;
+            const picongpu::float_64 xSquared = util::square<picongpu::float_64> ( x );
+
+            const picongpu::float_64 denominator = xSquared - y;
+
+            return uSquared * parMomCosTheta * parMomSinTheta * parMomSinPhi * detectorCosTheta * (1.0 / denominator);
         }
 
         HDINLINE
-        picongpu::float_64 calcEPara(void)
+        picongpu::float_64 calcEPara(void) const
         {
+            // sine and cosine calculations for spherical momentum coordinates from Particle
+            picongpu::float_64 parMomSinTheta;
+            picongpu::float_64 parMomCosTheta;
+            picongpu::math::sincos( particle.getMomTheta(), parMomSinTheta, parMomCosTheta );
+
+            picongpu::float_64 parMomSinPhi;
+            picongpu::float_64 parMomCosPhi;
+            picongpu::math::sincos( particle.getMomPhi(), parMomSinPhi, parMomCosPhi );
+
+            const picongpu::float_64 parSqrtOnePlusUSquared = picongpu::math::sqrt( 1 + util::square<picongpu::float_32>(particle.getU()) );
+        
+            // sine and cosine for detector position
+            const picongpu::float_64 detectorTheta = picongpu::math::atan2( lookDirection.y(), lookDirection.x() ) + picongpu::PI;
+            picongpu::float_64 detectorSinTheta;
+            picongpu::float_64 detectorCosTheta;
+            picongpu::math::sincos( detectorTheta, detectorSinTheta, detectorCosTheta );
+
             const picongpu::float_64 a = particle.getU() * parMomCosTheta;
             const picongpu::float_64 b = particle.getU() * parMomSinTheta * parMomCosPhi;
-            const picongpu::float_64 c = parSqrtOnePlusUSquared * detSinTheta;
-            return a * ( b - c ) / calcDenominator;
-        }
+            const picongpu::float_64 c = picongpu::math::sqrt( 1 + util::square<picongpu::float_32>(particle.getU()) ) * detectorSinTheta;
 
-        private:
-
-        HDINLINE
-        picongpu::float_64 calcDenominator(void)
-        {
-            const picongpu::float_64 x = parSqrtOnePlusUSquared - particle.getU() * parMomSinPhi * parMomCosPhi * lookSinTheta;
-            const picongpu::float_64 y = particle.getU() * parMomSinTheta * lookCosTheta;
+            // Denominator
+            const picongpu::float_64 x = parSqrtOnePlusUSquared - particle.getU() * parMomSinPhi * parMomCosPhi * detectorSinTheta;
+            const picongpu::float_64 y = particle.getU() * parMomSinTheta * detectorCosTheta;
             const picongpu::float_64 xSquared = util::square<picongpu::float_64> ( x );
-            return xSquared - y;
+
+            const picongpu::float_64 denominator = xSquared - y;
+
+            return a * ( b - c ) * (1.0 / denominator);
         }
-    }
+    };
 }

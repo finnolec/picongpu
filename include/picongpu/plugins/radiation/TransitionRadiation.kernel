@@ -1,7 +1,13 @@
 #pragma once
 
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+
 #include "picongpu/simulation_defines.hpp"
 #include "picongpu/plugins/radiation/coolParticle.hpp"
+#include "picongpu/plugins/radiation/transRadCalculator.hpp"
 
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
@@ -24,8 +30,6 @@ namespace picongpu
             T_Acc const & acc,
             ParBox pb,
             DBox incTransRad,
-            DBox cohTransRadPara,
-            DBox cohTransRadPerp,
             DBox numParticles,
             DataSpace<simDim> globalOffset,
             Mapping mapper,
@@ -42,8 +46,6 @@ namespace picongpu
             using FrameType = typename ParBox::FrameType;
             using FramePtr = typename ParBox::FramePtr;
 
-            using namespace parameters;
-
             uint32_t const workerIdx = threadIdx.x;
 
             /// calculate radiated Amplitude
@@ -58,17 +60,21 @@ namespace picongpu
             constexpr int blockSize = pmacc::math::CT::volume<SuperCellSize>::type::value;
 
             // perpendicular part of normalized energy
-            PMACC_SMEM( acc, energy_perp_s, memory::Array< vector_64, blockSize > );
+            PMACC_SMEM( acc, energy_perp_s, memory::Array<picongpu::float_32, blockSize > );
 
             // parallel part of normalized energy
-            PMACC_SMEM( acc, energy_para_s, memory::Array<vector_64, blockSize> );
-
-            // formfactor for coherent transition radiation
-            PMACC_SMEM( acc, formfactor_s, memory::Array<vector_64, blockSize> );
+            PMACC_SMEM( acc, energy_para_s, memory::Array<picongpu::float_32, blockSize> );
 
             // amount of particles
-            PMACC_SMEM( acc, num_s, memory::Array< vector_64, blockSize > );
+            PMACC_SMEM( acc, num_s, memory::Array< picongpu::float_32, blockSize > );
+            // storage for macro particle weighting needed if
+            // the coherent and incoherent radiation of a single
+            // macro-particle needs to be considered
+            PMACC_SMEM( acc, radWeighting_s, memory::Array< float_X, blockSize > );
 
+
+            PMACC_SMEM( acc, counter_s, int );
+ 
 
             int const theta_idx = blockIdx.x; //blockIdx.x is used to determine theta
 
@@ -145,6 +151,7 @@ namespace picongpu
                             uint32_t const
                         )
                         {
+                            counter_s = 0;
                         }
                     );
 
@@ -169,7 +176,7 @@ namespace picongpu
                             {
                                 auto par = frame[ linearIdx ];
                                 // get particle momenta
-                                vector_X const particle_momentum = vector_X( par[momentum_] );
+                                vector_32 const particle_momentum = vector_32( par[momentum_] );
                                 /* initializes "saveParticleAt" flag with -1
                                 * because "counter_s" will never be -1
                                 * therefore, if a particle is saved, a value of counter
@@ -177,10 +184,11 @@ namespace picongpu
                                 * THIS IS ACTUALLY ONLY NEEDED IF: the radiation flag was set
                                 * LATER: can this be optimized?
                                 */
+
                                 int saveParticleAt = -1;
 
                                 // only moving particles create transition radiation
-                                if( particle_momentum <= 0)
+                                if( (particle_momentum*particle_momentum) > 0.0)
                                 {
                                     if( getRadiationMask(par) )
                                         saveParticleAt = nvidia::atomicAllInc(
@@ -188,6 +196,7 @@ namespace picongpu
                                             &counter_s,
                                             ::alpaka::hierarchy::Threads{}
                                         );
+
 
                                     /* for information:
                                     *   atomicAdd returns an int with the previous
@@ -212,7 +221,7 @@ namespace picongpu
                                         );
 
                                         // add global position of cell with local position of particle in cell
-                                        vector_X particle_location;
+                                        vector_32 particle_location;
                                         // set z component to zero in case of simDim==DIM2
                                         particle_location[ 2 ] = 0.0;
                                         // run over all components and compute gobal position
@@ -225,19 +234,22 @@ namespace picongpu
                                             * the weighting is the number of real particles described
                                             * by a macro-particle
                                             */
-                                        float_X const weighting = par[ weighting_ ];
+                                        float_32 const weighting = par[ weighting_ ];
+                                        radWeighting_s[ saveParticleAt ] = weighting;
 
                                         // charge of macro-particle
-                                        float_X const particle_charge = attribute::getCharge(
+                                        float_32 const particle_mass = attribute::getMass(
                                             weighting,
                                             par
                                         );
 
                                         // mass of macro-particle
-                                        float_X const particle_charge = attribute::getCharge(
+                                        float_32 const particle_charge = attribute::getCharge(
                                             weighting,
                                             par
                                         );
+
+                                        printf("%f \t %f \t %f \n", weighting, particle_mass, particle_charge);
 
                                         // using transition radiation particle class
                                         CoolParticle const particle(
@@ -247,7 +259,7 @@ namespace picongpu
                                             particle_mass
                                         );
 
-                                        TransRadCalculator calculator =  TransRadCalculator(
+                                        TransRadCalculator const calculator =  TransRadCalculator(
                                             particle,
                                             look
                                         );
@@ -255,11 +267,35 @@ namespace picongpu
                                         energy_perp_s[ saveParticleAt ] = calculator.calcEPerp();
 
                                         energy_para_s[ saveParticleAt ] = calculator.calcEPara();
+
+                                        num_s[saveParticleAt] = weighting;
                                     }
                                 } // only moving particles
                             } // only threads with particle
                         } 
                     ); // for each particle
+                    __syncthreads();
+
+                    // run over all  valid omegas for this thread
+                    for( int o = workerIdx; o < radiation_frequencies::N_omega; o += T_numWorkers )
+                    {
+                        picongpu::float_32 itrSum;
+                        picongpu::float_32 numParticlesAsdf;
+
+                        itrSum = 0.0;
+                        numParticlesAsdf = 0.0;
+ 
+                        for( int j = 0; j < counter_s; ++j )
+                        {
+                            itrSum += energy_perp_s[j] * energy_perp_s[j] + energy_para_s[j] * energy_para_s[j];
+                            numParticlesAsdf += num_s[j];
+                        }
+
+                        const int index = theta_idx * radiation_frequencies::N_omega + o;
+                        incTransRad[ index ] += itrSum;
+                        numParticles[ index ] += numParticlesAsdf;
+                    }
+
                     __syncthreads();
 
                     /* First threads starts loading next frame of the super-cell:
@@ -271,7 +307,7 @@ namespace picongpu
                     particlesInFrame = frameSize;
                     frame = pb.getPreviousFrame( frame );
                 } // while frame is valid
-            } // for all supercells
+            } // for all supercells 
         }
-    } // struct KernelTransRad
+    }; // struct KernelTransRad
 } // namespace picongpu

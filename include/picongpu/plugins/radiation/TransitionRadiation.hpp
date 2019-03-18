@@ -40,16 +40,18 @@ private:
 
     typedef PIConGPUVerboseRadiation radLog;
 
-    GridBuffer<picongpu::float_64, DIM1> *radiation;
     GridBuffer<picongpu::float_64, DIM1> *incTransRad;
-    GridBuffer<picongpu::float_64, DIM1> *cohTransRadPerp;
-    GridBuffer<picongpu::float_64, DIM1> *cohTransRadPara;
+    GridBuffer<picongpu::float_64, DIM1> *numParticles;
 
     radiation_frequencies::InitFreqFunctor freqInit;
     radiation_frequencies::FreqFunctor freqFkt;
 
+    picongpu::float_64 *tmp_result;
+    picongpu::float_64* theTransRad; 
     MappingDesc *cellDescription;
     std::string notifyPeriod;
+    uint32_t timeStep;
+    uint32_t potatoSalad;
 
     std::string speciesName;
     std::string pluginName;
@@ -62,6 +64,10 @@ private:
     float_64* detectorFrequencies;
 
     bool isMaster;
+    uint32_t currentStep;
+
+
+    mpi::MPIReduce reduce;
 
     bool debug;
 
@@ -71,18 +77,18 @@ public:
     pluginName("TransitionRadiation: calculate transition radiation of species"),
     speciesName(ParticlesType::FrameType::getName()),
     pluginPrefix(speciesName + std::string("_transRad")),
+    folderTransRad("transRad"),
     filename_prefix(pluginPrefix),
-    radiation(nullptr),
+    incTransRad(nullptr),
+    numParticles(nullptr),
     cellDescription(nullptr),
-    totalRad(false),
-    timeSumArray(nullptr),
     tmp_result(nullptr),
+    theTransRad(nullptr),
     detectorPositions(nullptr),
     detectorFrequencies(nullptr),
     isMaster(false),
     currentStep(0),
-    lastStep(0),
-    compressionOn(false),
+    potatoSalad(100),
     debug(true)
     {
         if (debug)
@@ -101,7 +107,7 @@ public:
     /**
      * This function calculates the Transition Radiation by calling the
      * according function of the Kernel File.
-     * @param: currentStep
+     * @param currentStep
      */
     void notify(uint32_t currentStep)
     {
@@ -109,22 +115,25 @@ public:
         if (debug)
         {
             log<radLog::SIMULATION_STATE> ("Notify called");
+            std::cout<<currentStep;
+        }
+        if (currentStep == potatoSalad)
+        {
+            //log<radLog::SIMULATION_STATE> ("Transition Radition (%1%): calculate time step %2% ") % speciesName % currentStep;
+            if (debug)
+            {
+                log<radLog::SIMULATION_STATE> ("Notify called in if statement.");
+                std::cout<<currentStep;
+            }
+            calculateRadiationParticles(currentStep);
         }
     }
 
     void pluginRegisterHelp(po::options_description& desc)
     {
-        if (debug)
-        {
-            log<radLog::SIMULATION_STATE>("PluginRegisterHelp called");
-        }
         desc.add_options()
-        ((pluginPrefix + ".period").c_str(), po::value<std::string> (&notifyPeriod), "enable plugin [for each n-th step]")
-        ((pluginPrefix + ".totalRadiation").c_str(), po::bool_switch(&totalRad), "enable calculation of integrated radiation from start of simulation")
-        ((pluginPrefix + ".folderTotalRad").c_str(), po::value<std::string > (&folderTotalRad)->default_value("totalRad"), "folder in which the integrated radiation from start of simulation is written")
-        ((pluginPrefix + ".omegaList").c_str(), po::value<std::string > (&pathOmegaList)->default_value("_noPath_"), "path to file containing all frequencies to calculate")
-        ((pluginPrefix + ".compression").c_str(), po::bool_switch(&compressionOn), "enable compression of hdf5 output");
-
+            ((pluginPrefix + ".period").c_str(), po::value<std::string> (&notifyPeriod), "enable plugin [for each n-th step]")
+            ((pluginPrefix + ".omegaList").c_str(), po::value<std::string > (&pathOmegaList)->default_value("_noPath_"), "path to file containing all frequencies to calculate");
     // log<radLog::SIMULATION_STATE>("Notify period is: (%1%)" % &notifyPeriod);
     }
 
@@ -157,24 +166,27 @@ public:
 private:
     void pluginLoad()
     {
-        log<radLog::SIMULATION_STATE>("Plugin Loaded");
         if(!notifyPeriod.empty())
         {
-            Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
-
-            radiation = new GridBuffer<Amplitude, DIM1 > (DataSpace<DIM1 > (elements_amplitude())); //create one int on GPU and host
-
-            freqInit.Init(pathOmegaList);
-            freqFkt = freqInit.getFunctor();
+            log<radLog::SIMULATION_STATE>("Plugin Loaded");
 
             /*only rank 0 create a file*/
             isMaster = reduce.hasResult(mpi::reduceMethods::Reduce());
             pmacc::Filesystem<simDim>& fs = Environment<simDim>::get().Filesystem();
 
+            tmp_result = new picongpu::float_64[elements_amplitude()];
+            
+            Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
+
+            incTransRad = new GridBuffer<picongpu::float_64, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
+            numParticles = new GridBuffer<picongpu::float_64, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
+
+            freqInit.Init(pathOmegaList);
+            freqFkt = freqInit.getFunctor();
+
             if (isMaster)
             {
-                timeSumArray = new Amplitude[elements_amplitude()];
-
+                theTransRad = new picongpu::float_64[elements_amplitude()];
                 /* save detector position / observation direction */
                 detectorPositions = new vector_64[parameters::N_observer];
                 for(uint32_t detectorIndex=0; detectorIndex < parameters::N_observer; ++detectorIndex)
@@ -189,17 +201,13 @@ private:
                     detectorFrequencies[detectorIndex] = freqFkt(detectorIndex);
                 }
 
-                if(totalRad)
+                for (unsigned int i=0; i< elements_amplitude(); ++i)
                 {
-                    fs.createDirectory("transitionRadiationHDF5");
-                    fs.setDirectoryPermissions("transitionRadiationHDF5");
-
-                    //create folder for total output
-                    fs.createDirectory(folderTotalRad);
-                    fs.setDirectoryPermissions(folderTotalRad);
-                    for (unsigned int i = 0; i < elements_amplitude(); ++i)
-                        timeSumArray[i] = Amplitude::zero();
+                    theTransRad[i] = 0;
                 }
+
+                fs.createDirectory(folderTransRad);
+                fs.setDirectoryPermissions(folderTransRad);
             }
         }
     }
@@ -210,6 +218,16 @@ private:
         {
             log<radLog::SIMULATION_STATE> ("pluginunload called");
         }
+        collectDataGPUToMaster();
+        writeTransRadToText();
+        if(isMaster)
+        {
+            __deleteArray(theTransRad);
+        }
+        CUDA_CHECK(cudaGetLastError());
+        __delete( incTransRad );
+        __delete( numParticles );
+        __deleteArray(tmp_result);
     }
 
     void copyRadiationDeviceToHost()
@@ -218,17 +236,9 @@ private:
         {
             log<radLog::SIMULATION_STATE>("copyradiationdevicetohost called");
         }
-        radiation->deviceToHost();
+        incTransRad->deviceToHost();
+        numParticles->deviceToHost();
         __getTransactionEvent().waitForFinished();
-    }
-
-    void saveRadPerGPU(const DataSpace<simDim> currentGPUpos)
-    {
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("saveRadPerGPU called");
-        }
-
     }
 
     static unsigned int elements_amplitude()
@@ -246,98 +256,51 @@ private:
         }
         reduce(nvidia::functors::Add(),
                 tmp_result,
-                radiation->getHostBuffer().getBasePointer(),
+                incTransRad->getHostBuffer().getBasePointer(),
                 elements_amplitude(),
                 mpi::reduceMethods::Reduce()
                 );
     }
 
-
-    /** add collected radiation data to previously stored data
-     *  should be called after collectRadiationOnMaster() */
-    void sumAmplitudesOverTime(Amplitude* targetArray, Amplitude* summandArray)
+    void writeTransRadToText()
     {
         if(debug)
         {
-            log<radLog::SIMULATION_STATE>("sumAmplitudesOverTime");
-        }
-        if (isMaster)
-        {
-            // add last amplitudes to previous amplitudes
-            for (unsigned int i = 0; i < elements_amplitude(); ++i)
-            targetArray[i] += summandArray[i];
-        }
-    }
-
-    void writeLastRadToText()
-    {
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("writeLastRadToText");
-        }
-    }
-
-    void writeTotalRadToText()
-    {
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("writeTotalRadToText");
+            log<radLog::SIMULATION_STATE>("writeTransRadToText");
         }
         // only the master rank writes data
         if (isMaster)
         {
-            // write file only if totalRad flag was selected
-            if (totalRad)
-            {
-                // get time step as string
-                std::stringstream o_step;
-                o_step << currentStep;
+            // get time step as string
+            std::stringstream o_step;
+            o_step << currentStep;
 
-                // write totalRad data to txt
-                writeFile(timeSumArray, folderTotalRad + "/" + filename_prefix + "_" + o_step.str() + ".dat");
-            }
+            // write totalRad data to txt
+            writeFile(theTransRad, folderTransRad + "/" + filename_prefix + "_" + o_step.str() + ".dat");
         }
     }
 
-    /** write total radiation data as HDF5 file */
-    void writeAmplitudesToHDF5()
-    {
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("writeAmplitudesToHDF5");
-        }
-        if (isMaster)
-        {
-            writeHDF5file(timeSumArray, std::string("transRadHDF5/") + speciesName + std::string("_radAmplitudes_"));
-        }
-    }
 
     /** perform all operations to get data from GPU to master */
     void collectDataGPUToMaster()
     {
-
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("collectDataGPUToMaster");
-        }
         // collect data GPU -> CPU -> Master
         copyRadiationDeviceToHost();
         collectRadiationOnMaster();
-        sumAmplitudesOverTime(timeSumArray, tmp_result);
+        sumAmplitudesOverTime(theTransRad, tmp_result);
     }
 
-    /** write all possible/selected output */
-    void writeAllFiles(const DataSpace<simDim> currentGPUpos)
+
+    /** add collected radiation data to previously stored data
+     *  should be called after collectRadiationOnMaster() */
+    void sumAmplitudesOverTime(picongpu::float_64* targetArray, picongpu::float_64* summandArray)
     {
-        if(debug)
+        if (isMaster)
         {
-            log<radLog::SIMULATION_STATE>("writeAllFiles");
+            // add last amplitudes to previous amplitudes
+            for (unsigned int i = 0; i < elements_amplitude(); ++i)
+                targetArray[i] += summandArray[i];
         }
-        // write data to files
-        saveRadPerGPU(currentGPUpos);
-        writeLastRadToText();
-        writeTotalRadToText();
-        writeAmplitudesToHDF5();
     }
 
 
@@ -371,40 +334,7 @@ private:
         return path + dataLabelsList[index];
     }
 
-    static const std::string meshRecordLabels(int index)
-    {
-        log<radLog::SIMULATION_STATE>("meshRecordLabels");
-        
-        if(index == idLabels::Amplitude)
-            return dataLabels(-1);
-        else if (index == idLabels::Detector)
-            return dataLabelsDetectorDirection(-1);
-        else if (index == idLabels::Frequency)
-            return dataLabelsDetectorFrequency(-1);
-        else
-            return std::string("this-record-does-not-exist");
-    }
-
-    void writeHDF5file(Amplitude* values, std::string name)
-    {  
-    
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("writeHDF5file");
-        }
-
-    }
-
-    void readHDF5file(Amplitude* values, std::string name, const int timeStep)
-    {
-        if(debug)
-        {
-            log<radLog::SIMULATION_STATE>("readHDF5file");
-        }
-
-    }
-
-    void writeFile(Amplitude* values, std::string name)
+    void writeFile(float_64* values, std::string name)
     {
 
         if(debug)
@@ -428,7 +358,7 @@ private:
                     // calculate the square of the absolute value
                     // and write to file.
                     outFile <<
-                        values[index_omega + index_direction * radiation_frequencies::N_omega].calc_radiation() * UNIT_ENERGY * UNIT_TIME << "\t";
+                        values[index_direction * radiation_frequencies::N_omega + index_omega] * UNIT_ENERGY << "\t";
 
                 }
                 outFile << std::endl;
@@ -448,10 +378,10 @@ private:
 
         if(debug)
         {
-            log<radLog::SIMULATION_STATE>("calculateRadiationParticles");
+            log<radLog::SIMULATION_STATE>("calculateRadiationParticles called");
+            std::cout << currentStep;
         }
 
-        this->currentStep = currentStep;
         DataConnector &dc = Environment<>::get().DataConnector();
         auto particles = dc.get< ParticlesType >( ParticlesType::FrameType::getName(), true);
 
@@ -478,10 +408,9 @@ private:
             pmacc::math::CT::volume< SuperCellSize >::type::value
         >::value;
 
-
         // PIC-like kernel call of the radiation kernel
-        PMACC_KERNEL( KernelRadiationParticles<
-            numWorkers,
+        PMACC_KERNEL( KernelTransRadParticles<
+            numWorkers
         >{} )(
             gridDim_rad,
             numWorkers
@@ -491,8 +420,6 @@ private:
 
             /*Pointer to memory of radiated amplitude on the device*/
             incTransRad->getDeviceBuffer().getDataBox(),
-            cohTransRadPara->getDeviceBuffer().getDataBox(),
-            cohTransRadPerp->getDeviceBuffer().getDataBox(),
             numParticles->getDeviceBuffer().getDataBox(),
             globalOffset,
             *cellDescription,
@@ -501,10 +428,13 @@ private:
         );
 
         dc.releaseData( ParticlesType::FrameType::getName() );
-        
+
+        if(debug)
+        {
+            log<radLog::SIMULATION_STATE>("calculateRadiationParticles finished");
+        }
 
     }
-
 };
 
 } // namespace picongpu
