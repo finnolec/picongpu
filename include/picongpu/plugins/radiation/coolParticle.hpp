@@ -29,77 +29,104 @@ namespace picongpu
         }
 
         HDINLINE 
-        vector_64 getMomentum(void) const
+        vector_X getMomentum(void) const
         {
             // returns momentum
             return momentum;
         }
 
         HDINLINE 
-        picongpu::float_64 getU(void) const
+        picongpu::float_X getU(void) const
         {
             // returns normalized momentum
             return calcU(getMomentum());
         }
 
+        HDINLINE
+        picongpu::float_X getCharge(void) const
+        {
+            return charge;
+        }
+/*
         HDINLINE 
-        picongpu::float_64 getV(void) const
+        picongpu::float_X getV(void) const
         {
             // return velocity
             return calcVelocity(getMomentum());
-        }
-
+        }*/
+/*
         HDINLINE 
-        picongpu::float_64 calcGamma(const vector_X& momentum) const
+        picongpu::float_X calcGamma(const vector_X& momentum) const
         {
             //returns lorentz factor gamma = sqrt(1/(1-beta**2))
-            const picongpu::float_64 betaSquared = util::square<
-                picongpu::float_64, 
-                picongpu::float_64 
+            const picongpu::float_X betaSquared = util::square<
+                picongpu::float_X, 
+                picongpu::float_X 
             > (calcBeta(momentum));
             return picongpu::math::sqrt( 1.0 / ( 1 - betaSquared ));
         }
 
         HDINLINE 
-        picongpu::float_64 calcBeta(const vector_X& momentum) const
+        picongpu::float_X calcBeta(const vector_X& momentum) const
         {
             // return beta = v / c
             return calcVelocity(momentum) * (1.0 / picongpu::SPEED_OF_LIGHT);
         }
+*/
 
-        HDINLINE 
-        picongpu::float_64 calcVelocity(const vector_X& momentum) const
+        HDINLINE picongpu::float_X calcBeta(const vector_X& momentum) const
         {
-            //returns velocity v = p/m
-            return std::sqrt(momentum * momentum) * (1.0 / mass);
+            // returns beta=v/c
+            const picongpu::float_X gamma1 = calcGamma(momentum);
+            const picongpu::float_X x = util::square<vector_X, picongpu::float_X >(
+                momentum * (1.0 / (mass * picongpu::SPEED_OF_LIGHT * gamma1))
+            );
+            return picongpu::math::sqrt(x);
         }
 
+        HDINLINE picongpu::float_X calcGamma(const vector_X& momentum) const
+        {
+            // return gamma = E/(mc^2)
+            const picongpu::float_X x = util::square<vector_X, picongpu::float_X > (momentum * (1.0 / (mass * picongpu::SPEED_OF_LIGHT)));
+            return picongpu::math::sqrt(1.0 + x);
+        }
+/*
         HDINLINE 
-        picongpu::float_64 calcU(const vector_X& momentum) const
+        picongpu::float_X calcVelocity(const vector_X& momentum) const
+        {
+            //returns velocity v = p/m
+           // const picongpu::float_X pOverMSquared = std::sqrt(momentum * momentum) / (mass * mass);
+            const picongpu::float_X mOverPSquared = std::sqrt(mass * mass * (1.0 / (momentum * momentum)));
+            //return pOverMSquared * (1.0 / (1 + pOverMSquared * (1.0 / (picongpu::SPEED_OF_LIGHT * picongpu::SPEED_OF_LIGHT))));
+            return picongpu::math::sqrt(1.0/(mOverPSquared + 1.0/(picongpu::SPEED_OF_LIGHT*picongpu::SPEED_OF_LIGHT)));
+        }
+*/
+        HDINLINE 
+        picongpu::float_X calcU(const vector_X& momentum) const
         {
             //returns normalized momentum u = gama * beta
-            const picongpu::float_64 gamma1 = calcGamma(momentum);
-            const picongpu::float_64 beta1 = calcBeta(momentum);
+            const picongpu::float_X gamma1 = calcGamma(momentum);
+            const picongpu::float_X beta1 = calcBeta(momentum);
             return gamma1 * beta1;
         }
 
         // Getters for Momentum in spherical coordinates
         HDINLINE
-        picongpu::float_64 getMomPhi(void) const
+        picongpu::float_X getMomPhi(void) const
         {
             //return polar angle phi of momentum
             return calcMomPhi();
         }
 
         HDINLINE
-        picongpu::float_64 getMomTheta(void) const
+        picongpu::float_X getMomTheta(void) const
         {
             //return azimuth angle psi of momentum
             return calcMomTheta();
         }
 
         HDINLINE
-        picongpu::float_64 getMomAbs(void) const
+        picongpu::float_X getMomAbs(void) const
         {
             //return absolute value of momentum
             return calcMomAbs();
@@ -108,21 +135,22 @@ namespace picongpu
         private:
         // Calculators for Momentum in spherical coordinates
         HDINLINE
-        picongpu::float_64 calcMomPhi(void) const
+        picongpu::float_X calcMomPhi(void) const
         {
             //return polar angle phi of momentum
             return picongpu::math::atan2(momentum.z(), momentum.x()) + picongpu::PI;
         }
 
         HDINLINE
-        picongpu::float_64 calcMomTheta(void) const
+        picongpu::float_X calcMomTheta(void) const
         {
             //return azimuth angle psi of momentum
-            return picongpu::math::acos(momentum.y() * (1.0 / getMomAbs()));
+            const picongpu::float_X x = picongpu::math::acos(momentum.y() * (1.0 / getMomAbs()));
+            return x;
         }
 
         HDINLINE
-        picongpu::float_64 calcMomAbs(void) const
+        picongpu::float_X calcMomAbs(void) const
         {
             //return absolute value of momentum
             return picongpu::math::sqrt(momentum * momentum);

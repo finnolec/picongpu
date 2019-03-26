@@ -40,14 +40,15 @@ private:
 
     typedef PIConGPUVerboseRadiation radLog;
 
-    GridBuffer<picongpu::float_64, DIM1> *incTransRad;
-    GridBuffer<picongpu::float_64, DIM1> *numParticles;
+    GridBuffer<picongpu::float_X, DIM1> *incTransRad;
+    GridBuffer<picongpu::float_X, DIM1> *numParticles;
 
     radiation_frequencies::InitFreqFunctor freqInit;
     radiation_frequencies::FreqFunctor freqFkt;
 
-    picongpu::float_64 *tmp_result;
-    picongpu::float_64* theTransRad; 
+    picongpu::float_X *tmp_itr;
+    picongpu::float_X *tmp_num;
+    picongpu::float_X* theTransRad; 
     MappingDesc *cellDescription;
     std::string notifyPeriod;
     uint32_t timeStep;
@@ -60,8 +61,8 @@ private:
     std::string folderTransRad;
     std::string pathOmegaList;
 
-    vector_64* detectorPositions;
-    float_64* detectorFrequencies;
+    vector_X* detectorPositions;
+    float_X* detectorFrequencies;
 
     bool isMaster;
     uint32_t currentStep;
@@ -82,7 +83,8 @@ public:
     incTransRad(nullptr),
     numParticles(nullptr),
     cellDescription(nullptr),
-    tmp_result(nullptr),
+    tmp_itr(nullptr),
+    tmp_num(nullptr),
     theTransRad(nullptr),
     detectorPositions(nullptr),
     detectorFrequencies(nullptr),
@@ -112,20 +114,18 @@ public:
     void notify(uint32_t currentStep)
     {
         //log<radLog::SIMULATION_STATE> ("Transition Radition (%1%): calculate time step %2% ") % speciesName % currentStep;
-        if (debug)
-        {
-            log<radLog::SIMULATION_STATE> ("Notify called");
-            std::cout<<currentStep;
-        }
         if (currentStep == potatoSalad)
         {
             //log<radLog::SIMULATION_STATE> ("Transition Radition (%1%): calculate time step %2% ") % speciesName % currentStep;
             if (debug)
             {
                 log<radLog::SIMULATION_STATE> ("Notify called in if statement.");
-                std::cout<<currentStep;
             }
             calculateRadiationParticles(currentStep);
+            if (debug)
+            {
+                log<radLog::SIMULATION_STATE> ("Notify finished in if statement.");
+            }
         }
     }
 
@@ -174,28 +174,29 @@ private:
             isMaster = reduce.hasResult(mpi::reduceMethods::Reduce());
             pmacc::Filesystem<simDim>& fs = Environment<simDim>::get().Filesystem();
 
-            tmp_result = new picongpu::float_64[elements_amplitude()];
+            tmp_itr = new picongpu::float_X[elements_amplitude()];
+            tmp_num = new picongpu::float_X[elements_amplitude()];
             
             Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
 
-            incTransRad = new GridBuffer<picongpu::float_64, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
-            numParticles = new GridBuffer<picongpu::float_64, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
+            incTransRad = new GridBuffer<picongpu::float_X, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
+            numParticles = new GridBuffer<picongpu::float_X, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
 
             freqInit.Init(pathOmegaList);
             freqFkt = freqInit.getFunctor();
 
             if (isMaster)
             {
-                theTransRad = new picongpu::float_64[elements_amplitude()];
+                theTransRad = new picongpu::float_X[elements_amplitude()];
                 /* save detector position / observation direction */
-                detectorPositions = new vector_64[parameters::N_observer];
+                detectorPositions = new vector_X[parameters::N_observer];
                 for(uint32_t detectorIndex=0; detectorIndex < parameters::N_observer; ++detectorIndex)
                 {
                     detectorPositions[detectorIndex] = radiation_observer::observation_direction(detectorIndex);
                 }
 
                 /* save detector frequencies */
-                detectorFrequencies = new float_64[radiation_frequencies::N_omega];
+                detectorFrequencies = new float_X[radiation_frequencies::N_omega];
                 for(uint32_t detectorIndex=0; detectorIndex < radiation_frequencies::N_omega; ++detectorIndex)
                 {
                     detectorFrequencies[detectorIndex] = freqFkt(detectorIndex);
@@ -227,7 +228,8 @@ private:
         CUDA_CHECK(cudaGetLastError());
         __delete( incTransRad );
         __delete( numParticles );
-        __deleteArray(tmp_result);
+        __deleteArray(tmp_itr);
+        __deleteArray(tmp_num);
     }
 
     void copyRadiationDeviceToHost()
@@ -254,12 +256,20 @@ private:
         {
             log<radLog::SIMULATION_STATE>("collectRadiationOnMaster");
         }
-        reduce(nvidia::functors::Add(),
-                tmp_result,
-                incTransRad->getHostBuffer().getBasePointer(),
-                elements_amplitude(),
-                mpi::reduceMethods::Reduce()
-                );
+        reduce(
+            nvidia::functors::Add(),
+            tmp_itr,
+            incTransRad->getHostBuffer().getBasePointer(),
+            elements_amplitude(),
+            mpi::reduceMethods::Reduce()
+        );
+        reduce(
+            nvidia::functors::Add(),
+            tmp_num,
+            numParticles->getHostBuffer().getBasePointer(),
+            elements_amplitude(),
+            mpi::reduceMethods::Reduce()
+        );
     }
 
     void writeTransRadToText()
@@ -287,19 +297,23 @@ private:
         // collect data GPU -> CPU -> Master
         copyRadiationDeviceToHost();
         collectRadiationOnMaster();
-        sumAmplitudesOverTime(theTransRad, tmp_result);
+        //sumTransitionRadiation(theTransRad, incTransRad->getHostBuffer().getBasePointer(), numParticles->getHostBuffer().getBasePointer());
+        sumTransitionRadiation(theTransRad, tmp_itr, tmp_num);
     }
 
-
-    /** add collected radiation data to previously stored data
-     *  should be called after collectRadiationOnMaster() */
-    void sumAmplitudesOverTime(picongpu::float_64* targetArray, picongpu::float_64* summandArray)
+    // calculate transition radiation integrals with the energy values from the kernel
+    void sumTransitionRadiation(
+        picongpu::float_X* targetArray, 
+        picongpu::float_X* itrArray,
+        picongpu::float_X* numArray
+    )
     {
         if (isMaster)
         {
-            // add last amplitudes to previous amplitudes
-            for (unsigned int i = 0; i < elements_amplitude(); ++i)
-                targetArray[i] += summandArray[i];
+            for(unsigned int i = 0; i < elements_amplitude(); ++i)
+            {
+                targetArray[i] = itrArray[i]; // * numArray[i];
+            }
         }
     }
 
@@ -334,7 +348,7 @@ private:
         return path + dataLabelsList[index];
     }
 
-    void writeFile(float_64* values, std::string name)
+    void writeFile(float_X* values, std::string name)
     {
 
         if(debug)
@@ -357,8 +371,11 @@ private:
                     // Take Amplitude for one direction and frequency,
                     // calculate the square of the absolute value
                     // and write to file.
+                    constexpr picongpu::float_X transRadUnit = 
+                        UNIT_CHARGE * UNIT_CHARGE * (1.0 / (4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI));
                     outFile <<
-                        values[index_direction * radiation_frequencies::N_omega + index_omega] * UNIT_ENERGY << "\t";
+                        values[index_direction * radiation_frequencies::N_omega + index_omega] 
+                        * transRadUnit << "\t";
 
                 }
                 outFile << std::endl;
@@ -379,7 +396,6 @@ private:
         if(debug)
         {
             log<radLog::SIMULATION_STATE>("calculateRadiationParticles called");
-            std::cout << currentStep;
         }
 
         DataConnector &dc = Environment<>::get().DataConnector();
