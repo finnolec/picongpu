@@ -6,8 +6,8 @@
 #include <cstdlib>
 
 #include "picongpu/simulation_defines.hpp"
-#include "picongpu/plugins/radiation/coolParticle.hpp"
-#include "picongpu/plugins/radiation/transRadCalculator.hpp"
+#include "picongpu/plugins/radiation/CoolParticle.hpp"
+#include "picongpu/plugins/radiation/TransRadCalculator.hpp"
 
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
@@ -79,7 +79,7 @@ namespace picongpu
             int const theta_idx = blockIdx.x; //blockIdx.x is used to determine theta
 
             // looking direction (needed for observer) used in the thread
-            vector_X const look = radiation_observer::observation_direction( theta_idx );
+            float3_X const look = radiation_observer::observation_direction_picongpustandard( theta_idx );
 
             // get extent of guarding super cells (needed to ignore them)
             DataSpace< simDim > const guardingSuperCells = mapper.getGuardingSuperCells();
@@ -176,7 +176,7 @@ namespace picongpu
                             {
                                 auto par = frame[ linearIdx ];
                                 // get particle momenta
-                                vector_X const particle_momentum = vector_X( par[momentum_] );
+                                float3_X const particle_momentum = par[momentum_];
                                 /* initializes "saveParticleAt" flag with -1
                                 * because "counter_s" will never be -1
                                 * therefore, if a particle is saved, a value of counter
@@ -188,7 +188,7 @@ namespace picongpu
                                 int saveParticleAt = -1;
 
                                 // only moving particles create transition radiation
-                                if( (particle_momentum*particle_momentum) > 0.0)
+                                if( (particle_momentum*particle_momentum).sumOfComponents() > 0.0)
                                 {
                                     if( getRadiationMask(par) )
                                         saveParticleAt = nvidia::atomicAllInc(
@@ -220,7 +220,7 @@ namespace picongpu
                                         );
 
                                         // add global position of cell with local position of particle in cell
-                                        vector_X particle_location;
+                                        float3_X particle_location;
                                         // set z component to zero in case of simDim==DIM2
                                         particle_location[ 2 ] = 0.0;
                                         // run over all components and compute gobal position
@@ -249,8 +249,9 @@ namespace picongpu
                                         );
 
                                         //printf("Particle Momentum: %f \tparticle charge: %f \tparticle mass %f\n", particle_momentum * particle_momentum, particle_charge, particle_mass);
-                                        //printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x(), particle_momentum.y(), particle_momentum.z());
+                                        // printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x(), particle_momentum.y(), particle_momentum.z());
                                         // using transition radiation particle class
+                                        // printf("shuut shuut \n");
                                         CoolParticle const particle(
                                             particle_location,
                                             particle_momentum,

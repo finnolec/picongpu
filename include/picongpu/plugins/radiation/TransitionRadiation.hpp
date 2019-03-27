@@ -61,7 +61,7 @@ private:
     std::string folderTransRad;
     std::string pathOmegaList;
 
-    vector_X* detectorPositions;
+    float3_X* detectorPositions;
     float_X* detectorFrequencies;
 
     bool isMaster;
@@ -189,10 +189,10 @@ private:
             {
                 theTransRad = new picongpu::float_X[elements_amplitude()];
                 /* save detector position / observation direction */
-                detectorPositions = new vector_X[parameters::N_observer];
+                detectorPositions = new float3_X[parameters::N_observer];
                 for(uint32_t detectorIndex=0; detectorIndex < parameters::N_observer; ++detectorIndex)
                 {
-                    detectorPositions[detectorIndex] = radiation_observer::observation_direction(detectorIndex);
+                    detectorPositions[detectorIndex] = radiation_observer::observation_direction_picongpustandard(detectorIndex);
                 }
 
                 /* save detector frequencies */
