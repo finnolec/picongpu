@@ -236,20 +236,20 @@ namespace picongpu
                                         float_X const weighting = par[ weighting_ ];
                                         radWeighting_s[ saveParticleAt ] = weighting;
 
-                                        // charge of macro-particle
+                                        // mass of macro-particle
                                         float_X const particle_mass = attribute::getMass(
                                             weighting,
                                             par
                                         );
 
-                                        // mass of macro-particle
+                                        // charge of macro-particle
                                         float_X const particle_charge = attribute::getCharge(
                                             weighting,
                                             par
                                         );
 
                                         //printf("Particle Momentum: %f \tparticle charge: %f \tparticle mass %f\n", particle_momentum * particle_momentum, particle_charge, particle_mass);
-                                        // printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x(), particle_momentum.y(), particle_momentum.z());
+                                        //printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x(), particle_momentum.y(), particle_momentum.z());
                                         // using transition radiation particle class
                                         // printf("shuut shuut \n");
                                         CoolParticle const particle(
@@ -266,11 +266,11 @@ namespace picongpu
                                         );
 
                                         // calculate values for transition radiation
-                                        energy_perp_s[ saveParticleAt ] = calculator.calcEPerp();
+                                        energy_perp_s[ saveParticleAt ] = 1.0; //calculator.calcEPerp();
 
                                         energy_para_s[ saveParticleAt ] = calculator.calcEPara();
 
-                                        num_s[saveParticleAt] = weighting;
+                                        num_s[ saveParticleAt ] = weighting;
                                     }
                                 } // only moving particles
                             } // only threads with particle
@@ -311,6 +311,7 @@ namespace picongpu
                     frame = pb.getPreviousFrame( frame );
                 } // while frame is valid
             } // for all supercells 
+
         }
     }; // struct KernelTransRad
 } // namespace picongpu

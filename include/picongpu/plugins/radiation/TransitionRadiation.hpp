@@ -312,6 +312,11 @@ private:
         {
             for(unsigned int i = 0; i < elements_amplitude(); ++i)
             {
+                if(i == 10)
+                {
+                    std::cout << numArray[i] << " numArray[i]\n";
+                    std::cout << itrArray[i] << " itrArray[i]\n";
+                }
                 targetArray[i] = itrArray[i]; // * numArray[i];
             }
         }

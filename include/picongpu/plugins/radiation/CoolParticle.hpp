@@ -7,8 +7,8 @@ namespace picongpu
     class CoolParticle
     {
         public:
-        const float3_X momentum;
-        const float3_X location;
+        const float3_X& momentum;
+        const float3_X& location;
         const picongpu::float_X charge;
         const picongpu::float_X mass;
 
@@ -138,21 +138,26 @@ namespace picongpu
         {
             //return polar angle phi of momentum
             return picongpu::math::atan2(momentum.z(), momentum.x()) + picongpu::PI;
+            //return picongpu::math::atan2(20.0, 1.0) + picongpu::PI;
+            //return picongpu::PI / 2.0;
         }
 
         HDINLINE
         picongpu::float_X calcMomTheta(void) const
         {
             //return azimuth angle psi of momentum
-            const picongpu::float_X x = picongpu::math::acos(momentum.y() * (1.0 / getMomAbs()));
-            return x;
+            //return picongpu::math::acos(momentum.y() * (1.0 / 100.0));
+            return picongpu::math::acos(momentum.y() * (1.0 / getMomAbs()));
+            //return picongpu::math::acos(1.0 * (1.0 / 2.0));
+            //return momentum.y() * 0.0;
         }
 
         HDINLINE
         picongpu::float_X calcMomAbs(void) const
         {
             //return absolute value of momentum
-            return picongpu::math::sqrt((momentum * momentum).sumOfComponents());
+            return picongpu::math::sqrt(momentum.x() * momentum.x()  + momentum.y() * momentum.y() + momentum.z() * momentum.z());
+            //return picongpu::math::sqrt((momentum * momentum).sumOfComponents());
         }
     }; // class CoolParticle
 } // namespace picongpu
