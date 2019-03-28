@@ -156,8 +156,8 @@ namespace picongpu
         picongpu::float_X calcMomAbs(void) const
         {
             //return absolute value of momentum
-            return picongpu::math::sqrt(momentum.x() * momentum.x()  + momentum.y() * momentum.y() + momentum.z() * momentum.z());
-            //return picongpu::math::sqrt((momentum * momentum).sumOfComponents());
+            // return picongpu::math::sqrt(momentum.x() * momentum.x()  + momentum.y() * momentum.y() + momentum.z() * momentum.z());
+            return picongpu::math::sqrt((momentum * momentum).sumOfComponents());
         }
     }; // class CoolParticle
 } // namespace picongpu
