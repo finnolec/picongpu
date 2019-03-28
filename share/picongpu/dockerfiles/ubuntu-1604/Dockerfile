@@ -6,7 +6,7 @@ ENV        DEBIAN_FRONTEND=noninteractive \
            FORCE_UNSAFE_CONFIGURE=1 \
            SPACK_ROOT=/usr/local \
            SPACK_EXTRA_REPO=/usr/local/share/spack-repo \
-           PIC_PACKAGE='picongpu@0.4.3+isaac backend=cuda'
+           PIC_PACKAGE='picongpu@0.5.0+isaac backend=cuda'
 
 # install minimal spack dependencies
 #   - adds gfortran for spack's openmpi package
@@ -59,7 +59,7 @@ RUN        spack install $PIC_PACKAGE && \
 
 # load spack & picongpu environment on login
 RUN        /bin/echo -e "source $SPACK_ROOT/share/spack/setup-env.sh\n" \
-                        "spack load $PIC_PACKAGE\n" \
+                        "spack load -r $PIC_PACKAGE\n" \
                         'if [ $(id -u) -eq 0 ]; then\n' \
                         '   function mpirun { $(which mpirun) --allow-run-as-root $@; }\n' \
                         '   export -f mpirun\n' \

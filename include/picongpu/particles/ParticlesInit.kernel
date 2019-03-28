@@ -1,4 +1,4 @@
-/* Copyright 2013-2018 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt
+/* Copyright 2013-2019 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt
  *
  * This file is part of PIConGPU.
  *
@@ -118,7 +118,7 @@ namespace picongpu
             using namespace mappings::threads;
 
             constexpr uint32_t frameSize = pmacc::math::CT::volume< SuperCellSize >::type::value;
-            constexpr uint32_t cellsPerSupercell = pmacc::math::CT::volume< SuperCellSize >::type::value;
+            PMACC_CONSTEXPR_CAPTURE uint32_t cellsPerSupercell = pmacc::math::CT::volume< SuperCellSize >::type::value;
             constexpr uint32_t numWorkers = T_numWorkers;
 
             uint32_t const workerIdx = threadIdx.x;

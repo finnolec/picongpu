@@ -35,7 +35,7 @@ Klaus Steiniger, and René Widera for contributions to this release!
   - Add system links #2818
   - Taurus:
     - add project #2819
-    - add Power9 V100 nodes #2856 
+    - add Power9 V100 nodes #2856
   - add D.A.V.I.D.E (CINECA) #2821
   - add JURECA (JSC) #2869
   - add JUWELS (JSC) #2874

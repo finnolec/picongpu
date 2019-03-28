@@ -65,7 +65,7 @@ namespace                     Description
 Observation directions
 """"""""""""""""""""""
 
-The number of observation directions `N_theta` is defined in :ref:`radiation.param <usage-params-plugins>`, but the distribution of observation directions is given in :ref:`radiationObserver.param.param <usage-params-plugins>`)
+The number of observation directions ``N_theta`` is defined in :ref:`radiation.param <usage-params-plugins>`, but the distribution of observation directions is given in :ref:`radiationObserver.param <usage-params-plugins>`)
 There, the function ``observation_direction`` defines the observation directions.
 
 This function returns the x,y and z component of a **unit vector** pointing in the observation direction. 
@@ -204,7 +204,7 @@ Window function filter
 A window function can be added to the simulation area to reduce `ringing artifacts <https://en.wikipedia.org/wiki/Ringing_artifacts>`_ due to sharp transition from radiating regions to non-radiating regions at the boundaries of the simulation box.
 This should be applied to simulation setups where the entire volume simulated is radiating (e.g. Kelvin-Helmholtz Instability).
 
-In ``radiationConfig.param`` the precompiler variable ``PIC_RADWINDOWFUNCTION`` defines if the window function filter should be used or not.
+In ``radiation.param`` the precompiler variable ``PIC_RADWINDOWFUNCTION`` defines if the window function filter should be used or not.
 
 .. code:: cpp
 
@@ -248,10 +248,10 @@ Command line option                       Description
 ========================================= ==============================================================================================================================
 ``--<species>_radiation.period``          Gives the number of time steps between which the radiation should be calculated.
                                           Default is ``0``, which means that the radiation in never calculated and therefor off.
-                                          Using `1` calculates the radiation constantly. Any value ``>=2`` is currently producing nonsense.
+                                          Using ``1`` calculates the radiation constantly. Any value ``>=2`` is currently producing nonsense.
 ``--<species>_radiation.dump``            Period, after which the calculated radiation data should be dumped to the file system.
                                           Default is ``0``, therefor never.
-                                          In order to store the radiation data, a value `>=1` should be used.
+                                          In order to store the radiation data, a value ``>=1`` should be used.
 ``--<species>_radiation.lastRadiation``   If set, the radiation spectra summed between the last and the current dump-time-step are stored.
                                           Used for a better evaluation of the temporal evolution of the emitted radiation.
 ``--<species>_radiation.folderLastRad``   Name of the folder, in which the summed spectra for the simulation time between the last dump and the current dump are stored.
@@ -262,9 +262,9 @@ Command line option                       Description
 ``--<species>_radiation.start``           Time step, at which PIConGPU starts calculating the radiation.
                                           Default is ``2`` in order to get enough history of the particles.
 ``--<species>_radiation.end``             Time step, at which the radiation calculation should end.
-                                          Default: `0`(stops at end of simulation).
+                                          Default: ``0``(stops at end of simulation).
 ``--<species>_radiation.omegaList``       In case the frequencies for the spectrum are coming from a list stored in a file, this gives the path to this list.
-                                          Default: `_noPath_` throws an error. *This does not switch on the frequency calculation via list.*
+                                          Default: ``_noPath_`` throws an error. *This does not switch on the frequency calculation via list.*
 ``--<species>_radiation.radPerGPU``       If set, each GPU additionally stores its own spectra without summing over the entire simulation area.
                                           This allows for a localization of specific spectral features.
 ``--<species>_radiation.folderRadPerGPU`` Name of the folder, where the GPU specific spectra are stored.
@@ -295,7 +295,7 @@ Command line flag                        Output description
 ======================================== ========================================================================================================================
 ``--<species>_radiation.totalRadiation`` Contains *ASCII* files that have the total spectral intensity until the timestep specified by the filename.
                                          Each row gives data for one observation direction (same order as specified in the ``observer.py``).
-                                         The values for each frequency are separated by *tabs* and have the same order as specified in ``radiationConfig.param``.
+                                         The values for each frequency are separated by *tabs* and have the same order as specified in ``radiation.param``.
                                          The spectral intensity is stored in the units **[J s]**.
 ``--<species>_radiation.lastRadiation``  has the same format as the output of *totalRadiation*.
                                          The spectral intensity is only summed over the last radiation `dump` period.
@@ -319,7 +319,7 @@ Tool                           Description
                                Run ``plotRadiation --help`` for more information.
 ``radiationSyntheticDetector`` Reads *ASCII* radiation data and statistically analysis the spectra for a user specified region of observation angles and frequencies.
                                This is a python script that has its own help. Run ``radiationSyntheticDetector --help`` for more information.
-*smooth.py*                    Python module needed by `plotRadiation`.
+*smooth.py*                    Python module needed by ``plotRadiation``.
 ============================== ======================================================================================================================================
 
 
