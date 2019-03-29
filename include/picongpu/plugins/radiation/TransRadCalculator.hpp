@@ -42,6 +42,13 @@ namespace picongpu
         HDINLINE 
         picongpu::float_X calcEPerp(void) const
         {
+            /* returns perpendicular part to movement direction of normalized energy
+             * determined by formula:
+             * E_perp = (u^2 cosPsi sinPsi sinPhi cosTheta) / 
+             *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
+             * where Psi is the azimuth angle of the particle momentum and theta is
+             * the azimuth angle of the detector position to the movement direction y
+             */
             const picongpu::float_X uSquared = particle.getU() * particle.getU();
             const picongpu::float_X a = uSquared * parMomCosTheta * parMomSinTheta * parMomSinPhi * detectorCosTheta;
  
@@ -59,18 +66,13 @@ namespace picongpu
         HDINLINE
         picongpu::float_X calcEPara(void) const
         {
-            // const picongpu::float_X a = particle.getU() * parMomCosTheta;
-            // const picongpu::float_X b = particle.getU() * parMomSinTheta * parMomCosPhi;
-            // const picongpu::float_X c = parSqrtOnePlusUSquared * detectorSinTheta;
-
-            // // Denominator
-            // const picongpu::float_X x = parSqrtOnePlusUSquared - particle.getU() * parMomSinTheta * parMomCosPhi * detectorSinTheta;
-            // const picongpu::float_X y = particle.getU() * parMomCosTheta * detectorCosTheta;
-            // const picongpu::float_X xSquared = util::square<picongpu::float_X> ( x );
-            // const picongpu::float_X ySquared = util::square<picongpu::float_X> ( y );
-
-            // const picongpu::float_X denominator = xSquared - ySquared;
-            // return particle.getCharge() * a * ( b - c ) * (1.0 / denominator);
+            /* returns parallel part to movement direction of normalized energy
+             * determined by formula:
+             * E_perp = (u cosPsi (u sinPsi cosPhi - sqrt(1 + u^2) sinTheta)) / 
+             *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
+             * where Psi is the azimuth angle of the particle momentum and theta is
+             * the azimuth angle of the detector position to the movement direction y
+             */
             const picongpu::float_X a = particle.getU() * parMomCosTheta;
             const picongpu::float_X b = particle.getU() * parMomSinTheta * parMomCosPhi;
             const picongpu::float_X c = parSqrtOnePlusUSquared * detectorSinTheta;
@@ -83,6 +85,19 @@ namespace picongpu
 
             const picongpu::float_X denominator = xSquared - ySquared;
             return particle.getCharge() * a * ( b - c ) * (1.0 / denominator);
+        }
+
+        HDINLINE
+        picongpu::float_X calcFExp(void) const
+        {
+            /* returns the exponent of the formfactor divided by \omega
+             * this doesn't have a physical meaning, it's calculated here for performance reasons
+             * determined by formula:
+             * F_exp = - i z ( 1 - beta sinTheta sinPsi cos(Phi_P - Phi_D) ) / (v  cosPsi)
+             *          - 
+             */
+            return 1.0;
+             
         }
     };
 }
