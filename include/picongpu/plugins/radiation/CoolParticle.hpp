@@ -34,44 +34,18 @@ namespace picongpu
             return momentum;
         }
 
+        HDINLINE
+        picongpu::float_X getCharge(void) const
+        {
+            return charge;
+        }
+
         HDINLINE 
         picongpu::float_X getU(void) const
         {
             // returns normalized momentum
             return calcU(getMomentum());
         }
-
-        HDINLINE
-        picongpu::float_X getCharge(void) const
-        {
-            return charge;
-        }
-/*
-        HDINLINE 
-        picongpu::float_X getV(void) const
-        {
-            // return velocity
-            return calcVelocity(getMomentum());
-        }*/
-/*
-        HDINLINE 
-        picongpu::float_X calcGamma(const float3_X& momentum) const
-        {
-            //returns lorentz factor gamma = sqrt(1/(1-beta**2))
-            const picongpu::float_X betaSquared = util::square<
-                picongpu::float_X, 
-                picongpu::float_X 
-            > (calcBeta(momentum));
-            return picongpu::math::sqrt( 1.0 / ( 1 - betaSquared ));
-        }
-
-        HDINLINE 
-        picongpu::float_X calcBeta(const float3_X& momentum) const
-        {
-            // return beta = v / c
-            return calcVelocity(momentum) * (1.0 / picongpu::SPEED_OF_LIGHT);
-        }
-*/
 
         HDINLINE picongpu::float_X calcBeta(const float3_X& momentum) const
         {
@@ -89,17 +63,7 @@ namespace picongpu
             const picongpu::float_X x = util::square<float_X, picongpu::float_X > ((1.0 / (mass * picongpu::SPEED_OF_LIGHT)));
             return picongpu::math::sqrt(1.0 + (momentum * momentum).sumOfComponents() * x);
         }
-/*
-        HDINLINE 
-        picongpu::float_X calcVelocity(const float3_X& momentum) const
-        {
-            //returns velocity v = p/m
-           // const picongpu::float_X pOverMSquared = std::sqrt(momentum * momentum) / (mass * mass);
-            const picongpu::float_X mOverPSquared = std::sqrt(mass * mass * (1.0 / (momentum * momentum)));
-            //return pOverMSquared * (1.0 / (1 + pOverMSquared * (1.0 / (picongpu::SPEED_OF_LIGHT * picongpu::SPEED_OF_LIGHT))));
-            return picongpu::math::sqrt(1.0/(mOverPSquared + 1.0/(picongpu::SPEED_OF_LIGHT*picongpu::SPEED_OF_LIGHT)));
-        }
-*/
+
         HDINLINE 
         picongpu::float_X calcU(const float3_X& momentum) const
         {
@@ -131,6 +95,27 @@ namespace picongpu
             return calcMomAbs();
         }
 
+        HDINLINE
+        picongpu::float_X getLocPerp(void) const
+        {
+            // return radial, perpendicular component of location in cylindrical coordinates
+            return calcLocRho();
+        }
+
+        HDINLINE
+        picongpu::float_X getLocPara(void) const
+        {
+            // return parallel component to z of location in cylindrical coordinates
+            return location.y();
+        }
+
+        HDINLINE
+        picongpu::float_X getLocPhi(void) const
+        {
+            //return polar angle of location in cylindrical coordinates
+            return calcLocPhi();
+        }
+
         private:
         // Calculators for Momentum in spherical coordinates
         HDINLINE
@@ -138,18 +123,22 @@ namespace picongpu
         {
             //return polar angle phi of momentum
             return picongpu::math::atan2(momentum.z(), momentum.x()) + picongpu::PI;
-            //return picongpu::math::atan2(20.0, 1.0) + picongpu::PI;
-            //return picongpu::PI / 2.0;
         }
 
         HDINLINE
         picongpu::float_X calcMomTheta(void) const
         {
             //return azimuth angle psi of momentum
-            //return picongpu::math::acos(momentum.y() * (1.0 / 100.0));
-            return picongpu::math::acos(momentum.y() * (1.0 / getMomAbs()));
-            //return picongpu::math::acos(1.0 * (1.0 / 2.0));
-            //return momentum.y() * 0.0;
+            //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<z
+            const float_X momAbs = getMomAbs();
+            if(momAbs <= momentum.y())
+            {
+                return 0.0;
+            }
+            else
+            {
+                return picongpu::math::acos(momentum.y() * (1.0 /momAbs));
+            }
         }
 
         HDINLINE
@@ -157,7 +146,22 @@ namespace picongpu
         {
             //return absolute value of momentum
             // return picongpu::math::sqrt(momentum.x() * momentum.x()  + momentum.y() * momentum.y() + momentum.z() * momentum.z());
-            return picongpu::math::sqrt((momentum * momentum).sumOfComponents());
+            return picongpu::math::sqrt(momentum.y() * momentum.y() + momentum.x() * momentum.x() + momentum.z() * momentum.z()); //picongpu::math::sqrt((momentum * momentum).sumOfComponents());
         }
+
+        HDINLINE
+        picongpu::float_X calcLocRho(void) const
+        {
+            // return radial component of location in cylindrical coordinates
+            return picongpu::math::sqrt(location.x() * location.x() + location.z() * location.z());
+        }
+
+        HDINLINE
+        picongpu::float_X calcLocPhi(void) const
+        {
+            // return radial angle phi of location in cylindrical coordinates
+            return picongpu::math::atan2(location.z(), location.x()) + picongpu::PI;
+        }
+
     }; // class CoolParticle
 } // namespace picongpu

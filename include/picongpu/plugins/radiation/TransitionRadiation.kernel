@@ -266,7 +266,7 @@ namespace picongpu
                                         );
 
                                         // calculate values for transition radiation
-                                        energy_perp_s[ saveParticleAt ] = 1.0; //calculator.calcEPerp();
+                                        energy_perp_s[ saveParticleAt ] = calculator.calcEPerp();
 
                                         energy_para_s[ saveParticleAt ] = calculator.calcEPara();
 
