@@ -28,6 +28,46 @@
 
 #include <cmath>
 
+
+#include "pmacc/traits/GetComponentsType.hpp"
+#include "pmacc/traits/GetNComponents.hpp"
+
+namespace pmacc
+{
+
+// namespace traits
+// {
+
+// template<typename T_Type>
+// struct GetComponentsType<::pmacc::math::Complex<T_Type>, false >
+// {
+//     typedef typename T_Type type;
+// };
+
+// /** Trait for float_X */
+// template<typename T_Type>
+// struct GetNComponents<::pmacc::math::Complex<T_Type>, false >
+// {
+//     static constexpr uint32_t value=2;
+// };
+// } //namespace traits
+
+namespace mpi
+{
+
+    using complex_X = pmacc::math::Complex< picongpu::float_X >;
+
+    template<>
+    MPI_StructAsArray getMPI_StructAsArray< pmacc::math::Complex<picongpu::float_X> >()
+    {
+        MPI_StructAsArray result = getMPI_StructAsArray< complex_X::type > ();
+        result.sizeMultiplier *= uint32_t(sizeof(complex_X) / sizeof(typename complex_X::type));
+        return result;
+    };
+
+} //namespace mpi
+} //namespace pmacc
+
 namespace pmacc
 {
 namespace algorithms

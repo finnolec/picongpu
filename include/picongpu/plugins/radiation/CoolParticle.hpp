@@ -47,6 +47,57 @@ namespace picongpu
             return calcU(getMomentum());
         }
 
+        HDINLINE
+        picongpu::float_X getVel(void) const
+        {
+            return calcBeta(getMomentum()) * picongpu::SPEED_OF_LIGHT;
+        }
+
+        // Getters for Momentum in spherical coordinates
+        HDINLINE
+        picongpu::float_X getMomPhi(void) const
+        {
+            //return polar angle phi of momentum
+            return calcMomPhi();
+        }
+
+        HDINLINE
+        picongpu::float_X getMomTheta(void) const
+        {
+            //return azimuth angle psi of momentum
+            return calcMomTheta();
+        }
+
+        HDINLINE
+        picongpu::float_X getMomAbs(void) const
+        {
+            //return absolute value of momentum
+            return calcMomAbs();
+        }
+
+        HDINLINE
+        picongpu::float_X getPosPerp(void) const
+        {
+            // return radial, perpendicular component of location in cylindrical coordinates
+            return calcPosRho();
+        }
+
+        HDINLINE
+        picongpu::float_X getPosPara(void) const
+        {
+            // return parallel component to z of location in cylindrical coordinates
+            return location.y();
+        }
+
+        HDINLINE
+        picongpu::float_X getPosPhi(void) const
+        {
+            //return polar angle of location in cylindrical coordinates
+            return calcPosPhi();
+        }
+
+        private:
+        // Calculators for Momentum in spherical coordinates
         HDINLINE picongpu::float_X calcBeta(const float3_X& momentum) const
         {
             // returns beta=v/c
@@ -73,51 +124,6 @@ namespace picongpu
             return gamma1 * beta1;
         }
 
-        // Getters for Momentum in spherical coordinates
-        HDINLINE
-        picongpu::float_X getMomPhi(void) const
-        {
-            //return polar angle phi of momentum
-            return calcMomPhi();
-        }
-
-        HDINLINE
-        picongpu::float_X getMomTheta(void) const
-        {
-            //return azimuth angle psi of momentum
-            return calcMomTheta();
-        }
-
-        HDINLINE
-        picongpu::float_X getMomAbs(void) const
-        {
-            //return absolute value of momentum
-            return calcMomAbs();
-        }
-
-        HDINLINE
-        picongpu::float_X getLocPerp(void) const
-        {
-            // return radial, perpendicular component of location in cylindrical coordinates
-            return calcLocRho();
-        }
-
-        HDINLINE
-        picongpu::float_X getLocPara(void) const
-        {
-            // return parallel component to z of location in cylindrical coordinates
-            return location.y();
-        }
-
-        HDINLINE
-        picongpu::float_X getLocPhi(void) const
-        {
-            //return polar angle of location in cylindrical coordinates
-            return calcLocPhi();
-        }
-
-        private:
-        // Calculators for Momentum in spherical coordinates
         HDINLINE
         picongpu::float_X calcMomPhi(void) const
         {
@@ -150,14 +156,14 @@ namespace picongpu
         }
 
         HDINLINE
-        picongpu::float_X calcLocRho(void) const
+        picongpu::float_X calcPosRho(void) const
         {
             // return radial component of location in cylindrical coordinates
             return picongpu::math::sqrt(location.x() * location.x() + location.z() * location.z());
         }
 
         HDINLINE
-        picongpu::float_X calcLocPhi(void) const
+        picongpu::float_X calcPosPhi(void) const
         {
             // return radial angle phi of location in cylindrical coordinates
             return picongpu::math::atan2(location.z(), location.x()) + picongpu::PI;

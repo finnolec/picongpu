@@ -15,6 +15,8 @@
 #include <pmacc/traits/HasIdentifier.hpp>
 #include <pmacc/traits/GetNumWorkers.hpp>
 
+#include <pmacc/math/Complex.hpp>
+
 #include <boost/filesystem.hpp>
 
 #include <string>
@@ -27,6 +29,7 @@ namespace picongpu
 using namespace pmacc;
 
 namespace po = boost::program_options;
+using complex_X = pmacc::math::Complex< picongpu::float_X >;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////~///  Transition Radiation Plugin Class  ///~///////////////////////////
@@ -41,12 +44,16 @@ private:
     typedef PIConGPUVerboseRadiation radLog;
 
     GridBuffer<picongpu::float_X, DIM1> *incTransRad;
+    GridBuffer<complex_X, DIM1> *cohTransRadPara;
+    GridBuffer<complex_X, DIM1> *cohTransRadPerp;
     GridBuffer<picongpu::float_X, DIM1> *numParticles;
 
     radiation_frequencies::InitFreqFunctor freqInit;
     radiation_frequencies::FreqFunctor freqFkt;
 
     picongpu::float_X *tmp_itr;
+    complex_X *tmp_ctr_para;
+    complex_X *tmp_ctr_perp;
     picongpu::float_X *tmp_num;
     picongpu::float_X* theTransRad; 
     MappingDesc *cellDescription;
@@ -67,7 +74,6 @@ private:
     bool isMaster;
     uint32_t currentStep;
 
-
     mpi::MPIReduce reduce;
 
     bool debug;
@@ -81,9 +87,13 @@ public:
     folderTransRad("transRad"),
     filename_prefix(pluginPrefix),
     incTransRad(nullptr),
+    cohTransRadPara(nullptr),
+    cohTransRadPerp(nullptr),
     numParticles(nullptr),
     cellDescription(nullptr),
     tmp_itr(nullptr),
+    tmp_ctr_para(nullptr),
+    tmp_ctr_perp(nullptr),
     tmp_num(nullptr),
     theTransRad(nullptr),
     detectorPositions(nullptr),
@@ -166,6 +176,11 @@ public:
 private:
     void pluginLoad()
     {
+        
+        tmp_itr = new float_X[elements_amplitude()];
+        tmp_ctr_para = new complex_X[elements_amplitude()];
+        tmp_ctr_perp = new complex_X[elements_amplitude()];
+        tmp_num = new float_X[elements_amplitude()];
         if(!notifyPeriod.empty())
         {
             log<radLog::SIMULATION_STATE>("Plugin Loaded");
@@ -174,20 +189,19 @@ private:
             isMaster = reduce.hasResult(mpi::reduceMethods::Reduce());
             pmacc::Filesystem<simDim>& fs = Environment<simDim>::get().Filesystem();
 
-            tmp_itr = new picongpu::float_X[elements_amplitude()];
-            tmp_num = new picongpu::float_X[elements_amplitude()];
-            
             Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
 
-            incTransRad = new GridBuffer<picongpu::float_X, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
-            numParticles = new GridBuffer<picongpu::float_X, DIM1 > (DataSpace<DIM1 > (elements_amplitude()));
+            incTransRad = new GridBuffer<float_X, DIM1 > (DataSpace<DIM1> (elements_amplitude()));
+            cohTransRadPara = new GridBuffer<complex_X, DIM1 > (DataSpace<DIM1> (elements_amplitude()));
+            cohTransRadPerp = new GridBuffer<complex_X, DIM1 > (DataSpace<DIM1> (elements_amplitude()));
+            numParticles = new GridBuffer<float_X, DIM1 > (DataSpace<DIM1> (elements_amplitude()));
 
             freqInit.Init(pathOmegaList);
             freqFkt = freqInit.getFunctor();
 
             if (isMaster)
             {
-                theTransRad = new picongpu::float_X[elements_amplitude()];
+                theTransRad = new float_X[elements_amplitude()];
                 /* save detector position / observation direction */
                 detectorPositions = new float3_X[parameters::N_observer];
                 for(uint32_t detectorIndex=0; detectorIndex < parameters::N_observer; ++detectorIndex)
@@ -227,8 +241,12 @@ private:
         }
         CUDA_CHECK(cudaGetLastError());
         __delete( incTransRad );
+        __delete( cohTransRadPara );
+        __delete( cohTransRadPerp );
         __delete( numParticles );
         __deleteArray(tmp_itr);
+        __deleteArray(tmp_ctr_para);
+        __deleteArray(tmp_ctr_perp);
         __deleteArray(tmp_num);
     }
 
@@ -239,6 +257,11 @@ private:
             log<radLog::SIMULATION_STATE>("copyradiationdevicetohost called");
         }
         incTransRad->deviceToHost();
+        __getTransactionEvent().waitForFinished();
+        cohTransRadPara->deviceToHost();
+        __getTransactionEvent().waitForFinished();
+        cohTransRadPerp->deviceToHost();
+        __getTransactionEvent().waitForFinished();
         numParticles->deviceToHost();
         __getTransactionEvent().waitForFinished();
     }
@@ -260,6 +283,20 @@ private:
             nvidia::functors::Add(),
             tmp_itr,
             incTransRad->getHostBuffer().getBasePointer(),
+            elements_amplitude(),
+            mpi::reduceMethods::Reduce()
+        );
+        reduce(
+            nvidia::functors::Add(),
+            tmp_ctr_para,
+            cohTransRadPara->getHostBuffer().getBasePointer(),
+            elements_amplitude(),
+            mpi::reduceMethods::Reduce()
+        );
+        reduce(
+            nvidia::functors::Add(),
+            tmp_ctr_perp,
+            cohTransRadPerp->getHostBuffer().getBasePointer(),
             elements_amplitude(),
             mpi::reduceMethods::Reduce()
         );
@@ -292,19 +329,21 @@ private:
 
 
     /** perform all operations to get data from GPU to master */
-    void collectDataGPUToMaster()
+    void collectDataGPUToMaster(void)
     {
         // collect data GPU -> CPU -> Master
         copyRadiationDeviceToHost();
         collectRadiationOnMaster();
         //sumTransitionRadiation(theTransRad, incTransRad->getHostBuffer().getBasePointer(), numParticles->getHostBuffer().getBasePointer());
-        sumTransitionRadiation(theTransRad, tmp_itr, tmp_num);
+        sumTransitionRadiation(theTransRad, tmp_itr, tmp_ctr_para, tmp_ctr_perp, tmp_num);
     }
 
     // calculate transition radiation integrals with the energy values from the kernel
     void sumTransitionRadiation(
         picongpu::float_X* targetArray, 
         picongpu::float_X* itrArray,
+        complex_X* ctrParaArray,
+        complex_X* ctrPerpArray,
         picongpu::float_X* numArray
     )
     {
@@ -317,7 +356,9 @@ private:
                     std::cout << numArray[i] << " numArray[i]\n";
                     std::cout << itrArray[i] << " itrArray[i]\n";
                 }
-                targetArray[i] = itrArray[i]; // * numArray[i];
+                const float_X ctrPara = math::abs(ctrParaArray[i]) * math::abs(ctrParaArray[i]);
+                const float_X ctrPerp = math::abs(ctrPerpArray[i]) * math::abs(ctrPerpArray[i]);
+                targetArray[i] = itrArray[i] + (numArray[i] - 1) * (ctrPara + ctrPerp); // * numArray[i];
             }
         }
     }
@@ -441,6 +482,8 @@ private:
 
             /*Pointer to memory of radiated amplitude on the device*/
             incTransRad->getDeviceBuffer().getDataBox(),
+            cohTransRadPara->getDeviceBuffer().getDataBox(),
+            cohTransRadPerp->getDeviceBuffer().getDataBox(),
             numParticles->getDeviceBuffer().getDataBox(),
             globalOffset,
             *cellDescription,

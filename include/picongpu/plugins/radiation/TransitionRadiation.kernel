@@ -22,6 +22,7 @@ namespace picongpu
         template<
             typename ParBox,
             typename DBox,
+            typename DBoxComplex, // One needs two different databoxes because why not
             typename Mapping,
             typename T_Acc
         >
@@ -30,6 +31,8 @@ namespace picongpu
             T_Acc const & acc,
             ParBox pb,
             DBox incTransRad,
+            DBoxComplex cohTransRadPara,
+            DBoxComplex cohTransRadPerp,
             DBox numParticles,
             DataSpace<simDim> globalOffset,
             Mapping mapper,
@@ -38,6 +41,7 @@ namespace picongpu
         ) const
         {
             using namespace mappings::threads;
+            using complex_X = pmacc::math::Complex< picongpu::float_X >;
             namespace po = boost::program_options;
 
             constexpr uint32_t frameSize = pmacc::math::CT::volume< SuperCellSize >::type::value;
@@ -67,6 +71,10 @@ namespace picongpu
 
             // amount of particles
             PMACC_SMEM( acc, num_s, memory::Array< picongpu::float_X, blockSize > );
+
+            // exponent
+            PMACC_SMEM( acc, formfactor_exponent, memory::Array<complex_X, blockSize> );
+
             // storage for macro particle weighting needed if
             // the coherent and incoherent radiation of a single
             // macro-particle needs to be considered
@@ -266,9 +274,11 @@ namespace picongpu
                                         );
 
                                         // calculate values for transition radiation
+                                        energy_para_s[ saveParticleAt ] = calculator.calcEPara();
+
                                         energy_perp_s[ saveParticleAt ] = calculator.calcEPerp();
 
-                                        energy_para_s[ saveParticleAt ] = calculator.calcEPara();
+                                        formfactor_exponent[ saveParticleAt ] = calculator.calcFExponent();
 
                                         num_s[ saveParticleAt ] = weighting;
                                     }
@@ -281,22 +291,27 @@ namespace picongpu
                     // run over all  valid omegas for this thread
                     for( int o = workerIdx; o < radiation_frequencies::N_omega; o += T_numWorkers )
                     {
-                        picongpu::float_X itrSum;
-                        picongpu::float_X numParticlesAsdf;
-
-                        itrSum = 0.0;
-                        numParticlesAsdf = 0.0;
+                        picongpu::float_X itrSum = 0.0;
+                        picongpu::float_X numParticlesAsdf = 0.0;
+                        complex_X ctrSumPara = 0.0;
+                        complex_X ctrSumPerp = 0.0;
  
                         for( int j = 0; j < counter_s; ++j )
                         {
+                            picongpu::float_64 const omega = freqFkt( o );
+                            complex_X const formfactor = makeExponentUseful(omega, formfactor_exponent[j]);
+
                             itrSum += energy_perp_s[j] * energy_perp_s[j] + energy_para_s[j] * energy_para_s[j];
                             numParticlesAsdf += num_s[j];
-                            //printf("itr_sum = %.15f", itrSum);
+                            ctrSumPara += energy_para_s[j] * formfactor;
+                            ctrSumPerp += energy_perp_s[j] * formfactor;
                         }
 
                         const int index = theta_idx * radiation_frequencies::N_omega + o;
                         incTransRad[ index ] += itrSum;
                         numParticles[ index ] += numParticlesAsdf;
+                        cohTransRadPara[ index ] += ctrSumPara;
+                        cohTransRadPerp[ index ] += ctrSumPerp;
                     }
 
                     __syncthreads();
