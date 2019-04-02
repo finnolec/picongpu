@@ -59,7 +59,6 @@ private:
     MappingDesc *cellDescription;
     std::string notifyPeriod;
     uint32_t timeStep;
-    uint32_t potatoSalad;
 
     std::string speciesName;
     std::string pluginName;
@@ -100,7 +99,6 @@ public:
     detectorFrequencies(nullptr),
     isMaster(false),
     currentStep(0),
-    potatoSalad(100),
     debug(true)
     {
         if (debug)
@@ -124,26 +122,30 @@ public:
     void notify(uint32_t currentStep)
     {
         //log<radLog::SIMULATION_STATE> ("Transition Radition (%1%): calculate time step %2% ") % speciesName % currentStep;
-        if (currentStep == potatoSalad)
+        
+        this->currentStep = currentStep;
+
+        //log<radLog::SIMULATION_STATE> ("Transition Radition (%1%): calculate time step %2% ") % speciesName % currentStep;
+        if (debug)
         {
-            //log<radLog::SIMULATION_STATE> ("Transition Radition (%1%): calculate time step %2% ") % speciesName % currentStep;
-            if (debug)
-            {
-                log<radLog::SIMULATION_STATE> ("Notify called in if statement.");
-            }
-            calculateRadiationParticles(currentStep);
-            if (debug)
-            {
-                log<radLog::SIMULATION_STATE> ("Notify finished in if statement.");
-            }
+            log<radLog::SIMULATION_STATE> ("Notify called in if statement.");
         }
+        calculateRadiationParticles(currentStep);
+        if (debug)
+        {
+            log<radLog::SIMULATION_STATE> ("Notify finished in if statement.");
+        }
+        collectDataGPUToMaster();
+        writeTransRadToText();
+        resetBuffers();
+        log<radLog::SIMULATION_STATE>("printed shit to data table");
+        
     }
 
     void pluginRegisterHelp(po::options_description& desc)
     {
         desc.add_options()
-            ((pluginPrefix + ".period").c_str(), po::value<std::string> (&notifyPeriod), "enable plugin [for each n-th step]")
-            ((pluginPrefix + ".omegaList").c_str(), po::value<std::string > (&pathOmegaList)->default_value("_noPath_"), "path to file containing all frequencies to calculate");
+            ((pluginPrefix + ".period").c_str(), po::value<std::string> (&notifyPeriod), "enable plugin [for each n-th step]");
     // log<radLog::SIMULATION_STATE>("Notify period is: (%1%)" % &notifyPeriod);
     }
 
@@ -174,6 +176,38 @@ public:
     }
 
 private:
+    void resetBuffers()
+    {
+        /* Resets all Databuffers and arrays for repeated calculation of the 
+         * transition radiation
+         */
+        incTransRad->getDeviceBuffer().reset(false);
+        cohTransRadPara->getDeviceBuffer().reset(false);
+        cohTransRadPerp->getDeviceBuffer().reset(false);
+        numParticles->getDeviceBuffer().reset(false);
+
+        for (unsigned int i=0; i< elements_amplitude(); ++i)
+        {
+            tmp_itr[i] = 0;
+            tmp_ctr_para[i] = 0;
+            tmp_ctr_perp[i] = 0;
+            tmp_num[i] = 0;
+        }
+
+        if (isMaster)
+        {
+            for (unsigned int i=0; i< elements_amplitude(); ++i)
+            {
+                theTransRad[i] = 0;
+            }
+        }
+
+        if(debug)
+        {
+            log<radLog::SIMULATION_STATE>("resetted everyhting");
+        }
+    }
+
     void pluginLoad()
     {
         
@@ -233,8 +267,6 @@ private:
         {
             log<radLog::SIMULATION_STATE> ("pluginunload called");
         }
-        collectDataGPUToMaster();
-        writeTransRadToText();
         if(isMaster)
         {
             __deleteArray(theTransRad);
@@ -361,37 +393,6 @@ private:
                 targetArray[i] = itrArray[i] + (numArray[i] - 1) * (ctrPara + ctrPerp); // * numArray[i];
             }
         }
-    }
-
-
-    static const std::string dataLabels(int index)
-    {
-        log<radLog::SIMULATION_STATE>("dataLabels");
-    
-        return "0";
-    }
-
-    static const std::string dataLabelsDetectorDirection(int index)
-    {
-    
-        log<radLog::SIMULATION_STATE>("dataLabelsDetectorDirection");
-        
-        return "0";
-    }
-
-    static const std::string dataLabelsDetectorFrequency(int index)
-    {
-        log<radLog::SIMULATION_STATE>("dataLabelsDetectorFrequency");
-        
-        const std::string path("DetectorFrequency/");
-
-        /* return record name if handed -1 */
-        if(index == -1)
-            return path;
-
-        const std::string dataLabelsList[] = {"omega"};
-
-        return path + dataLabelsList[index];
     }
 
     void writeFile(float_X* values, std::string name)

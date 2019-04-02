@@ -147,6 +147,8 @@ namespace picongpu
         // phi goes from 0 to 2*pi
         constexpr float_64 phiMin = 0.0;
         constexpr float_64 phiMax = 2 * picongpu::PI;
+
+        constexpr float_64 surfacePosition = 0.0;
     } /* end namespace parameters */
 
     namespace radiation

@@ -104,7 +104,7 @@ namespace picongpu
              *          - i sinTheta rho cos(Phi_P - Phi_D)
              */
             const float_X a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
-            const float_X b =  - particle.getPosPara() * ( 1 / particle.getVel() - a / SPEED_OF_LIGHT) / ( parMomCosTheta);
+            const float_X b =  - (particle.getPosPara() - parameters::surfacePosition) * ( 1 / particle.getVel() - a / SPEED_OF_LIGHT) / ( parMomCosTheta);
             const float_X c = - detectorSinTheta * particle.getPosPerp() * math::cos( particle.getPosPhi() - detectorPhi);
             const complex_X fpara = complex_X(0.0, b);
             const complex_X fperp = complex_X(0.0, c);
