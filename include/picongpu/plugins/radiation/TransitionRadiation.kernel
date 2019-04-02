@@ -12,6 +12,7 @@
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
 
+
 namespace picongpu
 {
     template<
@@ -27,7 +28,7 @@ namespace picongpu
             typename T_Acc
         >
         DINLINE
-        void operator()(
+        void operator( )(
             T_Acc const & acc,
             ParBox pb,
             DBox incTransRad,
@@ -41,7 +42,7 @@ namespace picongpu
         ) const
         {
             using namespace mappings::threads;
-            using complex_X = pmacc::math::Complex< picongpu::float_X >;
+            using complex_X = pmacc::math::Complex< float_X >;
             namespace po = boost::program_options;
 
             constexpr uint32_t frameSize = pmacc::math::CT::volume< SuperCellSize >::type::value;
@@ -64,13 +65,13 @@ namespace picongpu
             constexpr int blockSize = pmacc::math::CT::volume<SuperCellSize>::type::value;
 
             // perpendicular part of normalized energy
-            PMACC_SMEM( acc, energy_perp_s, memory::Array<picongpu::float_X, blockSize > );
+            PMACC_SMEM( acc, energy_perp_s, memory::Array<float_X, blockSize > );
 
             // parallel part of normalized energy
-            PMACC_SMEM( acc, energy_para_s, memory::Array<picongpu::float_X, blockSize> );
+            PMACC_SMEM( acc, energy_para_s, memory::Array<float_X, blockSize> );
 
             // amount of particles
-            PMACC_SMEM( acc, num_s, memory::Array< picongpu::float_X, blockSize > );
+            PMACC_SMEM( acc, num_s, memory::Array< float_X, blockSize > );
 
             // exponent
             PMACC_SMEM( acc, formfactor_exponent, memory::Array<complex_X, blockSize> );
@@ -90,7 +91,7 @@ namespace picongpu
             float3_X const look = radiation_observer::observation_direction_picongpustandard( theta_idx );
 
             // get extent of guarding super cells (needed to ignore them)
-            DataSpace< simDim > const guardingSuperCells = mapper.getGuardingSuperCells();
+            DataSpace< simDim > const guardingSuperCells = mapper.getGuardingSuperCells( );
 
             /* number of super cells on GPU per dimension (still including guard cells)
             * remove both guards from count [later one sided guard needs to be added again]
@@ -98,7 +99,7 @@ namespace picongpu
             DataSpace< simDim > const superCellsCount( mapper.getGridSuperCells( ) - 2 * guardingSuperCells );
 
             // get absolute number of relevant super cells
-            int const numSuperCells = superCellsCount.productOfComponents();
+            int const numSuperCells = superCellsCount.productOfComponents( );
 
 
             /* go over all super cells on GPU
@@ -115,10 +116,9 @@ namespace picongpu
 
                 // -guardingSuperCells remove guarding block
                 DataSpace< simDim > const superCellOffset(
-                    globalOffset +
-                    (
+                    globalOffset + (
                         ( superCell - guardingSuperCells ) *
-                        SuperCellSize::toRT()
+                        SuperCellSize::toRT( )
                     )
                 );
 
@@ -126,20 +126,20 @@ namespace picongpu
                 FramePtr frame = pb.getLastFrame( superCell );
 
                 // number  of particles in current frame
-                lcellId_t particlesInFrame = pb.getSuperCell( superCell ).getSizeLastFrame();
+                lcellId_t particlesInFrame = pb.getSuperCell( superCell ).getSizeLastFrame( );
 
                 /* go to next supercell
                 *
                 * if "isValid" is false then there is no frame
                 * inside the superCell (anymore)
                 */
-                while( frame.isValid() )
+                while( frame.isValid( ) )
                 {
                     /* since a race condition can occur if "continue loop" is called,
                     *  all threads must wait for the selection of a new frame
                     *  until all threads have evaluated "isValid"
                     */
-                    __syncthreads();
+                    __syncthreads( );
 
                     ForEachIdx<
                         IdxConfig<
@@ -163,7 +163,7 @@ namespace picongpu
                         }
                     );
 
-                    __syncthreads();
+                    __syncthreads( );
 
                     using ParticleDomCfg = IdxConfig<
                         frameSize,
@@ -196,9 +196,9 @@ namespace picongpu
                                 int saveParticleAt = -1;
 
                                 // only moving particles create transition radiation
-                                if( (particle_momentum*particle_momentum).sumOfComponents() > 0.0)
+                                if( ( particle_momentum*particle_momentum ).sumOfComponents( ) > 0.0)
                                 {
-                                    if( getRadiationMask(par) )
+                                    if( getRadiationMask( par ) )
                                         saveParticleAt = nvidia::atomicAllInc(
                                             acc,
                                             &counter_s,
@@ -233,7 +233,9 @@ namespace picongpu
                                         particle_location[ 2 ] = 0.0;
                                         // run over all components and compute gobal position
                                         for( int i = 0; i < simDim; ++i )
-                                            particle_location[ i ] = ( float_X( globalPos[ i ] ) + pos[ i ] ) * cellSize[ i ];
+                                            particle_location[ i ] = ( 
+                                                float_X( globalPos[ i ] ) + pos[ i ] 
+                                            ) * cellSize[ i ];
 
                                         /* get macro-particle weighting
                                             *
@@ -257,7 +259,7 @@ namespace picongpu
                                         );
 
                                         //printf("Particle Momentum: %f \tparticle charge: %f \tparticle mass %f\n", particle_momentum * particle_momentum, particle_charge, particle_mass);
-                                        //printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x(), particle_momentum.y(), particle_momentum.z());
+                                        //printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x( ), particle_momentum.y( ), particle_momentum.z( ));
                                         // using transition radiation particle class
                                         // printf("shuut shuut \n");
                                         CoolParticle const particle(
@@ -274,11 +276,11 @@ namespace picongpu
                                         );
 
                                         // calculate values for transition radiation
-                                        energy_para_s[ saveParticleAt ] = calculator.calcEPara();
+                                        energy_para_s[ saveParticleAt ] = calculator.calcEPara( );
 
-                                        energy_perp_s[ saveParticleAt ] = calculator.calcEPerp();
+                                        energy_perp_s[ saveParticleAt ] = calculator.calcEPerp( );
 
-                                        formfactor_exponent[ saveParticleAt ] = calculator.calcFExponent();
+                                        formfactor_exponent[ saveParticleAt ] = calculator.calcFExponent( );
 
                                         num_s[ saveParticleAt ] = weighting;
                                     }
@@ -286,22 +288,26 @@ namespace picongpu
                             } // only threads with particle
                         } 
                     ); // for each particle
-                    __syncthreads();
+                    __syncthreads( );
 
                     // run over all  valid omegas for this thread
                     for( int o = workerIdx; o < radiation_frequencies::N_omega; o += T_numWorkers )
                     {
-                        picongpu::float_X itrSum = 0.0;
-                        picongpu::float_X numParticlesAsdf = 0.0;
+                        float_X itrSum = 0.0;
+                        float_X numParticlesAsdf = 0.0;
                         complex_X ctrSumPara = 0.0;
                         complex_X ctrSumPerp = 0.0;
  
                         for( int j = 0; j < counter_s; ++j )
                         {
                             picongpu::float_64 const omega = freqFkt( o );
-                            complex_X const formfactor = makeExponentUseful(omega, formfactor_exponent[j]);
+                            complex_X const formfactor = makeExponentUseful(
+                                omega, 
+                                formfactor_exponent[j]
+                            );
 
-                            itrSum += energy_perp_s[j] * energy_perp_s[j] + energy_para_s[j] * energy_para_s[j];
+                            itrSum += energy_perp_s[j] * energy_perp_s[j] + 
+                                energy_para_s[j] * energy_para_s[j];
                             numParticlesAsdf += num_s[j];
                             ctrSumPara += energy_para_s[j] * formfactor;
                             ctrSumPerp += energy_perp_s[j] * formfactor;
@@ -314,7 +320,7 @@ namespace picongpu
                         cohTransRadPerp[ index ] += ctrSumPerp;
                     }
 
-                    __syncthreads();
+                    __syncthreads( );
 
                     /* First threads starts loading next frame of the super-cell:
                      *
