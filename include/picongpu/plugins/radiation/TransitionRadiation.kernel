@@ -6,7 +6,7 @@
 #include <cstdlib>
 
 #include "picongpu/simulation_defines.hpp"
-#include "picongpu/plugins/radiation/CoolParticle.hpp"
+#include "picongpu/plugins/radiation/TransRadParticle.hpp"
 #include "picongpu/plugins/radiation/TransRadCalculator.hpp"
 
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
@@ -21,24 +21,24 @@ namespace picongpu
     struct KernelTransRadParticles
     {
         template<
-            typename ParBox,
-            typename DBox,
-            typename DBoxComplex, // One needs two different databoxes because why not
-            typename Mapping,
+            typename T_ParBox,
+            typename T_DBox,
+            typename T_DBoxComplex, // One needs two different databoxes because why not
+            typename T_Mapping,
             typename T_Acc
         >
         DINLINE
         void operator( )(
             T_Acc const & acc,
-            ParBox pb,
-            DBox incTransRad,
-            DBoxComplex cohTransRadPara,
-            DBoxComplex cohTransRadPerp,
-            DBox numParticles,
-            DataSpace<simDim> globalOffset,
-            Mapping mapper,
+            T_ParBox pb,
+            T_DBox incTransRad,
+            T_DBoxComplex cohTransRadPara,
+            T_DBoxComplex cohTransRadPerp,
+            T_DBox numParticles,
+            DataSpace< simDim > globalOffset,
+            T_Mapping mapper,
             radiation_frequencies::FreqFunctor freqFkt,
-            DataSpace<simDim> simBoxSize
+            DataSpace< simDim > simBoxSize
         ) const
         {
             using namespace mappings::threads;
@@ -48,8 +48,8 @@ namespace picongpu
             constexpr uint32_t frameSize = pmacc::math::CT::volume< SuperCellSize >::type::value;
             constexpr uint32_t numWorker = T_numWorkers;
 
-            using FrameType = typename ParBox::FrameType;
-            using FramePtr = typename ParBox::FramePtr;
+            using FrameType = typename T_ParBox::FrameType;
+            using FramePtr = typename T_ParBox::FramePtr;
 
             uint32_t const workerIdx = threadIdx.x;
 
@@ -62,19 +62,19 @@ namespace picongpu
             * through all particles and calculates the radiation for one direction
             * for all frequencies
             */
-            constexpr int blockSize = pmacc::math::CT::volume<SuperCellSize>::type::value;
+            constexpr int blockSize = pmacc::math::CT::volume< SuperCellSize >::type::value;
 
             // perpendicular part of normalized energy
-            PMACC_SMEM( acc, energy_perp_s, memory::Array<float_X, blockSize > );
+            PMACC_SMEM( acc, energyPerp_s, memory::Array< float_X, blockSize > );
 
             // parallel part of normalized energy
-            PMACC_SMEM( acc, energy_para_s, memory::Array<float_X, blockSize> );
+            PMACC_SMEM( acc, energyPara_s, memory::Array< float_X, blockSize > );
 
             // amount of particles
             PMACC_SMEM( acc, num_s, memory::Array< float_X, blockSize > );
 
             // exponent
-            PMACC_SMEM( acc, formfactor_exponent, memory::Array<complex_X, blockSize> );
+            PMACC_SMEM( acc, formfactorExponent_s, memory::Array< complex_X, blockSize > );
 
             // storage for macro particle weighting needed if
             // the coherent and incoherent radiation of a single
@@ -105,12 +105,12 @@ namespace picongpu
             /* go over all super cells on GPU
             * but ignore all guarding supercells
             */
-            for( int super_cell_index = 0; super_cell_index <= numSuperCells; ++super_cell_index )
+            for( int superCellIndex = 0; superCellIndex <= numSuperCells; ++superCellIndex )
             {
                 // select SuperCell and add one sided guard again
                 DataSpace< simDim > const superCell = DataSpaceOperations<simDim>::map(
                     superCellsCount,
-                    super_cell_index
+                    superCellIndex
                 ) + guardingSuperCells;
                     
 
@@ -184,7 +184,7 @@ namespace picongpu
                             {
                                 auto par = frame[ linearIdx ];
                                 // get particle momenta
-                                float3_X const particle_momentum = par[momentum_];
+                                float3_X const particle_momentum = par[ momentum_ ];
                                 /* initializes "saveParticleAt" flag with -1
                                 * because "counter_s" will never be -1
                                 * therefore, if a particle is saved, a value of counter
@@ -196,13 +196,13 @@ namespace picongpu
                                 int saveParticleAt = -1;
 
                                 // only moving particles create transition radiation
-                                if( ( particle_momentum*particle_momentum ).sumOfComponents( ) > 0.0)
+                                if( ( particle_momentum * particle_momentum ).sumOfComponents( ) > 0.0 )
                                 {
                                     if( getRadiationMask( par ) )
                                         saveParticleAt = nvidia::atomicAllInc(
                                             acc,
                                             &counter_s,
-                                            ::alpaka::hierarchy::Threads{}
+                                            ::alpaka::hierarchy::Threads{ }
                                         );
 
                                     /* for information:
@@ -262,7 +262,7 @@ namespace picongpu
                                         //printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x( ), particle_momentum.y( ), particle_momentum.z( ));
                                         // using transition radiation particle class
                                         // printf("shuut shuut \n");
-                                        CoolParticle const particle(
+                                        transitionRadiation::Particle const particle(
                                             particle_location,
                                             particle_momentum,
                                             particle_charge,
@@ -276,11 +276,11 @@ namespace picongpu
                                         );
 
                                         // calculate values for transition radiation
-                                        energy_para_s[ saveParticleAt ] = calculator.calcEPara( );
+                                        energyPara_s[ saveParticleAt ] = calculator.calcEPara( );
 
-                                        energy_perp_s[ saveParticleAt ] = calculator.calcEPerp( );
+                                        energyPerp_s[ saveParticleAt ] = calculator.calcEPerp( );
 
-                                        formfactor_exponent[ saveParticleAt ] = calculator.calcFExponent( );
+                                        formfactorExponent_s[ saveParticleAt ] = calculator.calcFExponent( );
 
                                         num_s[ saveParticleAt ] = weighting;
                                     }
@@ -303,17 +303,17 @@ namespace picongpu
                             picongpu::float_64 const omega = freqFkt( o );
                             complex_X const formfactor = makeExponentUseful(
                                 omega, 
-                                formfactor_exponent[j]
+                                formfactorExponent_s[ j ]
                             );
 
-                            itrSum += energy_perp_s[j] * energy_perp_s[j] + 
-                                energy_para_s[j] * energy_para_s[j];
-                            numParticlesAsdf += num_s[j];
-                            ctrSumPara += energy_para_s[j] * formfactor;
-                            ctrSumPerp += energy_perp_s[j] * formfactor;
+                            itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] + 
+                                energyPara_s[ j ] * energyPara_s[ j ];
+                            numParticlesAsdf += num_s[ j ];
+                            ctrSumPara += energyPara_s[ j ] * formfactor;
+                            ctrSumPerp += energyPerp_s[ j ] * formfactor;
                         }
 
-                        const int index = theta_idx * radiation_frequencies::N_omega + o;
+                        int const index = theta_idx * radiation_frequencies::N_omega + o;
                         incTransRad[ index ] += itrSum;
                         numParticles[ index ] += numParticlesAsdf;
                         cohTransRadPara[ index ] += ctrSumPara;
