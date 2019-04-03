@@ -367,11 +367,11 @@ namespace picongpu
         // calculate transition radiation integrals with the energy values from the kernel
         void 
         sumTransitionRadiation(
-            float_X* targetArray, 
-            float_X* itrArray,
-            complex_X* ctrParaArray,
-            complex_X* ctrPerpArray,
-            float_X* numArray
+            float_X * targetArray, 
+            float_X * itrArray,
+            complex_X * ctrParaArray,
+            complex_X * ctrPerpArray,
+            float_X * numArray
         )
         {
             if (isMaster)
@@ -398,7 +398,7 @@ namespace picongpu
 
         void 
         writeFile(
-            float_X* values, 
+            float_X * values, 
             std::string name
         )
         {
