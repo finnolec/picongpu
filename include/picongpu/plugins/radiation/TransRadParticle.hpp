@@ -110,7 +110,6 @@ namespace transitionRadiation
         }
 
     private:
-
         // Calculators for Momentum in spherical coordinates
         HDINLINE 
         float_X 

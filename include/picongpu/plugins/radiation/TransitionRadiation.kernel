@@ -196,7 +196,7 @@ namespace picongpu
                                 int saveParticleAt = -1;
 
                                 // only moving particles create transition radiation
-                                if( ( particle_momentum * particle_momentum ).sumOfComponents( ) > 0.0 )
+                                if( ( particle_momentum * particle_momentum ).sumOfComponents( ) > 0.0)
                                 {
                                     if( getRadiationMask( par ) )
                                         saveParticleAt = nvidia::atomicAllInc(
@@ -258,10 +258,7 @@ namespace picongpu
                                             par
                                         );
 
-                                        //printf("Particle Momentum: %f \tparticle charge: %f \tparticle mass %f\n", particle_momentum * particle_momentum, particle_charge, particle_mass);
-                                        //printf("mom x: %.15f, mom y: %.15f, mom z: %.15f\n", particle_momentum.x( ), particle_momentum.y( ), particle_momentum.z( ));
                                         // using transition radiation particle class
-                                        // printf("shuut shuut \n");
                                         transitionRadiation::Particle const particle(
                                             particle_location,
                                             particle_momentum,
@@ -295,8 +292,8 @@ namespace picongpu
                     {
                         float_X itrSum = 0.0;
                         float_X numParticlesAsdf = 0.0;
-                        complex_X ctrSumPara = 0.0;
-                        complex_X ctrSumPerp = 0.0;
+                        complex_X ctrSumPara = complex_X(0.0, 0.0);
+                        complex_X ctrSumPerp = complex_X(0.0, 0.0);
  
                         for( int j = 0; j < counter_s; ++j )
                         {

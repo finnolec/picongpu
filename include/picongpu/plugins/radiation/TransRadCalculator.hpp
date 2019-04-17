@@ -134,8 +134,13 @@ namespace picongpu
              * F_exp = - i z ( 1 / v - sinTheta sinPsi cos(Phi_P - Phi_D) / c ) / (cosPsi)
              *          - i sinTheta rho cos(Phi_P - Phi_D)
              */
+            // If case for longitudinal moving particles... leads to 0 later in the kernel
+            if ( parMomCosTheta == 0 )
+            {
+                return complex_X( -1.0, 0.0 );
+            }
             float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
-            float_X const b =  - ( particle.getPosPara( ) - parameters::surfacePosition ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
+            float_X const b = - ( particle.getPosPara( ) - parameters::surfacePosition ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
             float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
             complex_X const fpara = complex_X( 0.0, b );
             complex_X const fperp = complex_X( 0.0, c );
@@ -151,6 +156,11 @@ namespace picongpu
         complex_X const exponent
     )
     {
+        // If case for longitudinal moving particles
+        if ( exponent.get_real() == -1.0 )
+        {
+            return complex_X( 0.0, 0.0 );
+        }
         /* Does exactly what the name says */
         return math::exp( exponent * omega );
     }

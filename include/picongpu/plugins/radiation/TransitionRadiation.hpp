@@ -101,7 +101,7 @@ namespace picongpu
             isMaster( false ),
             currentStep( 0 )
         {
-            Environment<>::get( ).PluginConnector( ).registerPlugin(this);
+            Environment<>::get( ).PluginConnector( ).registerPlugin( this );
         }
 
         virtual 
@@ -119,19 +119,19 @@ namespace picongpu
             uint32_t currentStep
         )
         {
-            log<radLog::SIMULATION_STATE>( "Transition Radition (%1%): calculate time step %2% " ) % speciesName % currentStep;
+            log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): calculate time step %2% " ) % speciesName % currentStep;
             
             this->currentStep = currentStep;
 
             calculateRadiationParticles( currentStep );
             
-            log<radLog::SIMULATION_STATE>( "Transition Radition (%1%): finished time step %2% " ) % speciesName % currentStep;
+            log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): finished time step %2% " ) % speciesName % currentStep;
             
             collectDataGPUToMaster( );
             writeTransRadToText( );
             resetBuffers( );
             
-            log<radLog::SIMULATION_STATE>( "Transition Radition (%1%): printed to table %2% " ) % speciesName % currentStep;
+            log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): printed to table %2% " ) % speciesName % currentStep;
         }
 
         void 
@@ -381,17 +381,29 @@ namespace picongpu
                 ************************************************************/
                 for( unsigned int i = 0; i < elements_amplitude( ); ++i )
                 {
-                    if(i == 10)
-                    {
-                        std::cout << numArray[ i ] << " numArray[ i ]\n";
-                        std::cout << itrArray[ i ] << " itrArray[ i ]\n";
-                    }
+                    // if(i == 10)
+                    // {
+                    std::cout << numArray[ i ] << " numArray[ i ]\n";
+                    std::cout << itrArray[ i ] << " itrArray[ i ]\n";
+                    std::cout << ctrParaArray[ i ].get_real() << " ctrParaArray[i]\n";
+                    std::cout << ctrPerpArray[ i ].get_imag() << " ctrPerpArray[i]\n";
+                    // }
                     const float_X ctrPara = 
                         math::abs(ctrParaArray[ i ]) * math::abs(ctrParaArray[ i ]);
                     const float_X ctrPerp = 
                         math::abs(ctrPerpArray[ i ]) * math::abs(ctrPerpArray[ i ]);
                     targetArray[ i ] = itrArray[ i ] + 
                         (numArray[ i ] - 1) * (ctrPara + ctrPerp);
+                    // targetArray[ i ] = (numArray[ i ] - 1) * (ctrPara + ctrPerp);
+                    // if(i == 10)
+                    // {
+                    //     std::cout << ctrPara << " ctr Para \n";
+                    //     std::cout << ctrPerp << " ctr Perp \n";
+                    //     std::cout << ctrParaArray[i].get_real() << " ctr ParaArrya \n";
+                    //     std::cout << ctrParaArray[i].get_imag() << " ctr ParaArrya \n";
+                    //     std::cout << ctrPerpArray[i].get_real() << " ctr PerpArray \n";
+                    //     std::cout << ctrPerpArray[i].get_imag() << " ctr PerpArray \n";
+                    // }
                 }
             }
         }
@@ -455,7 +467,7 @@ namespace picongpu
             uint32_t currentStep
         )
         {
-            DataConnector &dc = Environment<>::get( ).DataConnector( );
+            DataConnector &dc = Environment< >::get( ).DataConnector( );
             auto particles = dc.get< T_ParticlesType >( 
                 T_ParticlesType::FrameType::getName( ), 
                 true
@@ -487,7 +499,7 @@ namespace picongpu
             // PIC-like kernel call of the radiation kernel
             PMACC_KERNEL( KernelTransRadParticles<
                 numWorkers
-            >{} )(
+            >{ } )(
                 gridDim_rad,
                 numWorkers
             )(
