@@ -401,8 +401,8 @@ namespace picongpu
                         math::abs2( ctrPerpArray[ i ] );
 
                     targetArray[ i ] = ( 
-                        itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) 
-                        );
+                        itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
+                    );
                 }
             }
         }

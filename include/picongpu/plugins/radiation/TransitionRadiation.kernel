@@ -296,6 +296,8 @@ namespace picongpu
                         complex_X ctrSumPara = complex_X( 0.0, 0.0 );
                         complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
 
+                        // create a form factor object
+                        radFormFactor::radFormFactor const myRadFormFactor{ };
  
                         for( int j = 0; j < counter_s; ++j )
                         {
@@ -305,18 +307,25 @@ namespace picongpu
                                 formfactorExponent_s[ j ]
                             );
 
+                            float_X const macroParticleFormFactor = myRadFormFactor(
+                                radWeighting_s[ j ],
+                                omega,
+                                look
+                            );
+
                             // itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] / ( num_s[ j ] * num_s[ j ] ) + 
                             //     energyPara_s[ j ] * energyPara_s[ j ] / ( num_s[ j ] * num_s[ j ] );
                             // itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] / ( totalParticles * totalParticles ) + 
                             //     energyPara_s[ j ] * energyPara_s[ j ] / ( totalParticles * totalParticles );
+
                             itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] + 
                                 energyPara_s[ j ] * energyPara_s[ j ];
                             numParticlesAsdf += num_s[ j ];
                             totalParticles += num_s[ j ];
                             // ctrSumPara += energyPara_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
                             // ctrSumPerp += energyPerp_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
-                            ctrSumPara += energyPara_s[ j ] * formfactor;// / ( totalParticles );
-                            ctrSumPerp += energyPerp_s[ j ] * formfactor;// / ( totalParticles );
+                            ctrSumPara += macroParticleFormFactor * energyPara_s[ j ] * formfactor;// / ( totalParticles );
+                            ctrSumPerp += macroParticleFormFactor * energyPerp_s[ j ] * formfactor;// / ( totalParticles );
                             // if( num_s[ j ] < 1.0 )
                             // {
                             //     printf("num_s[ j ] is less than 1");
