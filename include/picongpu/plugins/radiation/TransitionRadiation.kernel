@@ -292,8 +292,10 @@ namespace picongpu
                     {
                         float_X itrSum = 0.0;
                         float_X numParticlesAsdf = 0.0;
-                        complex_X ctrSumPara = complex_X(0.0, 0.0);
-                        complex_X ctrSumPerp = complex_X(0.0, 0.0);
+                        float_X totalParticles = 0.0;
+                        complex_X ctrSumPara = complex_X( 0.0, 0.0 );
+                        complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
+
  
                         for( int j = 0; j < counter_s; ++j )
                         {
@@ -303,18 +305,35 @@ namespace picongpu
                                 formfactorExponent_s[ j ]
                             );
 
+                            // itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] / ( num_s[ j ] * num_s[ j ] ) + 
+                            //     energyPara_s[ j ] * energyPara_s[ j ] / ( num_s[ j ] * num_s[ j ] );
+                            // itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] / ( totalParticles * totalParticles ) + 
+                            //     energyPara_s[ j ] * energyPara_s[ j ] / ( totalParticles * totalParticles );
                             itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] + 
                                 energyPara_s[ j ] * energyPara_s[ j ];
                             numParticlesAsdf += num_s[ j ];
-                            ctrSumPara += energyPara_s[ j ] * formfactor;
-                            ctrSumPerp += energyPerp_s[ j ] * formfactor;
+                            totalParticles += num_s[ j ];
+                            // ctrSumPara += energyPara_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
+                            // ctrSumPerp += energyPerp_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
+                            ctrSumPara += energyPara_s[ j ] * formfactor;// / ( totalParticles );
+                            ctrSumPerp += energyPerp_s[ j ] * formfactor;// / ( totalParticles );
+                            // if( num_s[ j ] < 1.0 )
+                            // {
+                            //     printf("num_s[ j ] is less than 1");
+                            // } 
                         }
 
+
                         int const index = theta_idx * radiation_frequencies::N_omega + o;
-                        incTransRad[ index ] += itrSum;
-                        numParticles[ index ] += numParticlesAsdf;
-                        cohTransRadPara[ index ] += ctrSumPara;
-                        cohTransRadPerp[ index ] += ctrSumPerp;
+                        incTransRad[ index ] += ( itrSum ); // / ( totalParticles );
+                        numParticles[ index ] += totalParticles;
+                        cohTransRadPara[ index ] += ( ctrSumPara ); // / math::sqrt( totalParticles );
+                        cohTransRadPerp[ index ] += ( ctrSumPerp ); // / math::sqrt( totalParticles );
+
+                        // incTransRad[ index ]; // /= (totalParticles * totalParticles);
+                        // cohTransRadPara[ index ]; // /= totalParticles;
+                        // cohTransRadPerp[ index ]; // /= totalParticles;
+                    
                     }
 
                     __syncthreads( );

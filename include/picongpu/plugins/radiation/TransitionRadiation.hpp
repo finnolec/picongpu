@@ -2,8 +2,9 @@
 
 #include "picongpu/simulation_defines.hpp"
 
-#include "picongpu/plugins/radiation/TransitionRadiation.kernel" // TODO Replace with TR Kernel
+#include "picongpu/plugins/radiation/TransitionRadiation.kernel"
 #include "picongpu/plugins/ISimulationPlugin.hpp"
+#include "picongpu/plugins/radiation/ExecuteParticleFilter.hpp"
 #include "picongpu/plugins/common/stringHelpers.hpp"
 
 #include <pmacc/mpi/reduceMethods/Reduce.hpp>
@@ -23,6 +24,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <ctime>
 
 
 namespace picongpu
@@ -101,7 +103,7 @@ namespace picongpu
             isMaster( false ),
             currentStep( 0 )
         {
-            Environment<>::get( ).PluginConnector( ).registerPlugin( this );
+            Environment< >::get( ).PluginConnector( ).registerPlugin( this );
         }
 
         virtual 
@@ -121,15 +123,22 @@ namespace picongpu
         {
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): calculate time step %2% " ) % speciesName % currentStep;
             
+            resetBuffers( );
             this->currentStep = currentStep;
+            
+            // const std::clock_t beginTime = std::clock( );
 
             calculateRadiationParticles( currentStep );
             
+            // std::cout << float( std::clock( ) - beginTime ) / std::CLOCKS_PER_SEC;
+
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): finished time step %2% " ) % speciesName % currentStep;
             
             collectDataGPUToMaster( );
             writeTransRadToText( );
-            resetBuffers( );
+
+            // std::cout << float( std::clock( ) - beginTime ) / std::CLOCKS_PER_SEC;
+
             
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): printed to table %2% " ) % speciesName % currentStep;
         }
@@ -209,7 +218,7 @@ namespace picongpu
             tmpCTRpara = new complex_X[ elements_amplitude( ) ];
             tmpCTRperp = new complex_X[ elements_amplitude( ) ];
             tmpNum = new float_X[ elements_amplitude( ) ];
-            if(!notifyPeriod.empty( ))
+            if( !notifyPeriod.empty( ) )
             {
                 /*only rank 0 create a file*/
                 isMaster = reduce.hasResult( mpi::reduceMethods::Reduce( ) );
@@ -381,29 +390,19 @@ namespace picongpu
                 ************************************************************/
                 for( unsigned int i = 0; i < elements_amplitude( ); ++i )
                 {
-                    // if(i == 10)
-                    // {
-                    std::cout << numArray[ i ] << " numArray[ i ]\n";
-                    std::cout << itrArray[ i ] << " itrArray[ i ]\n";
-                    std::cout << ctrParaArray[ i ].get_real() << " ctrParaArray[i]\n";
-                    std::cout << ctrPerpArray[ i ].get_imag() << " ctrPerpArray[i]\n";
-                    // }
+                    // std::cout << numArray[ i ] << " numArray[ i ]\n";
+                    // std::cout << itrArray[ i ] << " itrArray[ i ]\n";
+                    // std::cout << ctrParaArray[ i ].get_real( ) << " ctrParaArray[ i ]\n";
+                    // std::cout << ctrPerpArray[ i ].get_imag( ) << " ctrPerpArray[ i ]\n";
+
                     const float_X ctrPara = 
-                        math::abs(ctrParaArray[ i ]) * math::abs(ctrParaArray[ i ]);
+                        math::abs2( ctrParaArray[ i ] );
                     const float_X ctrPerp = 
-                        math::abs(ctrPerpArray[ i ]) * math::abs(ctrPerpArray[ i ]);
-                    targetArray[ i ] = itrArray[ i ] + 
-                        (numArray[ i ] - 1) * (ctrPara + ctrPerp);
-                    // targetArray[ i ] = (numArray[ i ] - 1) * (ctrPara + ctrPerp);
-                    // if(i == 10)
-                    // {
-                    //     std::cout << ctrPara << " ctr Para \n";
-                    //     std::cout << ctrPerp << " ctr Perp \n";
-                    //     std::cout << ctrParaArray[i].get_real() << " ctr ParaArrya \n";
-                    //     std::cout << ctrParaArray[i].get_imag() << " ctr ParaArrya \n";
-                    //     std::cout << ctrPerpArray[i].get_real() << " ctr PerpArray \n";
-                    //     std::cout << ctrPerpArray[i].get_imag() << " ctr PerpArray \n";
-                    // }
+                        math::abs2( ctrPerpArray[ i ] );
+
+                    targetArray[ i ] = ( 
+                        itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) 
+                        );
                 }
             }
         }
@@ -472,6 +471,9 @@ namespace picongpu
                 T_ParticlesType::FrameType::getName( ), 
                 true
             );
+
+            /* execute the particle filter */
+            radiation::executeParticleFilter( particles, currentStep );
 
             const int N_observer = parameters::N_observer;
             const auto gridDim_rad = N_observer;

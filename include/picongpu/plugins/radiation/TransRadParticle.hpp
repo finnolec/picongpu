@@ -176,7 +176,7 @@ namespace transitionRadiation
             }
             else
             {
-                return picongpu::math::acos( momentum.y( ) * ( 1.0 /momAbs ) );
+                return picongpu::math::acos( momentum.y( ) * ( 1.0 / momAbs ) );
             }
         }
 
