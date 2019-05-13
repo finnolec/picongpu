@@ -395,14 +395,15 @@ namespace picongpu
                     // std::cout << ctrParaArray[ i ].get_real( ) << " ctrParaArray[ i ]\n";
                     // std::cout << ctrPerpArray[ i ].get_imag( ) << " ctrPerpArray[ i ]\n";
 
-                    const float_X ctrPara = 
-                        math::abs2( ctrParaArray[ i ] );
-                    const float_X ctrPerp = 
-                        math::abs2( ctrPerpArray[ i ] );
+                    const float_X ctrPara = math::abs2( ctrParaArray[ i ] );
+                    const float_X ctrPerp = math::abs2( ctrPerpArray[ i ] );
 
                     targetArray[ i ] = ( 
                         itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
                     );
+                    // targetArray[ i ] = ( 
+                    //     itrArray[i]
+                    // );
                 }
             }
         }
@@ -442,7 +443,10 @@ namespace picongpu
                         // and write to file.
                         constexpr float_X transRadUnit = 
                             UNIT_CHARGE * UNIT_CHARGE * 
-                            ( 1.0 / ( 4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI ) );
+                            ( 1.0 / ( 4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI 
+                            // * double(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE) 
+                            // * double(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE) 
+                            ) );
                         outFile <<
                             values[
                                 index_direction * radiation_frequencies::N_omega + index_omega

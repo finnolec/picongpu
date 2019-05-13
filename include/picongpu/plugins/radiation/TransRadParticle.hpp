@@ -158,8 +158,8 @@ namespace transitionRadiation
         {
             //return polar angle phi of momentum
             return picongpu::math::atan2(
-                momentum.z( ), 
-                momentum.x( )
+                momentum.x( ), 
+                momentum.z( )
             ) + picongpu::PI;
         }
 
@@ -209,8 +209,8 @@ namespace transitionRadiation
         {
             // return radial angle phi of location in cylindrical coordinates
             return picongpu::math::atan2(
-                location.z( ), 
-                location.x( )
+                location.x( ), 
+                location.z( )
             ) + picongpu::PI;
         }
     }; // class Particle

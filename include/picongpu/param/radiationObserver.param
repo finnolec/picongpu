@@ -164,7 +164,7 @@ namespace picongpu
 
       /** compute observation angles theta */
       const picongpu::float_64 theta( my_index_theta * delta_angle_theta + angle_theta_start );
-      /** compute observation angles theta */
+      /** compute observation angles phi */
       const picongpu::float_64 phi( my_index_phi * delta_angle_phi - angle_phi_start );
 
       /* helper functions for efficient trigonometric calculations */

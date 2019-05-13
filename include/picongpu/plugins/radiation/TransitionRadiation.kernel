@@ -238,11 +238,11 @@ namespace picongpu
                                             ) * cellSize[ i ];
 
                                         /* get macro-particle weighting
-                                            *
-                                            * Info:
-                                            * the weighting is the number of real particles described
-                                            * by a macro-particle
-                                            */
+                                        *
+                                        * Info:
+                                        * the weighting is the number of real particles described
+                                        * by a macro-particle
+                                        */
                                         float_X const weighting = par[ weighting_ ];
                                         radWeighting_s[ saveParticleAt ] = weighting;
 
@@ -320,12 +320,16 @@ namespace picongpu
 
                             itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] + 
                                 energyPara_s[ j ] * energyPara_s[ j ];
+                            // itrSum += energyPerp_s[j] * energyPerp_s[j];
+                            //itrSum *= macroParticleFormFactor * macroParticleFormFactor;
                             numParticlesAsdf += num_s[ j ];
                             totalParticles += num_s[ j ];
                             // ctrSumPara += energyPara_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
                             // ctrSumPerp += energyPerp_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
                             ctrSumPara += macroParticleFormFactor * energyPara_s[ j ] * formfactor;// / ( totalParticles );
                             ctrSumPerp += macroParticleFormFactor * energyPerp_s[ j ] * formfactor;// / ( totalParticles );
+                            // ctrSumPara += energyPara_s[ j ] * formfactor;// / ( totalParticles );
+                            // ctrSumPerp += energyPerp_s[ j ] * formfactor;
                             // if( num_s[ j ] < 1.0 )
                             // {
                             //     printf("num_s[ j ] is less than 1");

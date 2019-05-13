@@ -90,12 +90,11 @@ namespace picongpu
             float_X const x = parSqrtOnePlusUSquared - 
                 particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
             float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
-            float_X const xSquared = util::square< float_X > ( x );
-            float_X const ySquared = util::square< float_X > ( y );
 
-            float_X const denominator = xSquared - ySquared;
+            float_X const denominator = x * x - y * y;
 
             return particle.getCharge( ) * a * ( 1.0 / denominator );
+            //return parMomSinTheta;
         }
 
         HDINLINE
