@@ -16,7 +16,7 @@ namespace picongpu
 
         float_X parMomSinTheta;
         float_X parMomCosTheta;
-        float_X const parMomPhi;
+        float_X const parMomPhi; //TODO Const
         float_X parMomSinPhi;
         float_X parMomCosPhi;
         float_X detectorSinTheta;
@@ -52,9 +52,9 @@ namespace picongpu
                 parMomCosTheta 
             );
             picongpu::math::sincos( 
-                parMomPhi, 
+                parMomPhi - detectorPhi, 
                 parMomSinPhi, 
-                parMomCosPhi 
+                parMomCosPhi
             );
             
             // Detector Position
