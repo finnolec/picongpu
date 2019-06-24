@@ -23,7 +23,7 @@ namespace picongpu
         template<
             typename T_ParBox,
             typename T_DBox,
-            typename T_DBoxComplex, // One needs two different databoxes because why not
+            typename T_DBoxComplex, // Formfactor returns complex values
             typename T_Mapping,
             typename T_Acc
         >
@@ -53,9 +53,8 @@ namespace picongpu
 
             uint32_t const workerIdx = threadIdx.x;
 
-            /// calculate radiated Amplitude
-            /* parallelized in 1 dimensions:
-            * looking direction (theta)
+            /* parallelized in 2 dimensions:
+            * looking direction (theta, phi)
             * (not anymore data handling)
             * create shared memory for particle data to reduce global memory calls
             * every thread in a block loads one particle and every thread runs
@@ -73,7 +72,7 @@ namespace picongpu
             // amount of particles
             PMACC_SMEM( acc, num_s, memory::Array< float_X, blockSize > );
 
-            // exponent
+            // exponent of the form factor
             PMACC_SMEM( acc, formfactorExponent_s, memory::Array< complex_X, blockSize > );
 
             // storage for macro particle weighting needed if
@@ -81,7 +80,8 @@ namespace picongpu
             // macro-particle needs to be considered
             PMACC_SMEM( acc, radWeighting_s, memory::Array< float_X, blockSize > );
 
-
+            // particle counter used if not all particles are considered for
+            // radiation calculation
             PMACC_SMEM( acc, counter_s, int );
  
 
@@ -297,8 +297,8 @@ namespace picongpu
                         complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
 
                         // create a form factor object
-                        radFormFactor::radFormFactor const myRadFormFactor{ };
- 
+                        //radFormFactor::radFormFactor const myRadFormFactor{ };
+
                         for( int j = 0; j < counter_s; ++j )
                         {
                             picongpu::float_64 const omega = freqFkt( o );
@@ -307,27 +307,27 @@ namespace picongpu
                                 formfactorExponent_s[ j ]
                             );
 
-                            float_X const macroParticleFormFactor = myRadFormFactor(
-                                radWeighting_s[ j ],
-                                omega,
-                                look
-                            );
+                            // float_X const macroParticleFormFactor = myRadFormFactor(
+                            //     radWeighting_s[ j ],
+                            //     omega,
+                            //     look
+                            // );
 
                             // itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] / ( num_s[ j ] * num_s[ j ] ) + 
                             //     energyPara_s[ j ] * energyPara_s[ j ] / ( num_s[ j ] * num_s[ j ] );
                             // itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] / ( totalParticles * totalParticles ) + 
                             //     energyPara_s[ j ] * energyPara_s[ j ] / ( totalParticles * totalParticles );
 
-                            itrSum += energyPerp_s[ j ] * energyPerp_s[ j ] + 
-                                energyPara_s[ j ] * energyPara_s[ j ];
+                            itrSum += radWeighting_s[j] * (energyPerp_s[ j ] * energyPerp_s[ j ] + 
+                                energyPara_s[ j ] * energyPara_s[ j ]);
                             // itrSum += energyPerp_s[j] * energyPerp_s[j];
                             //itrSum *= macroParticleFormFactor * macroParticleFormFactor;
                             numParticlesAsdf += num_s[ j ];
                             totalParticles += num_s[ j ];
                             // ctrSumPara += energyPara_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
                             // ctrSumPerp += energyPerp_s[ j ] * formfactor / ( num_s[ j ] * num_s[ j ] );
-                            ctrSumPara += macroParticleFormFactor * energyPara_s[ j ] * formfactor;// / ( totalParticles );
-                            ctrSumPerp += macroParticleFormFactor * energyPerp_s[ j ] * formfactor;// / ( totalParticles );
+                            ctrSumPara += radWeighting_s[j] * energyPara_s[ j ] * formfactor;// / ( totalParticles );
+                            ctrSumPerp += radWeighting_s[j] * energyPerp_s[ j ] * formfactor;// / ( totalParticles );
                             // ctrSumPara += energyPara_s[ j ] * formfactor;// / ( totalParticles );
                             // ctrSumPerp += energyPerp_s[ j ] * formfactor;
                             // if( num_s[ j ] < 1.0 )
@@ -343,6 +343,7 @@ namespace picongpu
                         cohTransRadPara[ index ] += ( ctrSumPara ); // / math::sqrt( totalParticles );
                         cohTransRadPerp[ index ] += ( ctrSumPerp ); // / math::sqrt( totalParticles );
 
+                        
                         // incTransRad[ index ]; // /= (totalParticles * totalParticles);
                         // cohTransRadPara[ index ]; // /= totalParticles;
                         // cohTransRadPerp[ index ]; // /= totalParticles;
@@ -362,6 +363,58 @@ namespace picongpu
                 } // while frame is valid
             } // for all supercells 
 
+            //__syncthreads( );
+
+
+            // ForEachIdx<
+            //     IdxConfig<
+            //         1,
+            //         numWorker
+            //     >
+            // > onlyMaster{ workerIdx };
+
+            // onlyMaster(
+            //     [&](
+            //         uint32_t const,
+            //         uint32_t const
+            //     )
+            //     {
+            // for( int o = workerIdx; o < radiation_frequencies::N_omega; o += T_numWorkers )
+            // {
+            //     int const index = theta_idx * radiation_frequencies::N_omega + o;
+                
+            //     if ( numParticles[ index ] == 0 )
+            //     {
+            //         incTransRad[ index ] = 0;
+            //     }
+            //     else
+            //     {
+            //         const float_X tmpinctransrad  = incTransRad[ index ];
+            //         incTransRad[ index ] = 0.0;
+
+            //         incTransRad[ index ] += 
+            //         (
+            //             tmpinctransrad  
+            //             + 
+            //             ( numParticles[ index ] - 1.0 )
+            //             * 
+            //             ( 
+            //                 math::abs2( cohTransRadPara[ index ] ) 
+            //                 + math::abs2( cohTransRadPerp[ index ] ) 
+            //             )
+            //             / 
+            //             ( numParticles[ index ] )
+            //         );
+            //     }
+            //     cohTransRadPara[ index ] = 1.0;
+            //     cohTransRadPerp[ index ] = 1.0;
+            //     numParticles[ index ] = 0.0;            
+            // }
+            //     }
+            // );
+            
+
+            //__syncthreads( );
         }
     }; // struct KernelTransRad
 } // namespace picongpu

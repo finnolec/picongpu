@@ -25,6 +25,9 @@
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
+#include <chrono>
+
+#include <math.h>
 
 
 namespace picongpu
@@ -123,6 +126,7 @@ namespace picongpu
         {
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): calculate time step %2% " ) % speciesName % currentStep;
             
+            std::chrono::high_resolution_clock::time_point t_1 = std::chrono::high_resolution_clock::now();
             resetBuffers( );
             this->currentStep = currentStep;
             
@@ -131,6 +135,7 @@ namespace picongpu
             calculateRadiationParticles( currentStep );
             
             // std::cout << float( std::clock( ) - beginTime ) / std::CLOCKS_PER_SEC;
+            std::chrono::high_resolution_clock::time_point t_2 = std::chrono::high_resolution_clock::now();
 
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): finished time step %2% " ) % speciesName % currentStep;
             
@@ -139,6 +144,14 @@ namespace picongpu
 
             // std::cout << float( std::clock( ) - beginTime ) / std::CLOCKS_PER_SEC;
 
+            std::chrono::high_resolution_clock::time_point t_3 = std::chrono::high_resolution_clock::now();
+            auto duration_gpu = std::chrono::duration_cast<std::chrono::microseconds>(t_2 - t_1).count();
+            auto duration_cpu = std::chrono::duration_cast<std::chrono::microseconds>(t_3 - t_2).count();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_3 - t_1).count();
+
+            std::cout << "duration gpu: "<< duration_gpu<<"\n";
+            std::cout << "duration cpu: "<< duration_cpu<<"\n";
+            std::cout << "duration total: "<< duration<<"\n";
             
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): printed to table %2% " ) % speciesName % currentStep;
         }
@@ -303,6 +316,27 @@ namespace picongpu
             __getTransactionEvent( ).waitForFinished( );
             numParticles->deviceToHost( );
             __getTransactionEvent( ).waitForFinished( );
+
+            //DEBUG
+            for ( unsigned int i = 0; i < elements_amplitude( ); i++ )
+            {
+                if( isnan( incTransRad->getHostBuffer( ).getBasePointer( )[ i ] ) )
+                {
+                    std::cout<<"incTransRad["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
+                } 
+                if( isnan( cohTransRadPara->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )
+                {
+                    std::cout<<"cohTransRadPara["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
+                } 
+                if( isnan( cohTransRadPerp->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )
+                {
+                    std::cout<<"cohTransRadPerp["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
+                } 
+                if( isnan( numParticles->getHostBuffer( ).getBasePointer( )[ i ] ) )
+                {
+                    std::cout<<"numParticles["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
+                } 
+            }
         }
 
         static 
@@ -397,10 +431,26 @@ namespace picongpu
 
                     const float_X ctrPara = math::abs2( ctrParaArray[ i ] );
                     const float_X ctrPerp = math::abs2( ctrPerpArray[ i ] );
-
-                    targetArray[ i ] = ( 
-                        itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
-                    );
+                    if (numArray[i] != 0.0)
+                    {
+                        // targetArray[ i ] = ( 
+                        //     ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
+                        // );
+                        targetArray[ i ] = ( 
+                            itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
+                        );
+                        //std::cout << "oy" << "\n"; 
+                        // std::cout << "tr para: " << ctrPara << "\n";
+                        // std::cout << "tr perp: " << ctrPerp << "\n";
+                        // targetArray[ i ] = ( 
+                        //     itrArray[ i ]
+                        // );
+                    }
+                    else
+                    {
+                        //std::cout << "OMEGALUL" << "\n"; 
+                        targetArray[ i ] = 0.0;
+                    }
                     // targetArray[ i ] = ( 
                     //     itrArray[i]
                     // );
@@ -426,6 +476,17 @@ namespace picongpu
             }
             else
             {
+                outFile << "# \t";
+                outFile << picongpu::rad_log_frequencies::N_omega << "\t";
+                outFile << picongpu::rad_log_frequencies::SI::omega_min << "\t";
+                outFile << picongpu::rad_log_frequencies::SI::omega_max << "\t";
+                outFile << picongpu::parameters::N_phis << "\t";
+                outFile << picongpu::parameters::phiMin << "\t";
+                outFile << picongpu::parameters::phiMax << "\t";
+                outFile << picongpu::parameters::N_thetas << "\t";
+                outFile << picongpu::parameters::thetaMin << "\t";
+                outFile << picongpu::parameters::thetaMax << "\t";
+                outFile << std::endl;
                 for (
                     unsigned int index_direction = 0; 
                     index_direction < parameters::N_observer; 
@@ -442,11 +503,8 @@ namespace picongpu
                         // calculate the square of the absolute value
                         // and write to file.
                         constexpr float_X transRadUnit = 
-                            UNIT_CHARGE * UNIT_CHARGE * 
-                            ( 1.0 / ( 4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI 
-                            // * double(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE) 
-                            // * double(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE) 
-                            ) );
+                            SI::ELECTRON_CHARGE_SI * SI::ELECTRON_CHARGE_SI * 
+                            ( 1.0 / ( 4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI ) );
                         outFile <<
                             values[
                                 index_direction * radiation_frequencies::N_omega + index_omega

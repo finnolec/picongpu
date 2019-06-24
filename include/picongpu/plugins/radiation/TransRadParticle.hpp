@@ -118,11 +118,13 @@ namespace transitionRadiation
         ) const
         {
             // returns beta=v/c
-            float_X const gamma1 = calcGamma( momentum );
-            float_X const x = util::square< float_X, float_X >(
-                ( 1.0 / ( mass * picongpu::SPEED_OF_LIGHT * gamma1 ) )
-            );
-            return picongpu::math::sqrt( ( momentum * momentum ).sumOfComponents( ) * x);
+            // float_X const gamma1 = calcGamma( momentum );
+            // float_X const x = util::square< float_X, float_X >(
+            //     ( 1.0 / ( mass * picongpu::SPEED_OF_LIGHT * gamma1 ) )
+            // );
+            // return picongpu::math::sqrt( ( momentum * momentum ).sumOfComponents( ) * x);
+            float_X const gamma = calcGamma(momentum);
+            return picongpu::math::sqrt(1 - 1 / (gamma * gamma) );
         }
 
         HDINLINE 
@@ -146,7 +148,7 @@ namespace transitionRadiation
             float3_X const & momentum
         ) const
         {
-            //returns normalized momentum u = gama * beta
+            //returns normalized momentum u = gamma * beta
             float_X const gamma1 = calcGamma( momentum );
             float_X const beta1 = calcBeta( momentum );
             return gamma1 * beta1;

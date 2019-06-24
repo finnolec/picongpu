@@ -91,9 +91,12 @@ namespace picongpu
                 particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
             float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
 
-            float_X const denominator = x * x - y * y;
+            float_X const denominator =(x * x - y * y);
+            // if(math::abs(denominator) < 1e-7)
+            //     denominator = 1e-7;
 
-            return particle.getCharge( ) * a * ( 1.0 / denominator );
+            //return particle.getCharge( ) * a * ( 1.0 / denominator );
+            return a * ( 1.0 / denominator );
             //return parMomSinTheta;
         }
 
@@ -116,11 +119,12 @@ namespace picongpu
             float_X const x = parSqrtOnePlusUSquared - 
                 particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
             float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
-            float_X const xSquared = util::square< float_X > ( x );
-            float_X const ySquared = util::square< float_X > ( y );
 
-            float_X const denominator = xSquared - ySquared;
-            return particle.getCharge( ) * a * ( b - c ) * ( 1.0 / denominator );
+            float_X const denominator = x*x - y*y;
+            // if(math::abs(denominator) < 1e-7)
+            //     denominator = 1e-7;
+            return a * ( b - c ) * ( 1.0 / denominator );
+            //return particle.getCharge( ) * a * ( b - c ) * ( 1.0 / denominator );
         }
 
         HDINLINE
@@ -134,12 +138,12 @@ namespace picongpu
              *          - i sinTheta rho cos(Phi_P - Phi_D)
              */
             // If case for longitudinal moving particles... leads to 0 later in the kernel
-            if ( parMomCosTheta == 0 )
+            if ( parMomCosTheta == 0.0 )
             {
                 return complex_X( -1.0, 0.0 );
             }
             float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
-            float_X const b = - ( particle.getPosPara( ) - parameters::surfacePosition ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
+            float_X const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
             float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
             complex_X const fpara = complex_X( 0.0, b );
             complex_X const fperp = complex_X( 0.0, c );
