@@ -63,3 +63,6 @@
 #include "picongpu/param/isaac.param"
 #include "picongpu/param/radiationObserver.param"
 #include "picongpu/param/particleMerger.param"
+
+#include "picongpu/param/transitionRadiation.param"
+#include "picongpu/param/transitionRadiationObserver.param"

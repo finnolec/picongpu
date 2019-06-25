@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TransRadParticle.hpp"
+#include "Particle.hpp"
 
 
 namespace picongpu
@@ -91,13 +91,9 @@ namespace picongpu
                 particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
             float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
 
-            float_X const denominator =(x * x - y * y);
-            // if(math::abs(denominator) < 1e-7)
-            //     denominator = 1e-7;
+            float_X const denominator = x * x - y * y;
 
-            //return particle.getCharge( ) * a * ( 1.0 / denominator );
             return a * ( 1.0 / denominator );
-            //return parMomSinTheta;
         }
 
         HDINLINE
@@ -120,11 +116,8 @@ namespace picongpu
                 particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
             float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
 
-            float_X const denominator = x*x - y*y;
-            // if(math::abs(denominator) < 1e-7)
-            //     denominator = 1e-7;
+            float_X const denominator = x * x - y * y; 
             return a * ( b - c ) * ( 1.0 / denominator );
-            //return particle.getCharge( ) * a * ( b - c ) * ( 1.0 / denominator );
         }
 
         HDINLINE
@@ -159,12 +152,13 @@ namespace picongpu
         complex_X const exponent
     )
     {
+        /* Does exactly what the name says */
+        
         // If case for longitudinal moving particles
         if ( exponent.get_real() == -1.0 )
         {
             return complex_X( 0.0, 0.0 );
         }
-        /* Does exactly what the name says */
         return math::exp( exponent * omega );
     }
 }

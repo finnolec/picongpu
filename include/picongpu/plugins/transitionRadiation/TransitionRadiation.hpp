@@ -2,9 +2,9 @@
 
 #include "picongpu/simulation_defines.hpp"
 
-#include "picongpu/plugins/radiation/TransitionRadiation.kernel"
+#include "picongpu/plugins/transitionRadiation/TransitionRadiation.kernel"
 #include "picongpu/plugins/ISimulationPlugin.hpp"
-#include "picongpu/plugins/radiation/ExecuteParticleFilter.hpp"
+#include "picongpu/plugins/transitionRadiation/ExecuteParticleFilter.hpp"
 #include "picongpu/plugins/common/stringHelpers.hpp"
 
 #include <pmacc/mpi/reduceMethods/Reduce.hpp>
@@ -15,6 +15,8 @@
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/traits/HasIdentifier.hpp>
 #include <pmacc/traits/GetNumWorkers.hpp>
+
+#include "picongpu/plugins/transitionRadiation/frequencies/radiation_log_freq.hpp"
 
 #include <pmacc/math/Complex.hpp>
 
@@ -56,8 +58,8 @@ namespace picongpu
         GridBuffer< complex_X, DIM1 > * cohTransRadPerp;
         GridBuffer< float_X, DIM1 > * numParticles;
 
-        radiation_frequencies::InitFreqFunctor freqInit;
-        radiation_frequencies::FreqFunctor freqFkt;
+        transitionRadiation::frequencies::InitFreqFunctor freqInit;
+        transitionRadiation::frequencies::FreqFunctor freqFkt;
 
         float_X * tmpITR;
         complex_X * tmpCTRpara;
@@ -116,7 +118,7 @@ namespace picongpu
 
         /**
          * This function calculates the Transition Radiation by calling the
-         * according function of the Kernel File.
+         * according function of the kernel file.
          * @param currentStep
          */
         void 
@@ -126,32 +128,15 @@ namespace picongpu
         {
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): calculate time step %2% " ) % speciesName % currentStep;
             
-            std::chrono::high_resolution_clock::time_point t_1 = std::chrono::high_resolution_clock::now();
             resetBuffers( );
             this->currentStep = currentStep;
-            
-            // const std::clock_t beginTime = std::clock( );
 
             calculateRadiationParticles( currentStep );
-            
-            // std::cout << float( std::clock( ) - beginTime ) / std::CLOCKS_PER_SEC;
-            std::chrono::high_resolution_clock::time_point t_2 = std::chrono::high_resolution_clock::now();
 
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): finished time step %2% " ) % speciesName % currentStep;
             
             collectDataGPUToMaster( );
             writeTransRadToText( );
-
-            // std::cout << float( std::clock( ) - beginTime ) / std::CLOCKS_PER_SEC;
-
-            std::chrono::high_resolution_clock::time_point t_3 = std::chrono::high_resolution_clock::now();
-            auto duration_gpu = std::chrono::duration_cast<std::chrono::microseconds>(t_2 - t_1).count();
-            auto duration_cpu = std::chrono::duration_cast<std::chrono::microseconds>(t_3 - t_2).count();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_3 - t_1).count();
-
-            std::cout << "duration gpu: "<< duration_gpu<<"\n";
-            std::cout << "duration cpu: "<< duration_cpu<<"\n";
-            std::cout << "duration total: "<< duration<<"\n";
             
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): printed to table %2% " ) % speciesName % currentStep;
         }
@@ -255,21 +240,21 @@ namespace picongpu
                 {
                     theTransRad = new float_X[ elements_amplitude( ) ];
                     /* save detector position / observation direction */
-                    detectorPositions = new float3_X[ parameters::N_observer ];
+                    detectorPositions = new float3_X[ transitionRadiation::parameters::N_observer ];
                     for(
                         uint32_t detectorIndex=0; 
-                        detectorIndex < parameters::N_observer; 
+                        detectorIndex < transitionRadiation::parameters::N_observer; 
                         ++detectorIndex
                     )
                     {
-                        detectorPositions[ detectorIndex ] = radiation_observer::observation_direction_picongpustandard( detectorIndex );
+                        detectorPositions[ detectorIndex ] = transitionRadiation::observationDirection( detectorIndex );
                     }
 
                     /* save detector frequencies */
-                    detectorFrequencies = new float_X[ radiation_frequencies::N_omega ];
+                    detectorFrequencies = new float_X[ transitionRadiation::frequencies::N_omega ];
                     for(
                         uint32_t detectorIndex=0; 
-                        detectorIndex < radiation_frequencies::N_omega; 
+                        detectorIndex < transitionRadiation::frequencies::N_omega; 
                         ++detectorIndex
                     )
                     {
@@ -316,34 +301,13 @@ namespace picongpu
             __getTransactionEvent( ).waitForFinished( );
             numParticles->deviceToHost( );
             __getTransactionEvent( ).waitForFinished( );
-
-            //DEBUG
-            for ( unsigned int i = 0; i < elements_amplitude( ); i++ )
-            {
-                if( isnan( incTransRad->getHostBuffer( ).getBasePointer( )[ i ] ) )
-                {
-                    std::cout<<"incTransRad["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
-                } 
-                if( isnan( cohTransRadPara->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )
-                {
-                    std::cout<<"cohTransRadPara["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
-                } 
-                if( isnan( cohTransRadPerp->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )
-                {
-                    std::cout<<"cohTransRadPerp["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
-                } 
-                if( isnan( numParticles->getHostBuffer( ).getBasePointer( )[ i ] ) )
-                {
-                    std::cout<<"numParticles["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";
-                } 
-            }
         }
 
         static 
         unsigned int 
         elements_amplitude( )
         {
-            return radiation_frequencies::N_omega * parameters::N_observer; // storage for amplitude results on GPU
+            return transitionRadiation::frequencies::N_omega * parameters::N_observer; // storage for amplitude results on GPU
         }
 
         /** combine radiation data from each CPU and store result on master
@@ -424,36 +388,18 @@ namespace picongpu
                 ************************************************************/
                 for( unsigned int i = 0; i < elements_amplitude( ); ++i )
                 {
-                    // std::cout << numArray[ i ] << " numArray[ i ]\n";
-                    // std::cout << itrArray[ i ] << " itrArray[ i ]\n";
-                    // std::cout << ctrParaArray[ i ].get_real( ) << " ctrParaArray[ i ]\n";
-                    // std::cout << ctrPerpArray[ i ].get_imag( ) << " ctrPerpArray[ i ]\n";
-
                     const float_X ctrPara = math::abs2( ctrParaArray[ i ] );
                     const float_X ctrPerp = math::abs2( ctrPerpArray[ i ] );
                     if (numArray[i] != 0.0)
                     {
-                        // targetArray[ i ] = ( 
-                        //     ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
-                        // );
                         targetArray[ i ] = ( 
                             itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
                         );
-                        //std::cout << "oy" << "\n"; 
-                        // std::cout << "tr para: " << ctrPara << "\n";
-                        // std::cout << "tr perp: " << ctrPerp << "\n";
-                        // targetArray[ i ] = ( 
-                        //     itrArray[ i ]
-                        // );
                     }
                     else
                     {
-                        //std::cout << "OMEGALUL" << "\n"; 
                         targetArray[ i ] = 0.0;
                     }
-                    // targetArray[ i ] = ( 
-                    //     itrArray[i]
-                    // );
                 }
             }
         }
@@ -477,25 +423,25 @@ namespace picongpu
             else
             {
                 outFile << "# \t";
-                outFile << picongpu::rad_log_frequencies::N_omega << "\t";
-                outFile << picongpu::rad_log_frequencies::SI::omega_min << "\t";
-                outFile << picongpu::rad_log_frequencies::SI::omega_max << "\t";
-                outFile << picongpu::parameters::N_phis << "\t";
-                outFile << picongpu::parameters::phiMin << "\t";
-                outFile << picongpu::parameters::phiMax << "\t";
-                outFile << picongpu::parameters::N_thetas << "\t";
-                outFile << picongpu::parameters::thetaMin << "\t";
-                outFile << picongpu::parameters::thetaMax << "\t";
+                outFile << transitionRadiation::frequencies::N_omega << "\t";
+                outFile << transitionRadiation::frequencies::SI::omega_min << "\t";
+                outFile << transitionRadiation::frequencies::SI::omega_max << "\t";
+                outFile << transitionRadiation::parameters::N_phis << "\t";
+                outFile << transitionRadiation::parameters::phiMin << "\t";
+                outFile << transitionRadiation::parameters::phiMax << "\t";
+                outFile << transitionRadiation::parameters::N_thetas << "\t";
+                outFile << transitionRadiation::parameters::thetaMin << "\t";
+                outFile << transitionRadiation::parameters::thetaMax << "\t";
                 outFile << std::endl;
                 for (
                     unsigned int index_direction = 0; 
-                    index_direction < parameters::N_observer; 
+                    index_direction < transitionRadiation::parameters::N_observer; 
                     ++index_direction
                 ) // over all directions
                 {
                     for (
                         unsigned index_omega = 0; 
-                        index_omega < radiation_frequencies::N_omega; 
+                        index_omega < transitionRadiation::frequencies::N_omega; 
                         ++index_omega
                     ) // over all frequencies
                     {
@@ -507,7 +453,7 @@ namespace picongpu
                             ( 1.0 / ( 4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI ) );
                         outFile <<
                             values[
-                                index_direction * radiation_frequencies::N_omega + index_omega
+                                index_direction * transitionRadiation::frequencies::N_omega + index_omega
                             ] * transRadUnit << "\t";
 
                     }
@@ -535,9 +481,9 @@ namespace picongpu
             );
 
             /* execute the particle filter */
-            radiation::executeParticleFilter( particles, currentStep );
+            transitionRadiation::executeParticleFilter( particles, currentStep );
 
-            const int N_observer = parameters::N_observer;
+            const int N_observer = transitionRadiation::parameters::N_observer;
             const auto gridDim_rad = N_observer;
 
             /* number of threads per block = number of cells in a super cell

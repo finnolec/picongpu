@@ -70,7 +70,7 @@
 #   include "picongpu/plugins/hdf5/HDF5Writer.hpp"
 #endif
 
-#include "picongpu/plugins/radiation/TransitionRadiation.hpp"
+#include "picongpu/plugins/transitionRadiation/TransitionRadiation.hpp"
 
 #include "picongpu/plugins/Checkpoint.hpp"
 #include "picongpu/plugins/ResourceLog.hpp"
