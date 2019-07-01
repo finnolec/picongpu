@@ -148,7 +148,7 @@ namespace picongpu
 
     HDINLINE
     complex_X 
-    makeExponentUseful(
+    transitionRadiationFormFactor(
         float_X const omega, 
         complex_X const exponent
     )

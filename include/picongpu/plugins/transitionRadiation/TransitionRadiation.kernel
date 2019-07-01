@@ -291,42 +291,32 @@ namespace picongpu
                         float_X totalParticles = 0.0;
                         complex_X ctrSumPara = complex_X( 0.0, 0.0 );
                         complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
-                        float_X macroParticleFormFactor = 0.0;
+                        // float_X macroParticleFormFactor = 0.0;
 
-                        // create a form factor object
-                        transitionRadiation::radFormFactor::radFormFactor const myRadFormFactor{ };
+                        // create a form factor object for physical correct coherence effects within macro-particles
+                        transitionRadiation::radFormFactor::radFormFactor const macroParticleFormFactor{ };
 
                         for( int j = 0; j < counter_s; ++j )
                         {
                             picongpu::float_64 const omega = freqFkt( o );
-                            complex_X const formfactor = makeExponentUseful(
+                            complex_X const formfactor = transitionRadiationFormFactor(
                                 omega, 
                                 formfactorExponent_s[ j ]
+                            ) * macroParticleFormFactor( 
+                                radWeighting_s[ j ],
+                                omega,
+                                look
                             );
 
-                            macroParticleFormFactor = precisionCast< float_64 >( 
-                            myRadFormFactor( 
-                                    radWeighting_s[ j ],
-                                    omega,
-                                    look
-                                )
+                            itrSum += radWeighting_s[ j ] * ( 
+                                energyPerp_s[ j ] * energyPerp_s[ j ] + 
+                                energyPara_s[ j ] * energyPara_s[ j ] 
                             );
-
-                            // macroParticleFormFactor = math::sqrt( macroParticleFormFactor );
-                            // macroParticleFormFactor /= radWeighting_s[ j ];
-                            // itrSum += macroParticleFormFactor * macroParticleFormFactor * 
-                            //     radWeighting_s[j] * ( 
-                            //         energyPerp_s[ j ] * energyPerp_s[ j ] + energyPara_s[ j ] * energyPara_s[ j ] 
-                            //     );
-                            itrSum += radWeighting_s[j] * ( energyPerp_s[ j ] * energyPerp_s[ j ] + 
-                                energyPara_s[ j ] * energyPara_s[ j ] );
 
                             totalParticles += radWeighting_s[ j ];
 
-                            ctrSumPara += energyPara_s[ j ] * formfactor * macroParticleFormFactor;
-                            ctrSumPerp += energyPerp_s[ j ] * formfactor * macroParticleFormFactor;
-                            // ctrSumPara += radWeighting_s[j] * energyPara_s[ j ] * formfactor;
-                            // ctrSumPerp += radWeighting_s[j] * energyPerp_s[ j ] * formfactor;
+                            ctrSumPara += energyPara_s[ j ] * formfactor;
+                            ctrSumPerp += energyPerp_s[ j ] * formfactor;
                         }
 
                         int const index = theta_idx * transitionRadiation::frequencies::N_omega + o;
