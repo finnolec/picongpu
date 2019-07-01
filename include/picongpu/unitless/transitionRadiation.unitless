@@ -43,8 +43,8 @@ namespace picongpu
             constexpr unsigned int blocksize_omega = pmacc::math::CT::volume<typename MappingDesc::SuperCellSize>::type::value;
             constexpr unsigned int gridsize_omega = N_omega / blocksize_omega; // size of grid (dim: x); radiation
         }
-    } //namespace transition Radiation
-} //namespace picongpu
+    } // namespace transitionRadiation
+} // namespace picongpu
 
 #include "picongpu/plugins/radiation/frequencies/radiation_lin_freq.hpp"
 #include "picongpu/plugins/radiation/frequencies/radiation_log_freq.hpp"

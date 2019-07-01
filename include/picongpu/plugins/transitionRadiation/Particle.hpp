@@ -115,11 +115,6 @@ namespace picongpu
             ) const
             {
                 // returns beta=v/c
-                // float_X const gamma1 = calcGamma( momentum );
-                // float_X const x = util::square< float_X, float_X >(
-                //     ( 1.0 / ( mass * picongpu::SPEED_OF_LIGHT * gamma1 ) )
-                // );
-                // return picongpu::math::sqrt( ( momentum * momentum ).sumOfComponents( ) * x);
                 float_X const gamma = calcGamma(momentum);
                 return picongpu::math::sqrt(1 - 1 / (gamma * gamma) );
             }
@@ -168,13 +163,9 @@ namespace picongpu
                 //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<z
                 float_X const momAbs = getMomAbs( );
                 if( momAbs <= momentum.y( ) )
-                {
                     return 0.0;
-                }
                 else
-                {
                     return picongpu::math::acos( momentum.y( ) * ( 1.0 / momAbs ) );
-                }
             }
 
             HDINLINE

@@ -49,6 +49,8 @@
 #   include "picongpu/param/bremsstrahlung.param"
 #endif
 #include "picongpu/param/radiation.param"
+#include "picongpu/param/transitionRadiation.param"
+#include "picongpu/param/transitionRadiationObserver.param"
 #include "picongpu/param/species.param"
 #include "picongpu/param/speciesDefinition.param"
 #include "picongpu/param/speciesInitialization.param"
@@ -64,5 +66,3 @@
 #include "picongpu/param/radiationObserver.param"
 #include "picongpu/param/particleMerger.param"
 
-#include "picongpu/param/transitionRadiation.param"
-#include "picongpu/param/transitionRadiationObserver.param"

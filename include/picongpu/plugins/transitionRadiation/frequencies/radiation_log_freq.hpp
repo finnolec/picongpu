@@ -65,6 +65,6 @@ namespace picongpu
                     return FreqFunctor();
                 }
             };
-        }//namespace rad_log_frequencies
-    }//namespace transitionRadiation
-}//namespace picongpu
+        } // namespace rad_log_frequencies
+    } // namespace transitionRadiation
+} // namespace picongpu

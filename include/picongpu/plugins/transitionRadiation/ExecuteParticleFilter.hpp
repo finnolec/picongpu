@@ -50,7 +50,7 @@ namespace picongpu
                 particles::Manipulate<
                     picongpu::transitionRadiation::RadiationParticleFilter,
                     T_Species
-                >{}( currentStep );
+                >{ }( currentStep );
             }
         };
 
@@ -69,8 +69,7 @@ namespace picongpu
              */
             template< typename T_Species >
             void operator()( const std::shared_ptr<T_Species>, const uint32_t currentStep )
-            {
-            }
+            { }
         };
 
         /** execute the particle filter on a species

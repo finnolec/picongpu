@@ -113,8 +113,7 @@ namespace picongpu
 
         virtual 
         ~TransitionRadiation( )
-        {
-        }
+        { }
 
         /**
          * This function calculates the Transition Radiation by calling the
@@ -172,16 +171,14 @@ namespace picongpu
             uint32_t timeStep, 
             const std::string restartDirectory
         )
-        {
-        }
+        { }
 
         void 
         checkpoint(
             uint32_t timeStep, 
             const std::string restartDirectory
         )
-        {
-        }
+        { }
 
     private:
         void 
@@ -397,9 +394,7 @@ namespace picongpu
                         );
                     }
                     else
-                    {
                         targetArray[ i ] = 0.0;
-                    }
                 }
             }
         }
@@ -433,6 +428,7 @@ namespace picongpu
                 outFile << transitionRadiation::parameters::thetaMin << "\t";
                 outFile << transitionRadiation::parameters::thetaMax << "\t";
                 outFile << std::endl;
+
                 for (
                     unsigned int index_direction = 0; 
                     index_direction < transitionRadiation::parameters::N_observer; 
@@ -456,9 +452,11 @@ namespace picongpu
                                 index_direction * transitionRadiation::frequencies::N_omega + index_omega
                             ] * transRadUnit << "\t";
 
-                    }
+                    } // for loop over all frequencies
+
                     outFile << std::endl;
-                }
+                } // for loop over all frequencies
+                
                 outFile.flush( );
                 outFile << std::endl; //now all data are written to file
 
@@ -530,5 +528,4 @@ namespace picongpu
             dc.releaseData( T_ParticlesType::FrameType::getName( ) );
         }
     };
-
 } // namespace picongpu

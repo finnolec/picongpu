@@ -117,6 +117,7 @@ namespace picongpu
             float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
 
             float_X const denominator = x * x - y * y; 
+
             return a * ( b - c ) * ( 1.0 / denominator );
         }
 
@@ -132,18 +133,18 @@ namespace picongpu
              */
             // If case for longitudinal moving particles... leads to 0 later in the kernel
             if ( parMomCosTheta == 0.0 )
-            {
                 return complex_X( -1.0, 0.0 );
-            }
+                
             float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
             float_X const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
             float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
+
             complex_X const fpara = complex_X( 0.0, b );
             complex_X const fperp = complex_X( 0.0, c );
             return fpara + fperp;
              
         }
-    };
+    }; // class TransRadCalculator
 
     HDINLINE
     complex_X 
@@ -156,9 +157,8 @@ namespace picongpu
         
         // If case for longitudinal moving particles
         if ( exponent.get_real() == -1.0 )
-        {
             return complex_X( 0.0, 0.0 );
-        }
-        return math::exp( exponent * omega );
+        else
+            return math::exp( exponent * omega );
     }
-}
+} // namespace picongpu
