@@ -266,7 +266,7 @@ namespace picongpu
                                         );
 
                                         // create calculator for TR calculations
-                                        TransRadCalculator const calculator =  TransRadCalculator(
+                                        transitionRadiation::Calculator const calculator =  transitionRadiation::Calculator(
                                             particle,
                                             look
                                         );
@@ -291,7 +291,6 @@ namespace picongpu
                         float_X totalParticles = 0.0;
                         complex_X ctrSumPara = complex_X( 0.0, 0.0 );
                         complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
-                        // float_X macroParticleFormFactor = 0.0;
 
                         // create a form factor object for physical correct coherence effects within macro-particles
                         transitionRadiation::radFormFactor::radFormFactor const macroParticleFormFactor{ };
@@ -299,7 +298,7 @@ namespace picongpu
                         for( int j = 0; j < counter_s; ++j )
                         {
                             picongpu::float_64 const omega = freqFkt( o );
-                            complex_X const formfactor = transitionRadiationFormFactor(
+                            complex_X const formfactor = transitionRadiation::formFactor(
                                 omega, 
                                 formfactorExponent_s[ j ]
                             ) * macroParticleFormFactor( 
