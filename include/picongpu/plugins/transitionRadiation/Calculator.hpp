@@ -93,7 +93,16 @@ namespace picongpu
                     particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
                 float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
 
-                float_X const denominator = x * x - y * y;
+                float_X denominator = x * x - y * y;
+
+                // Preventing division by 0
+                if( math::abs( denominator ) < 1e-9 )
+                {
+                    if( denominator < 0.0 )
+                        denominator = -1e-9;
+                    else
+                        denominator = 1e-9;
+                }
 
                 return a * ( 1.0 / denominator );
             }
@@ -118,7 +127,16 @@ namespace picongpu
                     particle.getU( ) * parMomSinTheta * parMomCosPhi * detectorSinTheta;
                 float_X const y = particle.getU( ) * parMomCosTheta * detectorCosTheta;
 
-                float_X const denominator = x * x - y * y; 
+                float_X denominator = x * x - y * y; 
+
+                // Preventing division by 0
+                if( math::abs( denominator ) < 1e-9 )
+                {
+                    if( denominator < 0.0 )
+                        denominator = -1e-9;
+                    else
+                        denominator = 1e-9;
+                }
 
                 return a * ( b - c ) * ( 1.0 / denominator );
             }
@@ -134,7 +152,7 @@ namespace picongpu
                 *          - i sinTheta rho cos(Phi_P - Phi_D)
                 */
                 // If case for longitudinal moving particles... leads to 0 later in the kernel
-                if ( parMomCosTheta == 0.0 )
+                if ( math::abs( parMomCosTheta ) <= 1e-9 )
                     return complex_X( -1.0, 0.0 );
                     
                 float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
