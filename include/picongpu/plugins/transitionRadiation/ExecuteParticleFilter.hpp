@@ -24,7 +24,7 @@
 #include <pmacc/traits/HasIdentifier.hpp>
 #include "picongpu/particles/Manipulate.hpp"
 
-#include "picongpu/plugins/transitionRadiation/GetRadiationMask.hpp"
+#include "picongpu/plugins/transitionRadiation/GammaMask.hpp"
 
 #include <memory>
 
@@ -48,7 +48,7 @@ namespace picongpu
             void operator()( std::shared_ptr<T_Species> const &, const uint32_t currentStep )
             {
                 particles::Manipulate<
-                    picongpu::transitionRadiation::RadiationParticleFilter,
+                    picongpu::transitionRadiation::GammaFilter,
                     T_Species
                 >{ }( currentStep );
             }
@@ -89,7 +89,7 @@ namespace picongpu
                 transitionRadiationMask
             >::type::value;
 
-            return ExecuteParticleFilter< hasRadiationFilter >{}( species, currentStep );
+            return ExecuteParticleFilter< hasRadiationFilter >{ }( species, currentStep );
         }
     } // namespace transitionRadiation
 } // namespace picongpu

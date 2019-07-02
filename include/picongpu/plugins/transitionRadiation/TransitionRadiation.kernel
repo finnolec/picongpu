@@ -9,6 +9,7 @@
 #include "picongpu/plugins/transitionRadiation/Particle.hpp"
 #include "picongpu/plugins/transitionRadiation/Calculator.hpp"
 #include "picongpu/plugins/transitionRadiation/FormFactor.hpp"
+#include "picongpu/plugins/transitionRadiation/GammaMask.hpp"
 
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
@@ -197,7 +198,7 @@ namespace picongpu
                                 // only moving particles create transition radiation
                                 if( ( particle_momentum * particle_momentum ).sumOfComponents( ) > 0.0)
                                 {
-                                    if( getRadiationMask( par ) )
+                                    if( transitionRadiation::getTransitionRadiationMask( par ) )
                                         saveParticleAt = nvidia::atomicAllInc(
                                             acc,
                                             &counter_s,

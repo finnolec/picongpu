@@ -149,7 +149,7 @@ namespace picongpu
         struct GammaFilterFunctor
         {
             /** Gamma value above which the radiation is calculated */
-            static constexpr float_X radiationGamma = 5.0;
+            static constexpr float_X filterGamma = 5.0;
 
             template< typename T_Particle >
             HDINLINE void operator()( T_Particle& particle )
@@ -161,7 +161,7 @@ namespace picongpu
                             particle[ picongpu::weighting_ ],
                             particle
                         )
-                    ) >= radiationGamma
+                    ) >= filterGamma
                 )
                     particle[ picongpu::transitionRadiationMask_ ] = true;
             }
@@ -174,7 +174,7 @@ namespace picongpu
          *   - goto file `speciesDefinition.param`
          *   - add the attribute `radiationMask` to the particle species
          */
-        using RadiationParticleFilter = picongpu::particles::manipulators::generic::Free<
+        using GammaFilter = picongpu::particles::manipulators::generic::Free<
             GammaFilterFunctor
         >;
 

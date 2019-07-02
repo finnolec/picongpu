@@ -29,8 +29,8 @@ namespace picongpu
     namespace transitionRadiation
     {
         /** read the `radiationMask` of a species */
-        template< bool hasRadiationMask >
-        struct GetRadiationMask
+        template< bool hasTransitionRadiationMask >
+        struct GetTransitionRadiationMask
         {
             /** get the attribute value of `radiationMask`
              *
@@ -50,7 +50,7 @@ namespace picongpu
          * `radiationMask`
          */
         template< >
-        struct GetRadiationMask< false >
+        struct GetTransitionRadiationMask< false >
         {
             /** get the attribute value of `radiationMask`
              *
@@ -74,13 +74,13 @@ namespace picongpu
          * @return particle attribute value `radiationMask`, always `true` if attribute `radiationMask` is not defined
          */
         template< typename T_Particle >
-        HDINLINE bool getRadiationMask( const T_Particle& particle )
+        HDINLINE bool getTransitionRadiationMask( const T_Particle& particle )
         {
-            constexpr bool hasRadiationMask = pmacc::traits::HasIdentifier<
+            constexpr bool hasTransitionRadiationMask = pmacc::traits::HasIdentifier<
                 typename T_Particle::FrameType,
                 transitionRadiationMask
             >::type::value;
-            return GetRadiationMask< hasRadiationMask >{}( particle );
+            return GetTransitionRadiationMask< hasTransitionRadiationMask >{}( particle );
         }
     } // namespace transitionRadiation
 } // namespace picongpu
