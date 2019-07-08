@@ -299,7 +299,7 @@ namespace picongpu
 
                         for( int j = 0; j < counter_s; ++j )
                         {
-                            float_X const omega = freqFkt( o );
+                            float_64 const omega = freqFkt( o );
                             complex_X const formfactor = transitionRadiation::formFactor(
                                 omega, 
                                 formfactorExponent_s[ j ]

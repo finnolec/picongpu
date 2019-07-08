@@ -178,7 +178,7 @@ namespace picongpu
         HDINLINE
         complex_X 
         formFactor(
-            float_X const omega, 
+            float_64 const omega, 
             complex_64 const exponent
         )
         {
@@ -188,7 +188,7 @@ namespace picongpu
             if ( exponent.get_real() == -1.0 )
                 return complex_X( 0.0, 0.0 );
             else
-                return math::exp( complex_X( exponent ) * omega );
+                return complex_X( math::exp( exponent * omega ) );
         }
     } // namespace transitionRadiation
 } // namespace picongpu
