@@ -209,7 +209,7 @@ namespace picongpu
                                     *   atomicAdd returns an int with the previous
                                     *   value of "counter_s" != -1
                                     *   therefore, if a particle is selected
-                                    *   "saveParticleAs" != -1
+                                    *   "saveParticleAt" != -1
                                     */
                                     // if a particle needs to be considered
                                     if( saveParticleAt != -1 )
@@ -280,7 +280,7 @@ namespace picongpu
                                         formfactorExponent_s[ saveParticleAt ] = calculator.calcFExponent( );
                                     }
                                 } // only moving particles
-                            } // only threads with particle
+                             } // only threads with particle
                         } 
                     ); // for each particle
                     __syncthreads( );
@@ -312,11 +312,14 @@ namespace picongpu
                                 energyPerp_s[ j ] * energyPerp_s[ j ] + 
                                 energyPara_s[ j ] * energyPara_s[ j ] 
                             );
+                            // itrSum += radWeighting_s[ j ];
 
                             totalParticles += radWeighting_s[ j ];
 
                             ctrSumPara += energyPara_s[ j ] * formfactor;
                             ctrSumPerp += energyPerp_s[ j ] * formfactor;
+                            // ctrSumPara += formfactor;
+                            // ctrSumPerp += formfactor;
                         }
 
                         int const index = theta_idx * transitionRadiation::frequencies::N_omega + o;

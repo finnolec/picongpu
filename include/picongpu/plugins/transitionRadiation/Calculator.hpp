@@ -9,6 +9,13 @@ namespace picongpu
     {
         using complex_X = pmacc::math::Complex< float_X >;
 
+        /** arbitrary margin necessary to prevent division by zero
+         * errors for the parallel part of the transition radiation
+         * from particles moving perpendicular to the normal of the 
+         * foil
+         */
+        float_X const DIV_BY_ZERO_MINIMUM = 1.e-7;
+
         class Calculator
         {
 
@@ -25,6 +32,7 @@ namespace picongpu
             float_X detectorCosTheta;
             float_X const detectorPhi;
             float_X const parSqrtOnePlusUSquared;
+            //float_X parSqrtOnePlusUSquared;
 
         public: 
 
@@ -96,12 +104,12 @@ namespace picongpu
                 float_X denominator = x * x - y * y;
 
                 // Preventing division by 0
-                if( math::abs( denominator ) < 1e-9 )
+                if( math::abs( denominator ) < DIV_BY_ZERO_MINIMUM )
                 {
                     if( denominator < 0.0 )
-                        denominator = -1e-9;
+                        denominator = -DIV_BY_ZERO_MINIMUM;
                     else
-                        denominator = 1e-9;
+                        denominator = DIV_BY_ZERO_MINIMUM;
                 }
 
                 return a * ( 1.0 / denominator );
@@ -130,12 +138,12 @@ namespace picongpu
                 float_X denominator = x * x - y * y; 
 
                 // Preventing division by 0
-                if( math::abs( denominator ) < 1e-9 )
+                if( math::abs( denominator ) < DIV_BY_ZERO_MINIMUM )
                 {
                     if( denominator < 0.0 )
-                        denominator = -1e-9;
+                        denominator = -DIV_BY_ZERO_MINIMUM;
                     else
-                        denominator = 1e-9;
+                        denominator = DIV_BY_ZERO_MINIMUM;
                 }
 
                 return a * ( b - c ) * ( 1.0 / denominator );
@@ -152,12 +160,15 @@ namespace picongpu
                 *          - i sinTheta rho cos(Phi_P - Phi_D)
                 */
                 // If case for longitudinal moving particles... leads to 0 later in the kernel
-                if ( math::abs( parMomCosTheta ) <= 1e-9 )
+                if ( math::abs( parMomCosTheta ) <= DIV_BY_ZERO_MINIMUM )
                     return complex_X( -1.0, 0.0 );
                     
                 float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
                 float_X const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
                 float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
+                // float_X const a = 1.0;
+                // float_X const b = 1.0;
+                // float_X const c = 1.0;
 
                 complex_X const fpara = complex_X( 0.0, b );
                 complex_X const fperp = complex_X( 0.0, c );

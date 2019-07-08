@@ -69,7 +69,9 @@ namespace picongpu
                 constexpr float_64 omega_max = 1.0e17;
             }
 
-            /** number of frequency values to compute in the logarithmic frequency [unitless] */
+            /** number of frequency values to compute in the logarithmic frequency [unitless] 
+             * N_omega must be larger than 1
+            */
             constexpr unsigned int N_omega = 2048;
         }
 
@@ -126,7 +128,9 @@ namespace picongpu
         namespace parameters
         {
 
-            /** number of observation directions */
+            /** number of observation directions 
+             * N_phis and N_thetas must be larger than 1
+            */
             constexpr unsigned int N_phis = 4;
             constexpr unsigned int N_thetas = 4;
             constexpr unsigned int N_observer = N_phis * N_thetas;
@@ -141,6 +145,8 @@ namespace picongpu
 
             constexpr float_64 surfacePosition = 0.0;
         } /* end namespace parameters */
+
+
 
 
         /** select particles for radiation

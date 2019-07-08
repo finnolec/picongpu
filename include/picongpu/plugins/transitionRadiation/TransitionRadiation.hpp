@@ -298,6 +298,26 @@ namespace picongpu
             __getTransactionEvent( ).waitForFinished( );
             numParticles->deviceToHost( );
             __getTransactionEvent( ).waitForFinished( );
+
+            // for ( unsigned int i = 0; i < elements_amplitude( ); i++ )	
+            // {	
+            //     if( isnan( incTransRad->getHostBuffer( ).getBasePointer( )[ i ] ) )	
+            //     {	
+            //         std::cout<<"incTransRad["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
+            //     } 	
+            //     if( isnan( cohTransRadPara->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )	
+            //     {	
+            //         std::cout<<"cohTransRadPara["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
+            //     } 	
+            //     if( isnan( cohTransRadPerp->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )	
+            //     {	
+            //         std::cout<<"cohTransRadPerp["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
+            //     } 	
+            //     if( isnan( numParticles->getHostBuffer( ).getBasePointer( )[ i ] ) )	
+            //     {	
+            //         std::cout<<"numParticles["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
+            //     } 	
+            // }
         }
 
         static 
