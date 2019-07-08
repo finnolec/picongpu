@@ -9,10 +9,8 @@ namespace picongpu
     {
         using complex_X = pmacc::math::Complex< float_X >;
 
-        /** arbitrary margin necessary to prevent division by zero
-         * errors for the parallel part of the transition radiation
-         * from particles moving perpendicular to the normal of the 
-         * foil
+        /** arbitrary margin which is necessary to prevent division by 0 error
+         * created by particles moving in the plane of the foil.
          */
         float_X const DIV_BY_ZERO_MINIMUM = 1.e-7;
 

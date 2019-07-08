@@ -147,8 +147,12 @@ namespace picongpu
         {
             desc.add_options( )(
                 ( pluginPrefix + ".period" ).c_str( ), 
-                po::value<std::string> ( &notifyPeriod ), 
+                po::value< std::string >( &notifyPeriod ), 
                 "enable plugin [for each n-th step]"
+            )(
+                ( pluginPrefix + ".omegaList").c_str(), 
+                po::value< std::string >( &pathOmegaList )->default_value( "_noPath_" ), 
+                "path to file containing all frequencies to calculate"
             );
         }
 
@@ -412,6 +416,9 @@ namespace picongpu
                         targetArray[ i ] = ( 
                             itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
                         );
+                        // targetArray[ i ] = ( 
+                        //    ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
+                        // );
                     }
                     else
                         targetArray[ i ] = 0.0;
