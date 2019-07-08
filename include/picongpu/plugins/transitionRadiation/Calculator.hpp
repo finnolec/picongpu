@@ -148,7 +148,7 @@ namespace picongpu
             }
 
             HDINLINE
-            complex_64 
+            complex_X 
             calcFExponent( ) const
             {
                 /* returns the exponent of the formfactor divided by \omega
@@ -159,17 +159,17 @@ namespace picongpu
                 */
                 // If case for longitudinal moving particles... leads to 0 later in the kernel
                 if ( math::abs( parMomCosTheta ) <= DIV_BY_ZERO_MINIMUM )
-                    return complex_64( -1.0, 0.0 );
+                    return complex_X( -1.0, 0.0 );
                     
-                float_64 const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
-                float_64 const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
-                float_64 const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
+                float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
+                float_X const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
+                float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
                 // float_X const a = 1.0;
                 // float_X const b = 1.0;
                 // float_X const c = 1.0;
 
-                complex_64 const fpara = complex_64( 0.0, b );
-                complex_64 const fperp = complex_64( 0.0, c );
+                complex_X const fpara = complex_X( 0.0, b );
+                complex_X const fperp = complex_X( 0.0, c );
                 return fpara + fperp;
                 
             }
@@ -178,8 +178,8 @@ namespace picongpu
         HDINLINE
         complex_X 
         formFactor(
-            float_64 const omega, 
-            complex_64 const exponent
+            float_X const omega, 
+            complex_X const exponent
         )
         {
             /* Does exactly what the name says */
@@ -188,7 +188,11 @@ namespace picongpu
             if ( exponent.get_real() == -1.0 )
                 return complex_X( 0.0, 0.0 );
             else
-                return complex_X( math::exp( exponent * omega ) );
+                return complex_X( 
+                    math::exp( 
+                        precisionCast< float_64 >( exponent * omega )
+                    ) 
+                );
         }
     } // namespace transitionRadiation
 } // namespace picongpu

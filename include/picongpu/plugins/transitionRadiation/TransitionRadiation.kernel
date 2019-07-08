@@ -74,7 +74,7 @@ namespace picongpu
             PMACC_SMEM( acc, energyPara_s, memory::Array< float_X, blockSize > );
 
             // exponent of the form factor
-            PMACC_SMEM( acc, formfactorExponent_s, memory::Array< complex_64, blockSize > );
+            PMACC_SMEM( acc, formfactorExponent_s, memory::Array< complex_X, blockSize > );
 
             // storage for macro particle weighting needed if
             // the coherent and incoherent radiation of a single
@@ -299,7 +299,7 @@ namespace picongpu
 
                         for( int j = 0; j < counter_s; ++j )
                         {
-                            float_64 const omega = freqFkt( o );
+                            float_X const omega = freqFkt( o );
                             complex_X const formfactor = transitionRadiation::formFactor(
                                 omega, 
                                 formfactorExponent_s[ j ]
