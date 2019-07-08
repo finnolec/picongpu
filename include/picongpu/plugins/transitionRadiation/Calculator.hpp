@@ -176,9 +176,9 @@ namespace picongpu
         }; // class Calculator
 
         HDINLINE
-        complex_64 
+        complex_X 
         formFactor(
-            float_64 const omega, 
+            float_X const omega, 
             complex_64 const exponent
         )
         {
@@ -186,9 +186,9 @@ namespace picongpu
             
             // If case for longitudinal moving particles
             if ( exponent.get_real() == -1.0 )
-                return complex_64( 0.0, 0.0 );
+                return complex_X( 0.0, 0.0 );
             else
-                return math::exp( exponent * omega );
+                return math::exp( complex_X( exponent ) * omega );
         }
     } // namespace transitionRadiation
 } // namespace picongpu

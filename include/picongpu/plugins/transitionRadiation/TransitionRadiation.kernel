@@ -299,16 +299,14 @@ namespace picongpu
 
                         for( int j = 0; j < counter_s; ++j )
                         {
-                            picongpu::float_64 const omega = freqFkt( o );
-                            complex_64 const formfactor = transitionRadiation::formFactor(
+                            float_X const omega = freqFkt( o );
+                            complex_X const formfactor = transitionRadiation::formFactor(
                                 omega, 
                                 formfactorExponent_s[ j ]
-                            ) * precisionCast< float_64 >( 
-                                macroParticleFormFactor( 
-                                    radWeighting_s[ j ],
-                                    omega,
-                                    look
-                                )
+                            ) * macroParticleFormFactor( 
+                                radWeighting_s[ j ],
+                                omega,
+                                look
                             );
 
                             itrSum += radWeighting_s[ j ] * ( 
@@ -319,12 +317,8 @@ namespace picongpu
 
                             totalParticles += radWeighting_s[ j ];
 
-                            ctrSumPara += energyPara_s[ j ] * precisionCast< float_X >( 
-                                formfactor 
-                            );
-                            ctrSumPerp += energyPerp_s[ j ] * precisionCast< float_X >( 
-                                formfactor 
-                            );
+                            ctrSumPara += energyPara_s[ j ] * formfactor;
+                            ctrSumPerp += energyPerp_s[ j ] * formfactor;
                             // ctrSumPara += formfactor;
                             // ctrSumPerp += formfactor;
                         }
