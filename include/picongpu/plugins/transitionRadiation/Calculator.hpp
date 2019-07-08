@@ -8,6 +8,7 @@ namespace picongpu
     namespace transitionRadiation
     {
         using complex_X = pmacc::math::Complex< float_X >;
+        using complex_64 = pmacc::math::Complex< float_64 >;
 
         /** arbitrary margin which is necessary to prevent division by 0 error
          * created by particles moving in the plane of the foil.
@@ -23,14 +24,13 @@ namespace picongpu
 
             float_X parMomSinTheta;
             float_X parMomCosTheta;
-            float_X const parMomPhi; //TODO Const
+            float_X const parMomPhi;
             float_X parMomSinPhi;
             float_X parMomCosPhi;
             float_X detectorSinTheta;
             float_X detectorCosTheta;
             float_X const detectorPhi;
             float_X const parSqrtOnePlusUSquared;
-            //float_X parSqrtOnePlusUSquared;
 
         public: 
 
@@ -148,7 +148,7 @@ namespace picongpu
             }
 
             HDINLINE
-            complex_X 
+            complex_64 
             calcFExponent( ) const
             {
                 /* returns the exponent of the formfactor divided by \omega
@@ -159,34 +159,34 @@ namespace picongpu
                 */
                 // If case for longitudinal moving particles... leads to 0 later in the kernel
                 if ( math::abs( parMomCosTheta ) <= DIV_BY_ZERO_MINIMUM )
-                    return complex_X( -1.0, 0.0 );
+                    return complex_64( -1.0, 0.0 );
                     
-                float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
-                float_X const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
-                float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
+                float_64 const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
+                float_64 const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
+                float_64 const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
                 // float_X const a = 1.0;
                 // float_X const b = 1.0;
                 // float_X const c = 1.0;
 
-                complex_X const fpara = complex_X( 0.0, b );
-                complex_X const fperp = complex_X( 0.0, c );
+                complex_64 const fpara = complex_64( 0.0, b );
+                complex_64 const fperp = complex_64( 0.0, c );
                 return fpara + fperp;
                 
             }
         }; // class Calculator
 
         HDINLINE
-        complex_X 
+        complex_64 
         formFactor(
-            float_X const omega, 
-            complex_X const exponent
+            float_64 const omega, 
+            complex_64 const exponent
         )
         {
             /* Does exactly what the name says */
             
             // If case for longitudinal moving particles
             if ( exponent.get_real() == -1.0 )
-                return complex_X( 0.0, 0.0 );
+                return complex_64( 0.0, 0.0 );
             else
                 return math::exp( exponent * omega );
         }
