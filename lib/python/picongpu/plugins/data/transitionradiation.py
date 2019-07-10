@@ -8,9 +8,7 @@ License: GPLv3+
 from .base_reader import DataReader
 
 import numpy as np
-import pandas as pd
 import os
-import collections
 
 
 class TransitionRadiationData(DataReader):
