@@ -190,7 +190,8 @@ namespace picongpu
             else
                 return complex_X( 
                     math::exp( 
-                        precisionCast< float_64 >( exponent * omega )
+                        //precisionCast< float_64 >( exponent * omega )
+                        exponent * omega
                     ) 
                 );
         }
