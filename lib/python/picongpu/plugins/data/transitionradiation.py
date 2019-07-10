@@ -28,6 +28,7 @@ class TransitionRadiationData(DataReader):
 
         self.data_file_prefix = "_transRad_"
         self.data_file_suffix = ".dat"
+        self.data_file_folder = "transRad/"
         self.data = None
         self.omegas = None
         self.thetas = None
@@ -51,9 +52,6 @@ class TransitionRadiationData(DataReader):
         """
         if species is None:
             raise ValueError("The species parameter can not be None!")
-        # if iteration is None:
-        #    raise ValueError("The iteration can't be None!")
-
 
         sim_output_dir = os.path.join(self.run_directory, "simOutput")
         if not os.path.isdir(sim_output_dir):
@@ -68,8 +66,8 @@ class TransitionRadiationData(DataReader):
         else:
             data_file_path = os.path.join(
                 sim_output_dir,
-                species + self.data_file_prefix + iteration +
-                self.data_file_suffix
+                self.data_file_folder + species + self.data_file_prefix +
+                str(iteration) + self.data_file_suffix
             )
             if not os.path.isfile(data_file_path):
                 raise IOError("The file {} does not exist.\n"
@@ -77,57 +75,86 @@ class TransitionRadiationData(DataReader):
                               .format(data_file_path))
             return data_file_path
 
-    def _get_for_iteration(self, species, iteration=None, **kwargs):
+    def _get_for_iteration(self, iteration=None, **kwargs):
         """
-        Returns data for transition radiation visualization.
+        Returns data for transition radiation visualization as specified with "type" for
+        transition_radiation_visualizer.py
 
         Parameters
         ----------
-        iteration : (unsigned)
+        iteration : (unsigned) int
             The iteration at which to read the data.
-        :param species:
-        :param kwargs:
+
         :return:
         """
+        species = kwargs["species"]
         if species is None:
             raise ValueError("The species parameter can not be None!")
+        kwargs.pop("species")  # remove entry from kwargs because we pass it on
+
         if iteration is None:
             raise ValueError("The iteration can't be None!")
 
         # Do loading once and store them in ram
         if self.data is None:
-            data_file_path = self.get_data_path(species, iteration)
+            data_file_path = self.get_data_path(species=species, iteration=iteration)
 
             self.data = np.loadtxt(data_file_path)
 
             # Read values to automatically create theta, phi and omega arrays
-            f = open(self.path + self.trOutputFile)
-            tmp = f.readlines()[0]
+            f = open(data_file_path)
+            parameters = f.readlines()[0].split("\t")
             f.close()
 
-            tmp = tmp.split("\t")
-            if len(tmp) == 1:  # TODO is if necessary
-                tmp = str(tmp).split(" ")
-                tmp[9] = tmp[9].split("\\")[0]
+            # Create discretized arrays or angles and frequency as they are discretized for the
+            # calculation in PIConGPU. This is necessary for the labels for the axes.
+            self.omegas = np.logspace(np.log10(float(parameters[2])), np.log10(float(parameters[3])),
+                                      int(parameters[1]))
+            self.phis = np.linspace(float(parameters[5]), float(parameters[6]), int(parameters[4]))
+            self.thetas = np.linspace(float(parameters[8]), float(parameters[9]), int(parameters[7]))
 
-            self.omegas = np.linspace(tmp[2], tmp[3], tmp[1])
-            self.phis = np.linspace(tmp[5], tmp[6], tmp[4])
-            self.thetas = np.linspace(tmp[8], tmp[9], tmp[7])
-
-        return self.data
+        return self.get_data(species=species, iteration=iteration, **kwargs)
 
     def get_data(self, species, iteration=None, **kwargs):
         """
-        :param observer:  shoudl
-        :param n_observer:
-        :return:
+        Calculates data as specified with "type" for the plot from transition_radiation_visualizer.py.
+
+        Parameters
+        ----------
+        kwargs: dictionary with further keyword arguments, valid are:
+            species: string
+                short name of the particle species, e.g. 'e' for electrons
+                (defined in ``speciesDefinition.param``)
+            iteration: int
+                number of the iteration
+            time: float
+                simulation time.
+                Only one of 'iteration' or 'time' should be passed!
+            type: string
+                name of figure type. valid figure types are:
+                    'spectrum' - (default) plots transition radiation spectrum
+                        at angles theta and phi over the frequency omega
+            phi: int
+                index of polar angle for a fixed value
+            theta: int
+                index of azimuth angle for a fixed value
+            omega: int
+                index of frequency for a fixed value, pointless in a spectrum
+
+        Returns
+        ----------
+        A tuple of the x and y values for the plot as one dimensional arrays for normal figures
+        (not heatmaps) and as colormeshes for heatmaps.
         """
         if iteration is None:
             raise ValueError("Can't return data for an unknown iteration!")
-        if self.data == None:
-            self.data = self._get_for_iteration(iteration, species)
+        if self.data is None:
+            self.data = self._get_for_iteration(species, iteration, **kwargs)
 
+        # Specify plot type
         type = kwargs["type"]
+
+        # Load fixed values for observation angles from arguments, if given
         theta = kwargs["theta"]
         phi = kwargs["phi"]
         omega = kwargs["omega"]
@@ -135,18 +162,18 @@ class TransitionRadiationData(DataReader):
         if type is "spectrum":
             # find phi and theta with maximum intensity if they are not given as parameters
             if theta is None and phi is None:
-                maxIndex = np.argmax(self.data[, ::])
-                theta = np.floor(maxIndex / len(self.phis))
+                maxIndex = np.argmax(self.data[:, 0])
+                theta = int(np.floor(maxIndex / len(self.phis)))
                 phi = maxIndex % len(self.phis)
             elif theta is None and phi is not None:
-                theta = np.argmax(self.data[phi::len(self.phis), ::])
+                theta = np.argmax(self.data[phi::len(self.phis), :])
             elif theta is not None and phi is None:
-                phi = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis):, ::])
-            print("Spectrum is calculated for theta={:.4e} and phi={:.4e}".format(self.thetas[theta],
-                                                                                  self.phis[phi]))
-            return self.data[theta * len(self.phis) + phi, ::]
+                phi = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis):, :])
 
-    def get_iterations(self, species, species_filter="all"):
+            # return arrays prepared for the plot with transition_radiation_visualizer.py
+            return self.omegas, self.data[theta * len(self.phis) + phi, :]
+
+    def get_iterations(self, species):
         """
         Return an array of iterations with available data.
 
@@ -155,9 +182,6 @@ class TransitionRadiationData(DataReader):
         species : string
             short name of the particle species, e.g. "e" for electrons
             (defined in ``speciesDefinition.param``)
-        species_filter: string
-            name of the particle species filter, default is "all"
-            (defined in ``particleFilters.param``)
 
         Returns
         -------

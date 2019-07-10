@@ -7,6 +7,9 @@ Authors: Finn-Ole Carstens, Sebastian Starke
 from picongpu.plugins.data import TransitionRadiationData
 from picongpu.plugins.plot_mpl.base_visualizer import Visualizer as \
     BaseVisualizer
+from matplotlib.ticker import FixedLocator
+import numpy as np
+import scipy.constants as const
 
 
 class Visualizer(BaseVisualizer):
@@ -36,12 +39,6 @@ class Visualizer(BaseVisualizer):
            Implementation of base class function.
            Turns 'self.plt_obj' into a matplotlib.pyplot.plot object.
            """
-
-        # counts, bins, iteration, dt = self.data[idx]
-        # label = self.sim_labels[idx]
-        # self.plt_obj[idx] = self.ax.semilogy(
-        #     bins, counts, nonposy='clip', label=label,
-        #     color=self.colors[idx])[0]
         omegas, spectral_power = self.data[idx]
         self.plt_obj[idx] = self.ax.plot(omegas, spectral_power)
 
@@ -74,7 +71,14 @@ class Visualizer(BaseVisualizer):
                 name of figure type. valid figure types are:
                     'spectrum' - (default) plots transition radiation spectrum
                         at angles theta and phi over the frequency omega
+            phi: int
+                index of polar angle for a fixed value
+            theta: int
+                index of azimuth angle for a fixed value
+            omega: int
+                index of frequency for a fixed value, pointless in a spectrum
         """
+        print(kwargs)
         super().visualize(**kwargs)
 
     def adjust_plot(self, **kwargs):
@@ -86,7 +90,59 @@ class Visualizer(BaseVisualizer):
             self.ax.set_xlabel(r"Frequency $\omega$ [1/s]")
             self.ax.set_ylabel(r"Spectral Power $d^2 W / d\omega d\Omega$ [Js]")
             self.ax.set_xscale("log")
+            self.ax.set_yscale("log")
             self.ax.set_title("Transition Radiation Spectrum for " + species)
+
+            # care for beautiful figure top axes
+            # activate top axes as a log axes as clone from bottom axes
+            axtop = self.ax.twiny()
+            axtop.set_xscale("log")
+            axtop.autoscale(False)
+            axtop.set_xlim(self.ax.get_xlim())
+
+            # necessary functions for calculation from lambda to omega and vice versa
+            def calc_lambda(_omega):
+                return 2 * np.pi * const.c / _omega
+
+            def calc_omega(_lambda):
+                return 2 * np.pi * const.c / _lambda
+
+            # calculate limits for top ticks
+            lambda_min = np.ceil(np.log10(calc_lambda(self.ax.get_xlim()[1])))
+            lambda_max = np.floor(np.log10(calc_lambda(self.ax.get_xlim()[0])))
+            # calculate tick locations
+            lambda_locations = np.logspace(lambda_min, lambda_max, np.abs(lambda_max - lambda_min) + 1)
+            # set tick locations of top axes
+            axtop.set_xticks(calc_omega(lambda_locations))
+
+            # calculate positions for minor and major ticks for the beauty of the plot
+            nmaj = 200
+            nmin = 10
+            minorlocs = np.linspace(0.1, 1, nmin, endpoint=True)
+            majorlocs = np.linspace(99, -100, nmaj, endpoint=True)
+            alllocs = np.zeros(nmaj * nmin)
+            for i in range(nmaj):
+                for j in range(nmin):
+                    alllocs[i * nmin + j] = minorlocs[j] * 10 ** majorlocs[i]
+
+            alllocs = calc_omega(alllocs)
+
+            axtop.xaxis.set_minor_locator(FixedLocator(alllocs))
+
+            # necessary function for labelling of top axes
+            def maketentothepower(x):
+                if x == 0: return "$0$"
+                exponent = np.int32(np.log10(x))
+                return r"$10^{{ {:2d} }}$".format(exponent)
+
+            # create names for top ticks with log scale
+            lambda_names = []
+            for i in range(len(lambda_locations)):
+                lambda_names.append(maketentothepower(lambda_locations[i]))
+
+            # set tick labels and ax label for top label
+            axtop.set_xticklabels(lambda_names)
+            axtop.set_xlabel(r"Wavelength $\lambda [m]$")
 
 
 if __name__ == "__main__":
@@ -126,6 +182,7 @@ if __name__ == "__main__":
             usage()
             sys.exit(2)
 
+        # go through kwargs
         for opt, arg in opts:
             if opt in ["-h", "--help"]:
                 usage()
@@ -168,9 +225,12 @@ if __name__ == "__main__":
             print("No fixed polar angle phi was given for the spectrum. The spectrum "
                   "will be created at the maximum of the spectral power depending on phi.")
 
-        _, ax = plt.subplot(1, 1)
+        # create pyplot axes object and visualize data
+        _, ax = plt.subplots(1, 1)
         Visualizer(path, ax).visualize(iteration=iteration, species=species, type=type,
                                        phi=phi, theta=theta, omega=omega)
+        # plot layout magic for the beauty of the plot
+        plt.tight_layout()
         plt.show()
 
 
