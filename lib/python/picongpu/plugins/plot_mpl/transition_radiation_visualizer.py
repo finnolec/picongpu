@@ -88,6 +88,7 @@ class Visualizer(BaseVisualizer):
                         at a fixed angle phi and frequency omega
                     'sliceoverphi' - shows angular distribution of transition radiation
                         at a fixed angle theta and frequency omega
+                    'heatmap' - shows angular distribution as heatmap over both observation angles
             phi: int
                 index of polar angle for a fixed value
             theta: int
@@ -95,9 +96,7 @@ class Visualizer(BaseVisualizer):
             omega: int
                 index of frequency for a fixed value, pointless in a spectrum
         """
-        print(kwargs)  # TODO remove
         self.type = kwargs["type"]
-        print("self.type is ", self.type)
         super().visualize(**kwargs)
 
     def adjust_plot(self, **kwargs):
@@ -184,14 +183,14 @@ if __name__ == "__main__":
 
         def usage():
             print("usage:")
-            print("python", sys.argv[0],
-                  "-p, --path <path to run_directory> "
-                  "-i, --iteration <iteration> "
-                  "-s, --species <particle species> "
-                  "-t, --type <figure type "
-                  "-P, --phi  <index of polar angle phi> "
-                  "-T, --theta <index of azimuth angle theta> "
-                  "-O, --omega <index of frequency omega>")
+            print("python", sys.argv[0], "\n",
+                  "\t-p, --path\t<path to run_directory>\n"
+                  "\t-i, --iteration\t<iteration>\n"
+                  "\t-s, --species\t<particle species>\n"
+                  "\t-t, --type\t<figure type\n"
+                  "\t-P, --phi\t<index of polar angle phi>\n"
+                  "\t-T, --theta\t<index of azimuth angle theta>\n"
+                  "\t-O, --omega\t<index of frequency omega>")
 
         path = None
         iteration = None
@@ -204,7 +203,7 @@ if __name__ == "__main__":
         omega = None
 
         try:
-            opts, args = getopt.getopt(sys.argv[1:], "h:p:i:s:t:P:T:O",
+            opts, args = getopt.getopt(sys.argv[1:], "hp:i:s:t:P:T:O:",
                                        ["help", "path", "iteration",
                                         "species", "type", "phi",
                                         "theta", "omega"])
@@ -246,15 +245,15 @@ if __name__ == "__main__":
             print("Figure type was not given, will use", type)
 
         # check for specified angles and frequencies
-        if omega is not None and type is "spectrum":
-            print("A fixed omega was given for a spectrum over the frequency. It will be ignored.")
-            omega = None
-        if theta is None and type is "spectrum":
-            print("No fixed azimuth angle theta was given for the spectrum. The spectrum "
-                  "will be created at the maximum of the spectral power depending on theta.")
-        if phi is None and type is "spectrum":
-            print("No fixed polar angle phi was given for the spectrum. The spectrum "
-                  "will be created at the maximum of the spectral power depending on phi.")
+        # if omega is not None and type is "spectrum":
+        #     print("A fixed omega was given for a spectrum over the frequency. It will be ignored.")
+        #     omega = None
+        # if theta is None and type is "spectrum":
+        #     print("No fixed azimuth angle theta was given for the spectrum. The spectrum "
+        #           "will be created at the maximum of the spectral power depending on theta.")
+        # if phi is None and type is "spectrum":
+        #     print("No fixed polar angle phi was given for the spectrum. The spectrum "
+        #           "will be created at the maximum of the spectral power depending on phi.")
 
         # create pyplot axes object and visualize data
         _, ax = plt.subplots(1, 1)
