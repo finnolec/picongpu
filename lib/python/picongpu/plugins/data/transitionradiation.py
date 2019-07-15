@@ -87,17 +87,15 @@ class TransitionRadiationData(DataReader):
 
         :return:
         """
-        species = kwargs["species"]
-        if species is None:
+        if kwargs["species"] is None:
             raise ValueError("The species parameter can not be None!")
-        kwargs.pop("species")  # remove entry from kwargs because we pass it on
 
         if iteration is None:
             raise ValueError("The iteration can't be None!")
 
         # Do loading once and store them in ram
         if self.data is None:
-            data_file_path = self.get_data_path(species=species, iteration=iteration)
+            data_file_path = self.get_data_path(species=kwargs["species"], iteration=iteration)
 
             self.data = np.loadtxt(data_file_path)
 
@@ -113,9 +111,9 @@ class TransitionRadiationData(DataReader):
             self.phis = np.linspace(float(parameters[5]), float(parameters[6]), int(parameters[4]))
             self.thetas = np.linspace(float(parameters[8]), float(parameters[9]), int(parameters[7]))
 
-        return self.get_data(species=species, iteration=iteration, **kwargs)
+        return self.get_data(iteration=iteration, **kwargs)
 
-    def get_data(self, species, iteration=None, **kwargs):
+    def get_data(self, iteration=None, **kwargs):
         """
         Calculates data as specified with "type" for the plot from transition_radiation_visualizer.py.
 
@@ -149,7 +147,7 @@ class TransitionRadiationData(DataReader):
         if iteration is None:
             raise ValueError("Can't return data for an unknown iteration!")
         if self.data is None:
-            self.data = self._get_for_iteration(species, iteration, **kwargs)
+            self.data = self._get_for_iteration(kwargs["species"], iteration, **kwargs)
 
         # Specify plot type
         type = kwargs["type"]
@@ -159,7 +157,21 @@ class TransitionRadiationData(DataReader):
         phi = kwargs["phi"]
         omega = kwargs["omega"]
 
-        if type is "spectrum":
+        # Cast parameters to int and check for legitimacy
+        if theta is not None:
+            theta = int(theta)
+            if theta < 0 or theta >= len(self.thetas):
+                raise ValueError("Invalid index for Theta!")
+        if phi is not None:
+            phi = int(phi)
+            if phi < 0 or phi >= len(self.phis):
+                raise ValueError("Invalid index for Phi!")
+        if omega is not None:
+            omega = int(omega)
+            if omega < 0 or omega >= len(self.omegas):
+                raise ValueError("Invalid index for Omega!")
+
+        if type == "spectrum":
             # find phi and theta with maximum intensity if they are not given as parameters
             if theta is None and phi is None:
                 maxIndex = np.argmax(self.data[:, 0])
@@ -170,8 +182,49 @@ class TransitionRadiationData(DataReader):
             elif theta is not None and phi is None:
                 phi = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis):, :])
 
+            print("Spectrum is plotted at phi={:.2e} and theta={:.2e}".format(self.phis[phi], self.thetas[theta]))
             # return arrays prepared for the plot with transition_radiation_visualizer.py
             return self.omegas, self.data[theta * len(self.phis) + phi, :]
+        elif type == "sliceovertheta":
+            # find phi and omega with maximum intensity if they are not given as parameters
+            if omega is None:
+                print("It is assumed that the transition radiation has the maximal intensity"
+                      " at the minimal frequency. Check with the spectrum if this is correct.")  # TODO
+                omega = 0
+            if phi is None:
+                maxIndex = np.argmax(self.data[:, omega])
+                phi = maxIndex % len(self.phis)
+            print("Angular intensity distribution is sliced at phi={:.2e} with omega={:.2e}.".format(self.phis[phi],
+                                                                                                     self.omegas[
+                                                                                                         omega]))
+            return self.thetas, self.data[phi::len(self.phis), omega]
+        elif type == "sliceoverphi":
+            # find theta and omega with maximum intensity if they are not given as parameters
+            if omega is None:
+                print("It is assumed that the transition radiation has the maximal intensity"
+                      " at the minimal frequency. Check with the spectrum if this is correct.")  # TODO
+                omega = 0
+            if theta is None:
+                maxIndex = np.argmax(self.data[:, omega])
+                theta = int(np.floor(maxIndex / len(self.phis)))
+            print("Angular intensity distribution is sliced at theta={:.2e} "
+                  "with omega={:.2e}.".format(self.thetas[theta], self.omegas[omega]))
+            return self.phis, self.data[theta * len(self.phis):(theta + 1) * len(self.phis), omega]
+        elif type == "heatmap":
+            # find omega with maximum intensity if it is not given as parameter
+            if omega is None:
+                print("It is assumed that the transition radiation has the maximal intensity"
+                      " at the minimal frequency. Check with the spectrum if this is correct.")  # TODO
+                omega = 0
+            # meshgrids for visualization
+            theta_mesh, phi_mesh = np.meshgrid(self.thetas, self.phis)
+            print("Heatmap is for omega={:.2e}.".format(self.omegas[omega]))
+            return theta_mesh, phi_mesh, self.data[::, omega].reshape((len(self.thetas), len(self.phis))).transpose()
+        else:
+            print("asdf asdf")
+            print(type)
+            print(type is "sliceovertheta")
+            print(type == "sliceovertheta")
 
     def get_iterations(self, species):
         """

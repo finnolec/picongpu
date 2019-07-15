@@ -10,6 +10,7 @@ from picongpu.plugins.plot_mpl.base_visualizer import Visualizer as \
 from matplotlib.ticker import FixedLocator
 import numpy as np
 import scipy.constants as const
+import matplotlib.pyplot as plt
 
 
 class Visualizer(BaseVisualizer):
@@ -33,14 +34,26 @@ class Visualizer(BaseVisualizer):
         ax: matplotlib.axes
         """
         super().__init__(TransitionRadiationData, run_directories, ax)
+        self.type = None
 
     def _create_plt_obj(self, idx):
         """
            Implementation of base class function.
            Turns 'self.plt_obj' into a matplotlib.pyplot.plot object.
            """
-        omegas, spectral_power = self.data[idx]
-        self.plt_obj[idx] = self.ax.plot(omegas, spectral_power)
+        if self.type == "spectrum":
+            omegas, spectral_power = self.data[idx]
+            self.plt_obj[idx] = self.ax.plot(omegas, spectral_power)
+        elif self.type == "sliceovertheta":
+            thetas, spectral_power = self.data[idx]
+            self.plt_obj[idx] = self.ax.plot(thetas, spectral_power)
+        elif self.type == "sliceoverphi":
+            phis, spectral_power = self.data[idx]
+            self.plt_obj[idx] = self.ax.plot(phis, spectral_power)
+        elif self.type == "heatmap":
+            theta_mesh, phi_mesh, spectral_power = self.data[idx]
+            im = self.plt_obj[idx] = self.ax.pcolormesh(theta_mesh, phi_mesh, spectral_power)
+            self.ax.get_figure().colorbar(im, label=r"Spectral Power $d^2 W / d\omega d\Omega$")
 
     def _update_plt_obj(self, idx):
         """
@@ -53,7 +66,7 @@ class Visualizer(BaseVisualizer):
 
     def visualize(self, **kwargs):
         """
-        Creates a semilogy plot on the provided axes object for
+        Creates a plot on the provided axes object for
         the data of the given iteration using matpotlib.
 
         Parameters
@@ -71,6 +84,10 @@ class Visualizer(BaseVisualizer):
                 name of figure type. valid figure types are:
                     'spectrum' - (default) plots transition radiation spectrum
                         at angles theta and phi over the frequency omega
+                    'sliceovertheta' - shows angular distribution of transition radiation
+                        at a fixed angle phi and frequency omega
+                    'sliceoverphi' - shows angular distribution of transition radiation
+                        at a fixed angle theta and frequency omega
             phi: int
                 index of polar angle for a fixed value
             theta: int
@@ -78,7 +95,9 @@ class Visualizer(BaseVisualizer):
             omega: int
                 index of frequency for a fixed value, pointless in a spectrum
         """
-        print(kwargs)
+        print(kwargs)  # TODO remove
+        self.type = kwargs["type"]
+        print("self.type is ", self.type)
         super().visualize(**kwargs)
 
     def adjust_plot(self, **kwargs):
@@ -86,7 +105,7 @@ class Visualizer(BaseVisualizer):
         Implementation of base class function.
         """
         species = kwargs["species"]
-        if kwargs["type"] == "spectrum":
+        if self.type == "spectrum":
             self.ax.set_xlabel(r"Frequency $\omega$ [1/s]")
             self.ax.set_ylabel(r"Spectral Power $d^2 W / d\omega d\Omega$ [Js]")
             self.ax.set_xscale("log")
@@ -143,6 +162,18 @@ class Visualizer(BaseVisualizer):
             # set tick labels and ax label for top label
             axtop.set_xticklabels(lambda_names)
             axtop.set_xlabel(r"Wavelength $\lambda [m]$")
+        elif self.type == "sliceovertheta":
+            self.ax.set_title("Angular transition radiation distribution for " + species)
+            self.ax.set_xlabel(r"Detector Angle $\theta$")
+            self.ax.set_ylabel(r"Spectral Power $d^2 W / d\omega d\Omega$")
+        elif self.type == "sliceoverphi":
+            self.ax.set_title("Angular transition radiation distribution for " + species)
+            self.ax.set_xlabel(r"Detector Angle $\phi$")
+            self.ax.set_ylabel(r"Spectral Power $d^2 W / d\omega d\Omega$")
+        elif self.type == "heatmap":
+            self.ax.set_title("Angular transition radiation distribution for " + species)
+            self.ax.set_xlabel(r"Detector Angle $\theta$")
+            self.ax.set_ylabel(r"Detector Angle $\phi$")
 
 
 if __name__ == "__main__":
