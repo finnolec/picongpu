@@ -56,8 +56,7 @@ namespace picongpu
     template<
         typename T_ParticlesType
     >
-    class TransitionRadiation : public ISimulationPlugin
-    // class TransitionRadiation : public ILightweightPlugin
+    class TransitionRadiation : public ILightweightPlugin
     {
     private:
     
@@ -195,30 +194,6 @@ namespace picongpu
         {
             this->cellDescription = cellDescription;
         }
-
-        /** Implementation of base class function. 
-         * 
-         * @param timeStep simulation iteration step to restart from
-         * @param restartDirectory common restart directory (contains checkpoints)
-         */
-        void 
-        restart(
-            uint32_t timeStep, 
-            const std::string restartDirectory
-        )
-        { }
-
-        /** Implementation of base class function.
-         * 
-         * @param timeStep current simulation iteration step
-         * @param checkpointDirectory common directory for checkpoints
-         */
-        void 
-        checkpoint(
-            uint32_t timeStep, 
-            const std::string restartDirectory
-        )
-        { }
 
     private:
         //! Resets buffers for multiple transition radiation calculation per simulation. 
