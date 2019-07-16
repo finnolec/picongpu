@@ -116,14 +116,14 @@ namespace picongpu
             struct radFormFactor
             {
                 /** Form Factor for point-symmetric Gauss-shaped charge distribution of N discrete electrons:
-                    * \f[ <rho(r)> = N*q_e* 1/sqrt(2*pi*sigma^2) * exp(-0.5 * r^2/sigma^2) \f]
-                    * with sigma = 0.5*c/delta_t (0.5 because sigma is defined around center)
-                    *
-                    * @param N = macro particle weighting
-                    * @param omega = frequency at which to calculate the  form factor
-                    * @param observer_unit_vec = observation direction
-                    * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
-                    */
+                * \f[ <rho(r)> = N*q_e* 1/sqrt(2*pi*sigma^2) * exp(-0.5 * r^2/sigma^2) \f]
+                * with sigma = 0.5*c/delta_t (0.5 because sigma is defined around center)
+                *
+                * @param N = macro particle weighting
+                * @param omega = frequency at which to calculate the  form factor
+                * @param observer_unit_vec = observation direction
+                * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
+                */
                 HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
                 {
                     /* currently a fixed sigma of DELTA_T * c is used to describe the distribution - might become a parameter */
@@ -142,14 +142,14 @@ namespace picongpu
             struct radFormFactor
             {
                 /** Form Factor for per-dimension Gauss-shaped charge distribution of N discrete electrons:
-                    * \f[ <rho(r)> = N*q_e* product[d={x,y,z}](1/sqrt(2*pi*sigma_d^2) * exp(-0.5 * d^2/sigma_d^2)) \f]
-                    * with sigma_d = 0.5*cell_width_d*n_d
-                    *
-                    * @param N = macro particle weighting
-                    * @param omega = frequency at which to calculate the  form factor
-                    * @param observer_unit_vec = observation direction
-                    * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
-                    */
+                * \f[ <rho(r)> = N*q_e* product[d={x,y,z}](1/sqrt(2*pi*sigma_d^2) * exp(-0.5 * d^2/sigma_d^2)) \f]
+                * with sigma_d = 0.5*cell_width_d*n_d
+                *
+                * @param N = macro particle weighting
+                * @param omega = frequency at which to calculate the  form factor
+                * @param observer_unit_vec = observation direction
+                * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
+                */
                 HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
                 {
                     return math::sqrt(
@@ -174,12 +174,12 @@ namespace picongpu
             struct radFormFactor
             {
                 /** Form Factor for an incoherent charge distribution:
-                    *
-                    * @param N = macro particle weighting
-                    * @param omega = frequency at which to calculate the  form factor
-                    * @param observer_unit_vec = observation direction
-                    * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 == \sqrt(weighting) \f$
-                    */
+                *
+                * @param N = macro particle weighting
+                * @param omega = frequency at which to calculate the  form factor
+                * @param observer_unit_vec = observation direction
+                * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 == \sqrt(weighting) \f$
+                */
                 HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
                 {
                     return math::sqrt(N);
@@ -193,12 +193,12 @@ namespace picongpu
             struct radFormFactor
             {
                 /** Form Factor for a coherent charge distribution:
-                    *
-                    * @param N = macro particle weighting
-                    * @param omega = frequency at which to calculate the  form factor
-                    * @param observer_unit_vec = observation direction
-                    * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 == \sqrt(weighting) \f$
-                    */
+                *
+                * @param N = macro particle weighting
+                * @param omega = frequency at which to calculate the  form factor
+                * @param observer_unit_vec = observation direction
+                * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 == \sqrt(weighting) \f$
+                */
                 HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
                 {
                     return N;

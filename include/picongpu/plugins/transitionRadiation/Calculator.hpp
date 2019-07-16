@@ -10,11 +10,16 @@ namespace picongpu
         using complex_X = pmacc::math::Complex< float_X >;
         using complex_64 = pmacc::math::Complex< float_64 >;
 
-        /** arbitrary margin which is necessary to prevent division by 0 error
+        /** Arbitrary margin which is necessary to prevent division by 0 error
          * created by particles moving in the plane of the foil.
          */
         float_X const DIV_BY_ZERO_MINIMUM = 1.e-7;
 
+        /** Calculator class for calculation of transition radiation.
+         * 
+         * @param particleSet transitionRadiation::Particle to compute transition radiation for
+         * @param lookDirection vector with observation direction
+         */
         class Calculator
         {
 
@@ -33,7 +38,6 @@ namespace picongpu
             float_X const parSqrtOnePlusUSquared;
 
         public: 
-
             HDINLINE
             Calculator(
                 transitionRadiation::Particle const & particleSet,
@@ -66,7 +70,6 @@ namespace picongpu
                 );
                 
                 // Detector Position
-                //const float_X detectorTheta = picongpu::math::atan2(lookDirection.x( ), lookDirection.y( )) + picongpu::PI;
                 float_X const detectorTheta = picongpu::math::acos( 
                     lookDirection.y( ) / picongpu::math::sqrt( ( 
                         lookDirection * lookDirection
@@ -79,17 +82,19 @@ namespace picongpu
                 );
             }
 
+            /** Calculates perpendicular part to movement direction of normalized energy
+             * determined by formula:
+             * E_perp = (u^2 cosPsi sinPsi sinPhi cosTheta) / 
+             *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
+             * where Psi is the azimuth angle of the particle momentum and theta is
+             * the azimuth angle of the detector position to the movement direction y
+             * 
+             * @return perpendicular part of normalized energy
+             */
             HDINLINE 
             float_X 
             calcEPerp( ) const
             {
-                /* returns perpendicular part to movement direction of normalized energy
-                * determined by formula:
-                * E_perp = (u^2 cosPsi sinPsi sinPhi cosTheta) / 
-                *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
-                * where Psi is the azimuth angle of the particle momentum and theta is
-                * the azimuth angle of the detector position to the movement direction y
-                */
                 float_X const uSquared = particle.getU( ) * particle.getU( );
                 float_X const a = uSquared * parMomCosTheta * parMomSinTheta * 
                     parMomSinPhi * detectorCosTheta;
@@ -113,17 +118,19 @@ namespace picongpu
                 return a * ( 1.0 / denominator );
             }
 
+            /** Calculates parallel part to movement direction of normalized energy
+             * determined by formula:
+             * E_perp = (u cosPsi (u sinPsi cosPhi - sqrt(1 + u^2) sinTheta)) / 
+             *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
+             * where Psi is the azimuth angle of the particle momentum and theta is
+             * the azimuth angle of the detector position to the movement direction y
+             * 
+             * @return parallel part of normalized energy
+             */
             HDINLINE
             float_X 
             calcEPara( ) const
             {
-                /* returns parallel part to movement direction of normalized energy
-                * determined by formula:
-                * E_perp = (u cosPsi (u sinPsi cosPhi - sqrt(1 + u^2) sinTheta)) / 
-                *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
-                * where Psi is the azimuth angle of the particle momentum and theta is
-                * the azimuth angle of the detector position to the movement direction y
-                */
                 float_X const a = particle.getU( ) * parMomCosTheta;
                 float_X const b = particle.getU( ) * parMomSinTheta * parMomCosPhi;
                 float_X const c = parSqrtOnePlusUSquared * detectorSinTheta;
@@ -147,16 +154,17 @@ namespace picongpu
                 return a * ( b - c ) * ( 1.0 / denominator );
             }
 
+            /** Calculates the exponent of the formfactor divided by \omega
+             * It represents the phase of a single electron in the bunch, but it is mostly
+             * calculated for performance reasons.
+             * F_exp = - i z ( 1 / v - sinTheta sinPsi cos(Phi_P - Phi_D) / c ) / (cosPsi)
+             *          - i sinTheta rho cos(Phi_P - Phi_D)
+             * 
+             */
             HDINLINE
             complex_X 
             calcFExponent( ) const
             {
-                /* returns the exponent of the formfactor divided by \omega
-                * this doesn't have a physical meaning, it's calculated here for performance reasons
-                * determined by formula:
-                * F_exp = - i z ( 1 / v - sinTheta sinPsi cos(Phi_P - Phi_D) / c ) / (cosPsi)
-                *          - i sinTheta rho cos(Phi_P - Phi_D)
-                */
                 // If case for longitudinal moving particles... leads to 0 later in the kernel
                 if ( math::abs( parMomCosTheta ) <= DIV_BY_ZERO_MINIMUM )
                     return complex_X( -1.0, 0.0 );
@@ -164,9 +172,6 @@ namespace picongpu
                 float_X const a = detectorSinTheta * parMomSinTheta * math::cos( parMomPhi - detectorPhi );
                 float_X const b = - ( particle.getPosPara( ) ) * ( 1 / particle.getVel( ) - a / SPEED_OF_LIGHT) / ( parMomCosTheta );
                 float_X const c = - detectorSinTheta * particle.getPosPerp( ) * math::cos( particle.getPosPhi( ) - detectorPhi );
-                // float_X const a = 1.0;
-                // float_X const b = 1.0;
-                // float_X const c = 1.0;
 
                 complex_X const fpara = complex_X( 0.0, b );
                 complex_X const fperp = complex_X( 0.0, c );
@@ -175,6 +180,12 @@ namespace picongpu
             }
         }; // class Calculator
 
+        /** Calculates of the electron bunch with the exponent calculated by the 
+         * Calculator class. F = exp{ F_exp * \omega }
+         * 
+         * @param omega observed frequency
+         * @param exponent exponent of exponential function
+         */
         HDINLINE
         complex_X 
         formFactor(
@@ -182,8 +193,6 @@ namespace picongpu
             complex_X const exponent
         )
         {
-            /* Does exactly what the name says */
-            
             // If case for longitudinal moving particles
             if ( exponent.get_real() == -1.0 )
                 return complex_X( 0.0, 0.0 );

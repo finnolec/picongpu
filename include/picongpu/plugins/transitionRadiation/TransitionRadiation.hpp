@@ -39,13 +39,25 @@ namespace picongpu
     namespace po = boost::program_options;
     using complex_X = pmacc::math::Complex< float_X >;
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////~///  Transition Radiation Plugin Class  ///~///////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////
+    /** Implementation of transition radiation for in situ calculation in PIConGPU
+     * 
+     * The transition radiation implemented in this plugin is based on
+     * C. B. Schroeder, E. Esarey, J. van Tilborg, and W. P. Leemans:
+     * Theory of coherent transition radiation generated at a plasma-vacuum interface
+     * (DOI:https://doi.org/10.1103/PhysRevE.69.016501)
+     * 
+     * Transition radiation is created by charged particles moving through an 
+     * interface where one medium has a different diffraction index as the other
+     * medium. Since it is mostly used to analyze electron bunches, this plugin
+     * assumes that the analyzed particles have the mass and charge of electrons.
+     * 
+     * @tparam T_ParticlesType particle type to compute transition radiation from
+     */
     template<
         typename T_ParticlesType
     >
     class TransitionRadiation : public ISimulationPlugin
+    // class TransitionRadiation : public ILightweightPlugin
     {
     private:
     
@@ -86,7 +98,7 @@ namespace picongpu
         mpi::MPIReduce reduce;
 
     public:
-        // Constructor
+        //! Constructor
         TransitionRadiation( ) :
             pluginName( "TransitionRadiation: calculate transition radiation of species" ),
             speciesName( T_ParticlesType::FrameType::getName( ) ),
@@ -115,10 +127,12 @@ namespace picongpu
         ~TransitionRadiation( )
         { }
 
-        /**
-         * This function calculates the Transition Radiation by calling the
-         * according function of the kernel file.
-         * @param currentStep
+        /** Implementation of base class function. Calculates the transition radiation 
+         * by calling the according function of the kernel file, writes data to a 
+         * file and resets the buffers if transition radiation is calculated for 
+         * multiple timesteps.
+         * 
+         * @param currentStep current step of simulation
          */
         void 
         notify(
@@ -130,7 +144,7 @@ namespace picongpu
             resetBuffers( );
             this->currentStep = currentStep;
 
-            calculateRadiationParticles( currentStep );
+            calculateTransitionRadiation( currentStep );
 
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): finished time step %2% " ) % speciesName % currentStep;
             
@@ -140,6 +154,10 @@ namespace picongpu
             log< radLog::SIMULATION_STATE >( "Transition Radition (%1%): printed to table %2% " ) % speciesName % currentStep;
         }
 
+        /** Implementation of base class function. Registers plugin options.
+         * 
+         * @param desc boost::program_options description
+         */
         void 
         pluginRegisterHelp(
             po::options_description& desc
@@ -156,12 +174,20 @@ namespace picongpu
             );
         }
 
+        /** Implementation of base class function.
+         * 
+         * @return name of plugin
+         */
         std::string 
         pluginGetName( ) const
         {
             return pluginName;
         }
 
+        /** Implementation of base class function. Sets mapping description.
+         * 
+         * @param cellDescription 
+         */
         void 
         setMappingDescription(
             MappingDesc *cellDescription
@@ -170,6 +196,11 @@ namespace picongpu
             this->cellDescription = cellDescription;
         }
 
+        /** Implementation of base class function. 
+         * 
+         * @param timeStep simulation iteration step to restart from
+         * @param restartDirectory common restart directory (contains checkpoints)
+         */
         void 
         restart(
             uint32_t timeStep, 
@@ -177,6 +208,11 @@ namespace picongpu
         )
         { }
 
+        /** Implementation of base class function.
+         * 
+         * @param timeStep current simulation iteration step
+         * @param checkpointDirectory common directory for checkpoints
+         */
         void 
         checkpoint(
             uint32_t timeStep, 
@@ -185,6 +221,7 @@ namespace picongpu
         { }
 
     private:
+        //! Resets buffers for multiple transition radiation calculation per simulation. 
         void 
         resetBuffers ( )
         {
@@ -209,6 +246,10 @@ namespace picongpu
             }
         }
 
+        /** Implementation of base class function. Create buffers and arrays for
+         * transition radiation calculation and create a folder for transition
+         * radiation storage.
+         */
         void 
         pluginLoad( )
         {
@@ -273,6 +314,7 @@ namespace picongpu
             }
         }
 
+        //! Implementation of base class function. Deletes buffers andf arrays.
         void 
         pluginUnload( )
         {
@@ -291,6 +333,7 @@ namespace picongpu
             __deleteArray( tmpNum );
         }
 
+        //! Moves transition radiation data from GPUs to CPUs.
         void 
         copyRadiationDeviceToHost( )
         {
@@ -302,28 +345,13 @@ namespace picongpu
             __getTransactionEvent( ).waitForFinished( );
             numParticles->deviceToHost( );
             __getTransactionEvent( ).waitForFinished( );
-
-            // for ( unsigned int i = 0; i < elements_amplitude( ); i++ )	
-            // {	
-            //     if( isnan( incTransRad->getHostBuffer( ).getBasePointer( )[ i ] ) )	
-            //     {	
-            //         std::cout<<"incTransRad["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
-            //     } 	
-            //     if( isnan( cohTransRadPara->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )	
-            //     {	
-            //         std::cout<<"cohTransRadPara["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
-            //     } 	
-            //     if( isnan( cohTransRadPerp->getHostBuffer( ).getBasePointer( )[ i ].get_imag() ) )	
-            //     {	
-            //         std::cout<<"cohTransRadPerp["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
-            //     } 	
-            //     if( isnan( numParticles->getHostBuffer( ).getBasePointer( )[ i ] ) )	
-            //     {	
-            //         std::cout<<"numParticles["<<i<<"] is nan with mpi rank <<"<<reduce.getRank(mpi::reduceMethods::Reduce( ))<<"\n";	
-            //     } 	
-            // }
         }
 
+        /** Calculates amount of different transition radiation values, which
+         * have to be computed.
+         * 
+         * @return amount of transition radiation values to be calculated
+         */
         static 
         unsigned int 
         elements_amplitude( )
@@ -331,8 +359,9 @@ namespace picongpu
             return transitionRadiation::frequencies::N_omega * parameters::N_observer; // storage for amplitude results on GPU
         }
 
-        /** combine radiation data from each CPU and store result on master
-         *  copyRadiationDeviceToHost( ) should be called before */
+        /** Combine transition radiation data from each CPU and store result on master.
+         * copyRadiationDeviceToHost( ) should be called before.
+         */
         void 
         collectRadiationOnMaster( )
         {
@@ -366,6 +395,7 @@ namespace picongpu
             );
         }
 
+        //! Write transition radiation data to file.
         void 
         writeTransRadToText( )
         {
@@ -382,7 +412,7 @@ namespace picongpu
         }
 
 
-        /** perform all operations to get data from GPU to master */
+        //! perform all operations to get data from GPU to master
         void 
         collectDataGPUToMaster( )
         {
@@ -392,7 +422,15 @@ namespace picongpu
             sumTransitionRadiation( theTransRad, tmpITR, tmpCTRpara, tmpCTRperp, tmpNum );
         }
 
-        // calculate transition radiation integrals with the energy values from the kernel
+        /** Calculate transition radiation integrals. This can't happen on the GPU
+         * since the absolute square of a sum can't be moved within a sum.
+         *  
+         * @param targetArray array to store transition radiation in
+         * @param itrArray array of calculated incoherent transition radiation
+         * @param ctrParaArray array of complex values of the parallel part of the coherent transition radiation
+         * @param ctrPerpArray array of complex values of the perpendicular part of coherent transition radiation
+         * @param numArray array of amount of particles
+         */ 
         void 
         sumTransitionRadiation(
             float_X * targetArray, 
@@ -416,9 +454,6 @@ namespace picongpu
                         targetArray[ i ] = ( 
                             itrArray[ i ] + ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
                         );
-                        // targetArray[ i ] = ( 
-                        //    ( numArray[ i ] - 1.0 ) * ( ctrPara + ctrPerp ) / numArray[i]
-                        // );
                     }
                     else
                         targetArray[ i ] = 0.0;
@@ -426,6 +461,11 @@ namespace picongpu
             }
         }
 
+        /** Writes file with transition radiation data with the right units.
+         * 
+         * @param values transition radiation values
+         * @param name name of file
+         */
         void 
         writeFile(
             float_X * values, 
@@ -494,8 +534,13 @@ namespace picongpu
             }
         }
 
+        /** Exectues the particle filter and calls the transition radiation kernel
+         * of the kernel file.
+         * 
+         * @param currentStep current simulation iteration step
+         */
         void 
-        calculateRadiationParticles(
+        calculateTransitionRadiation(
             uint32_t currentStep
         )
         {

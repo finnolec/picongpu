@@ -19,6 +19,24 @@
 
 namespace picongpu
 {
+    /** Kernel for computation of transition radiation on GPUs.
+     * 
+     * @tparam T_numWorkers maximal CUDA threads
+     * @tparam T_ParBox box with particles
+     * @tparam T_DBox box with float data
+     * @tparam T_DBoxComplex box with complex data
+     * @tparam T_Mapping ABSOLUTELY NO FUCKING CLUE
+     * @tparam T_Acc ABSOLUTELY NO FUCKING CLUE
+     * @param acc ABSOLUTELY NO FUCKING CLUE
+     * @param incTransRad output array for storage incoherent transition radiation
+     * @param cohTransRadPara output array for storage of parallel parts of coherent transition radiation
+     * @param cohTransRadPerp output array for storage of perpendicular parts of coherent transition radiation
+     * @param numParticles output array for amount of particles
+     * @param globalOffset offset of simulation
+     * @param mapper description of cells
+     * @param freqFkt frequency functor
+     * @param simBoxSize size of simulation box
+     */
     template<
         uint32_t T_numWorkers
     >
@@ -253,17 +271,10 @@ namespace picongpu
                                             par
                                         );
 
-                                        // charge of macro-particle
-                                        float_X const particle_charge = attribute::getCharge(
-                                            weighting,
-                                            par
-                                        );
-
                                         // using transition radiation particle class
                                         transitionRadiation::Particle const particle(
                                             particle_location,
                                             particle_momentum,
-                                            particle_charge,
                                             particle_mass
                                         );
 
@@ -313,14 +324,10 @@ namespace picongpu
                                 energyPerp_s[ j ] * energyPerp_s[ j ] + 
                                 energyPara_s[ j ] * energyPara_s[ j ] 
                             );
-                            // itrSum += radWeighting_s[ j ];
-
                             totalParticles += radWeighting_s[ j ];
 
                             ctrSumPara += energyPara_s[ j ] * formfactor;
                             ctrSumPerp += energyPerp_s[ j ] * formfactor;
-                            // ctrSumPara += formfactor;
-                            // ctrSumPerp += formfactor;
                         }
 
                         int const index = theta_idx * transitionRadiation::frequencies::N_omega + o;
