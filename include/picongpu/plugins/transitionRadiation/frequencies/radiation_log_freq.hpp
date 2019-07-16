@@ -45,7 +45,7 @@ namespace picongpu
             private:
                 float_X omega_log_min;
                 float_X delta_omega_log;
-            };
+            }; // FreqFunctor
 
 
             class InitFreqFunctor
@@ -64,7 +64,23 @@ namespace picongpu
                 {
                     return FreqFunctor();
                 }
-            };
+            }; // InitFreqFunctor
+
+
+            /** Getter for parameters in output file
+             * 
+             * return parameters as string
+             */
+            HDINLINE
+            std::string 
+            getParameters( void )
+            {
+                std::string params = std::string( "log\t" );
+                params += std::to_string( transitionRadiation::frequencies::N_omega ) + "\t";
+                params += std::to_string( transitionRadiation::frequencies::SI::omega_min ) + "\t";
+                params += std::to_string( transitionRadiation::frequencies::SI::omega_max ) + "\t";
+                return params; 
+            }
         } // namespace rad_log_frequencies
     } // namespace transitionRadiation
 } // namespace picongpu

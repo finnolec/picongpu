@@ -24,38 +24,46 @@
 
 namespace picongpu
 {
-  namespace rad_linear_frequencies
-  {
-
-
-    class FreqFunctor
+    namespace rad_linear_frequencies
     {
-    public:
-      FreqFunctor(void)
-      { }
+        class FreqFunctor
+        {
+        public:
+            FreqFunctor(void)
+            { }
 
-      HDINLINE float_X operator()(const int ID)
-      {
-          return omega_min + float_X(ID) * delta_omega;
-      }
-    };
+            HDINLINE float_X operator()(const int ID)
+            {
+                return omega_min + float_X(ID) * delta_omega;
+            }
+        }; // FreqFunctor
+
+        class InitFreqFunctor
+        {
+            public:
+                InitFreqFunctor(void)
+                { }
+
+                HINLINE void Init(const std::string path )
+                { }
 
 
-    class InitFreqFunctor
-    {
-    public:
-      InitFreqFunctor(void)
-      { }
+            HINLINE FreqFunctor getFunctor(void)
+            {
+                return FreqFunctor();
+            }
+        }; // InitFreqFunctor
 
-      HINLINE void Init(const std::string path )
-      { }
-
-
-      HINLINE FreqFunctor getFunctor(void)
-      {
-    return FreqFunctor();
-      }
-    };
-
-  }
+        //! Getter for parameters for fileooutput
+        HDINLINE
+        std::string 
+        getParameters( ) const
+        {
+            std::string params = std::string( "lin\t" );
+            params << transitionRadiation::frequencies::N_omega << "\t";
+            params << transitionRadiation::frequencies::SI::omega_min << "\t";
+            params << transitionRadiation::frequencies::SI::omega_max << "\t";
+            return params; 
+        }
+    }
 }

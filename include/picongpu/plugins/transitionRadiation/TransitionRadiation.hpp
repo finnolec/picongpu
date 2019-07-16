@@ -460,9 +460,7 @@ namespace picongpu
             else
             {
                 outFile << "# \t";
-                outFile << transitionRadiation::frequencies::N_omega << "\t";
-                outFile << transitionRadiation::frequencies::SI::omega_min << "\t";
-                outFile << transitionRadiation::frequencies::SI::omega_max << "\t";
+                outFile << transitionRadiation::frequencies::getParameters();
                 outFile << transitionRadiation::parameters::N_phis << "\t";
                 outFile << transitionRadiation::parameters::phiMin << "\t";
                 outFile << transitionRadiation::parameters::phiMax << "\t";
@@ -509,7 +507,7 @@ namespace picongpu
             }
         }
 
-        /** Exectues the particle filter and calls the transition radiation kernel
+        /** Executes the particle filter and calls the transition radiation kernel
          * of the kernel file.
          * 
          * @param currentStep current simulation iteration step

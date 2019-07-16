@@ -76,6 +76,15 @@ namespace picongpu
         }
 
 
+        namespace rad_frequencies_from_list
+        {
+            /** path to text file with frequencies */
+            constexpr char listLocation[] = "/path/to/frequency_list";
+            /** number of frequency values to compute if frequencies are given in a file [unitless] */
+            constexpr unsigned int N_omega = 2048;
+        }
+
+
         /** selected mode of frequency scaling:
          *
          * options:
