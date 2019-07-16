@@ -29,40 +29,43 @@ namespace picongpu
         class FreqFunctor
         {
         public:
-            FreqFunctor(void)
+            FreqFunctor( void )
             { }
 
-            HDINLINE float_X operator()(const int ID)
+            HDINLINE float_X operator( )( const int ID )
             {
-                return omega_min + float_X(ID) * delta_omega;
+                return omega_min + float_X( ID ) * delta_omega;
             }
         }; // FreqFunctor
 
         class InitFreqFunctor
         {
             public:
-                InitFreqFunctor(void)
+                InitFreqFunctor( void )
                 { }
 
-                HINLINE void Init(const std::string path )
+                HINLINE void Init( const std::string path )
                 { }
 
 
-            HINLINE FreqFunctor getFunctor(void)
+            HINLINE FreqFunctor getFunctor( void )
             {
-                return FreqFunctor();
+                return FreqFunctor( );
             }
         }; // InitFreqFunctor
-
-        //! Getter for parameters for fileooutput
+        
+        /** Getter for parameters in output file
+         * 
+         * return parameters as string
+         */
         HDINLINE
         std::string 
         getParameters( ) const
         {
             std::string params = std::string( "lin\t" );
-            params << transitionRadiation::frequencies::N_omega << "\t";
-            params << transitionRadiation::frequencies::SI::omega_min << "\t";
-            params << transitionRadiation::frequencies::SI::omega_max << "\t";
+            params += std::to_string( transitionRadiation::frequencies::N_omega ) << "\t";
+            params += std::to_string( transitionRadiation::frequencies::SI::omega_min ) << "\t";
+            params += std::to_string( transitionRadiation::frequencies::SI::omega_max ) << "\t";
             return params; 
         }
     }

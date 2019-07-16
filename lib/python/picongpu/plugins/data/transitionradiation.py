@@ -109,11 +109,24 @@ class TransitionRadiationData(DataReader):
 
             # Create discretized arrays or angles and frequency as they are discretized for the
             # calculation in PIConGPU. This is necessary for the labels for the axes.
+            indexOffset = 2
             if parameters[1] == "log":
-                self.omegas = np.logspace(np.log10(float(parameters[3])), np.log10(float(parameters[4])),
-                                          int(parameters[2]))
-            self.phis = np.linspace(float(parameters[6]), float(parameters[7]), int(parameters[5]))
-            self.thetas = np.linspace(float(parameters[9]), float(parameters[10]), int(parameters[8]))
+                self.omegas = np.logspace(np.log10(float(parameters[1 + indexOffset])),
+                                          np.log10(float(parameters[2 + indexOffset])),
+                                          int(parameters[0 + indexOffset]))
+            elif parameters[1] == "lin":
+                self.omegas = np.linspace(float(parameters[1 + indexOffset]),
+                                          float(parameters[2 + indexOffset]),
+                                          int(parameters[0 + indexOffset]))
+            elif parameters[1] == "list":
+                self.omegas = np.loadtxt(self.get_data_path() + parameters[0 + indexOffset])
+                indexOffset += 2
+            self.phis = np.linspace(float(parameters[4 + indexOffset]),
+                                    float(parameters[5 + indexOffset]),
+                                    int(parameters[3 + indexOffset]))
+            self.thetas = np.linspace(float(parameters[7 + indexOffset]),
+                                      float(parameters[8 + indexOffset]),
+                                      int(parameters[6 + indexOffset]))
 
         return self.get_data(iteration=iteration, **kwargs)
 

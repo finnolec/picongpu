@@ -31,15 +31,15 @@ namespace picongpu
             class FreqFunctor
             {
             public:
-                FreqFunctor(void)
+                FreqFunctor( void )
                 {
-                    omega_log_min = math::log(omega_min);
-                    delta_omega_log = (math::log(omega_max) - omega_log_min) / float_X(N_omega - 1);
+                    omega_log_min = math::log( omega_min );
+                    delta_omega_log = ( math::log( omega_max ) - omega_log_min ) / float_X( N_omega - 1 );
                 }
 
-                HDINLINE float_X operator()(const int ID)
+                HDINLINE float_X operator( )( const int ID )
                 {
-                    return  math::exp(omega_log_min + (float_X(ID)) * delta_omega_log) ;
+                    return  math::exp( omega_log_min + ( float_X( ID ) ) * delta_omega_log );
                 }
 
             private:
@@ -51,18 +51,16 @@ namespace picongpu
             class InitFreqFunctor
             {
             public:
-                InitFreqFunctor(void)
-                { 
-                }
+                InitFreqFunctor( void )
+                { }
 
-                HINLINE void Init(const std::string path )
-                { 
-                }
+                HINLINE void Init( const std::string path )
+                { }
 
 
-                HINLINE FreqFunctor getFunctor(void)
+                HINLINE FreqFunctor getFunctor( void )
                 {
-                    return FreqFunctor();
+                    return FreqFunctor( );
                 }
             }; // InitFreqFunctor
 
