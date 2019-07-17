@@ -27,7 +27,6 @@
  * On the comand line the plugin still needs to be called for each species the radiation
  * should be computed for.
  */
-
 #pragma once
 
 /**
@@ -49,39 +48,37 @@ namespace picongpu
         {
             namespace SI
             {
-                /** mimimum frequency of the linear frequency scale in units of [1/s] */
-                constexpr float_64 omega_min = 0.0;
-                /** maximum frequency of the linear frequency scale in units of [1/s] */
-                constexpr float_64 omega_max = 1.06e16;
+                //! mimimum frequency of the linear frequency scale in units of [1/s]
+                constexpr float_64 omegaMin = 0.0;
+                //! maximum frequency of the linear frequency scale in units of [1/s]
+                constexpr float_64 omegaMax = 1.06e16;
             }
 
-            /** number of frequency values to compute in the linear frequency [unitless] */
-            constexpr unsigned int N_omega = 512;
+            //! number of frequency values to compute in the linear frequency [unitless]
+            constexpr unsigned int nOmega = 512;
         }
 
         namespace logFrequencies
         {
             namespace SI
             {
-                /** mimimum frequency of the logarithmic frequency scale in units of [1/s] */
-                constexpr float_64 omega_min = 1.0e13;
-                /** maximum frequency of the logarithmic frequency scale in units of [1/s] */
-                constexpr float_64 omega_max = 1.0e17;
+                //! mimimum frequency of the logarithmic frequency scale in units of [1/s]
+                constexpr float_64 omegaMin = 1.0e13;
+                //! maximum frequency of the logarithmic frequency scale in units of [1/s]
+                constexpr float_64 omegaMax = 1.0e17;
             }
 
-            /** number of frequency values to compute in the logarithmic frequency [unitless] 
-             * N_omega must be larger than 1
-            */
-            constexpr unsigned int N_omega = 512;
+            //! number of frequency values to compute in the logarithmic frequency [unitless] 
+            constexpr unsigned int nOmega = 256;
         }
 
 
         namespace listFrequencies
         {
-            /** path to text file with frequencies */
+            //! path to text file with frequencies
             constexpr char listLocation[] = "/path/to/frequency_list";
-            /** number of frequency values to compute if frequencies are given in a file [unitless] */
-            constexpr unsigned int N_omega = 512;
+            //! number of frequency values to compute if frequencies are given in a file [unitless]
+            constexpr unsigned int nOmega = 512;
         }
 
 
@@ -120,40 +117,29 @@ namespace picongpu
 
         namespace macroParticleFormFactor = macroParticleFormFactorGaussSpherical;
 
-
         ///////////////////////////////////////////////////////////
-
 
         namespace parameters
         {
-
-            /** number of observation directions 
-             * N_phis and N_thetas must be larger than 1
-            */
-            constexpr unsigned int N_phis = 4;
-            constexpr unsigned int N_thetas = 4;
-            constexpr unsigned int N_observer = N_phis * N_thetas;
+            // number of observation directions 
+            constexpr unsigned int nPhi = 256;
+            constexpr unsigned int nTheta = 256;
+            constexpr unsigned int nObserver = nPhi * nTheta;
 
             // theta goes from 0 to pi
             constexpr float_64 thetaMin = 0.0 ; 
-            constexpr float_64 thetaMax = 2* picongpu::PI; 
+            constexpr float_64 thetaMax = picongpu::PI / 8; 
 
             // phi goes from 0 to 2*pi
-            constexpr float_64 phiMin = 0.008;
-            constexpr float_64 phiMax = 0.011;
-
-            constexpr float_64 surfacePosition = 0.0;
+            constexpr float_64 phiMin = 0.0;
+            constexpr float_64 phiMax = 2 * picongpu::PI;
         } /* end namespace parameters */
 
-
-
-
-        /** select particles for radiation
-         * example of a filter for the relativistic Lorentz factor gamma
-         */
+    
+        //! example of a filter for the relativistic Lorentz factor gamma
         struct GammaFilterFunctor
         {
-            /** Gamma value above which the radiation is calculated */
+            //! Gamma value above which the radiation is calculated
             static constexpr float_X filterGamma = 5.0;
 
             template< typename T_Particle >
@@ -171,7 +157,6 @@ namespace picongpu
                     particle[ picongpu::transitionRadiationMask_ ] = true;
             }
         };
-
 
         /** filter to (de)select particles for the radiation calculation
          *

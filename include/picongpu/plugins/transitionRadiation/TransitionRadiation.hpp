@@ -127,7 +127,9 @@ namespace picongpu
         ~TransitionRadiation( )
         { }
 
-        /** Implementation of base class function. Calculates the transition radiation 
+        /** Plugin management
+         * 
+         * Implementation of base class function. Calculates the transition radiation 
          * by calling the according function of the kernel file, writes data to a 
          * file and resets the buffers if transition radiation is calculated for 
          * multiple timesteps.
@@ -209,7 +211,7 @@ namespace picongpu
             cohTransRadPerp->getDeviceBuffer( ).reset( false );
             numParticles->getDeviceBuffer( ).reset( false );
 
-            for( unsigned int i=0; i< elements_amplitude( ); ++i )
+            for( unsigned int i=0; i< elementsTransitionRadiation( ); ++i )
             {
                 tmpITR[ i ] = 0;
                 tmpCTRpara[ i ] = 0;
@@ -222,7 +224,9 @@ namespace picongpu
             }
         }
 
-        /** Implementation of base class function. Create buffers and arrays for
+        /** Create buffers and arrays
+         * 
+         * Implementation of base class function. Create buffers and arrays for
          * transition radiation calculation and create a folder for transition
          * radiation storage.
          */
@@ -230,10 +234,10 @@ namespace picongpu
         pluginLoad( )
         {
             
-            tmpITR = new float_X[ elements_amplitude( ) ];
-            tmpCTRpara = new complex_X[ elements_amplitude( ) ];
-            tmpCTRperp = new complex_X[ elements_amplitude( ) ];
-            tmpNum = new float_X[ elements_amplitude( ) ];
+            tmpITR = new float_X[ elementsTransitionRadiation( ) ];
+            tmpCTRpara = new complex_X[ elementsTransitionRadiation( ) ];
+            tmpCTRperp = new complex_X[ elementsTransitionRadiation( ) ];
+            tmpNum = new float_X[ elementsTransitionRadiation( ) ];
             if( !notifyPeriod.empty( ) )
             {
                 /*only rank 0 create a file*/
@@ -243,25 +247,25 @@ namespace picongpu
                 Environment<>::get( ).PluginConnector( ).setNotificationPeriod( this, notifyPeriod );
 
                 incTransRad = new GridBuffer< float_X, DIM1 >( 
-                    DataSpace< DIM1 > ( elements_amplitude( ) ) );
+                    DataSpace< DIM1 > ( elementsTransitionRadiation( ) ) );
                 cohTransRadPara = new GridBuffer< complex_X, DIM1 >( 
-                    DataSpace< DIM1 > ( elements_amplitude( ) ) );
+                    DataSpace< DIM1 > ( elementsTransitionRadiation( ) ) );
                 cohTransRadPerp = new GridBuffer< complex_X, DIM1 >( 
-                    DataSpace< DIM1 > ( elements_amplitude( ) ) );
+                    DataSpace< DIM1 > ( elementsTransitionRadiation( ) ) );
                 numParticles = new GridBuffer< float_X, DIM1 >( 
-                    DataSpace< DIM1 > ( elements_amplitude( ) ) );
+                    DataSpace< DIM1 > ( elementsTransitionRadiation( ) ) );
 
                 freqInit.Init( pathOmegaList );
                 freqFkt = freqInit.getFunctor( );
 
                 if ( isMaster )
                 {
-                    theTransRad = new float_X[ elements_amplitude( ) ];
+                    theTransRad = new float_X[ elementsTransitionRadiation( ) ];
                     /* save detector position / observation direction */
-                    detectorPositions = new float3_X[ transitionRadiation::parameters::N_observer ];
+                    detectorPositions = new float3_X[ transitionRadiation::parameters::nObserver ];
                     for(
                         uint32_t detectorIndex=0; 
-                        detectorIndex < transitionRadiation::parameters::N_observer; 
+                        detectorIndex < transitionRadiation::parameters::nObserver; 
                         ++detectorIndex
                     )
                     {
@@ -269,17 +273,17 @@ namespace picongpu
                     }
 
                     /* save detector frequencies */
-                    detectorFrequencies = new float_X[ transitionRadiation::frequencies::N_omega ];
+                    detectorFrequencies = new float_X[ transitionRadiation::frequencies::nOmega ];
                     for(
                         uint32_t detectorIndex=0; 
-                        detectorIndex < transitionRadiation::frequencies::N_omega; 
+                        detectorIndex < transitionRadiation::frequencies::nOmega; 
                         ++detectorIndex
                     )
                     {
                         detectorFrequencies[ detectorIndex ] = freqFkt( detectorIndex );
                     }
 
-                    for ( unsigned int i=0; i< elements_amplitude( ); ++i )
+                    for ( unsigned int i=0; i< elementsTransitionRadiation( ); ++i )
                     {
                         theTransRad[ i ] = 0;
                     }
@@ -323,20 +327,23 @@ namespace picongpu
             __getTransactionEvent( ).waitForFinished( );
         }
 
-        /** Calculates amount of different transition radiation values, which
+        /** Amount of transition radiation values
+         * 
+         * Calculates amount of different transition radiation values, which
          * have to be computed.
          * 
          * @return amount of transition radiation values to be calculated
          */
         static 
         unsigned int 
-        elements_amplitude( )
+        elementsTransitionRadiation( )
         {
-            return transitionRadiation::frequencies::N_omega * parameters::N_observer; // storage for amplitude results on GPU
+            return transitionRadiation::frequencies::nOmega * transitionRadiation::parameters::nObserver; // storage for amplitude results on GPU
         }
 
         /** Combine transition radiation data from each CPU and store result on master.
-         * copyRadiationDeviceToHost( ) should be called before.
+         * 
+         * @remark copyRadiationDeviceToHost( ) should be called before.
          */
         void 
         collectRadiationOnMaster( )
@@ -345,28 +352,28 @@ namespace picongpu
                 nvidia::functors::Add( ),
                 tmpITR,
                 incTransRad->getHostBuffer( ).getBasePointer( ),
-                elements_amplitude( ),
+                elementsTransitionRadiation( ),
                 mpi::reduceMethods::Reduce( )
             );
             reduce(
                 nvidia::functors::Add( ),
                 tmpCTRpara,
                 cohTransRadPara->getHostBuffer( ).getBasePointer( ),
-                elements_amplitude( ),
+                elementsTransitionRadiation( ),
                 mpi::reduceMethods::Reduce( )
             );
             reduce(
                 nvidia::functors::Add( ),
                 tmpCTRperp,
                 cohTransRadPerp->getHostBuffer( ).getBasePointer( ),
-                elements_amplitude( ),
+                elementsTransitionRadiation( ),
                 mpi::reduceMethods::Reduce( )
             );
             reduce(
                 nvidia::functors::Add( ),
                 tmpNum,
                 numParticles->getHostBuffer( ).getBasePointer( ),
-                elements_amplitude( ),
+                elementsTransitionRadiation( ),
                 mpi::reduceMethods::Reduce( )
             );
         }
@@ -398,7 +405,9 @@ namespace picongpu
             sumTransitionRadiation( theTransRad, tmpITR, tmpCTRpara, tmpCTRperp, tmpNum );
         }
 
-        /** Calculate transition radiation integrals. This can't happen on the GPU
+        /** Final transition radiation calculation on CPU side
+         * 
+         * Calculate transition radiation integrals. This can't happen on the GPU
          * since the absolute square of a sum can't be moved within a sum.
          *  
          * @param targetArray array to store transition radiation in
@@ -421,7 +430,7 @@ namespace picongpu
                 /************************************************************
                  ******** Here happens the true physical calculation ********
                 ************************************************************/
-                for( unsigned int i = 0; i < elements_amplitude( ); ++i )
+                for( unsigned int i = 0; i < elementsTransitionRadiation( ); ++i )
                 {
                     const float_X ctrPara = math::abs2( ctrParaArray[ i ] );
                     const float_X ctrPerp = math::abs2( ctrPerpArray[ i ] );
@@ -462,23 +471,23 @@ namespace picongpu
             {
                 outFile << "# \t";
                 outFile << transitionRadiation::frequencies::getParameters();
-                outFile << transitionRadiation::parameters::N_phis << "\t";
+                outFile << transitionRadiation::parameters::nPhi << "\t";
                 outFile << transitionRadiation::parameters::phiMin << "\t";
                 outFile << transitionRadiation::parameters::phiMax << "\t";
-                outFile << transitionRadiation::parameters::N_thetas << "\t";
+                outFile << transitionRadiation::parameters::nTheta << "\t";
                 outFile << transitionRadiation::parameters::thetaMin << "\t";
                 outFile << transitionRadiation::parameters::thetaMax << "\t";
                 outFile << std::endl;
 
                 for (
                     unsigned int index_direction = 0; 
-                    index_direction < transitionRadiation::parameters::N_observer; 
+                    index_direction < transitionRadiation::parameters::nObserver; 
                     ++index_direction
                 ) // over all directions
                 {
                     for (
                         unsigned index_omega = 0; 
-                        index_omega < transitionRadiation::frequencies::N_omega; 
+                        index_omega < transitionRadiation::frequencies::nOmega; 
                         ++index_omega
                     ) // over all frequencies
                     {
@@ -490,7 +499,7 @@ namespace picongpu
                             ( 1.0 / ( 4 * PI * SI::EPS0_SI * PI * PI * SI::SPEED_OF_LIGHT_SI ) );
                         outFile <<
                             values[
-                                index_direction * transitionRadiation::frequencies::N_omega + index_omega
+                                index_direction * transitionRadiation::frequencies::nOmega + index_omega
                             ] * transRadUnit << "\t";
 
                     } // for loop over all frequencies
@@ -508,7 +517,9 @@ namespace picongpu
             }
         }
 
-        /** Executes the particle filter and calls the transition radiation kernel
+        /** Kernel call
+         * 
+         * Executes the particle filter and calls the transition radiation kernel
          * of the kernel file.
          * 
          * @param currentStep current simulation iteration step
@@ -527,8 +538,7 @@ namespace picongpu
             /* execute the particle filter */
             transitionRadiation::executeParticleFilter( particles, currentStep );
 
-            const int N_observer = transitionRadiation::parameters::N_observer;
-            const auto gridDim_rad = N_observer;
+            const auto gridDim_rad = transitionRadiation::parameters::nObserver;
 
             /* number of threads per block = number of cells in a super cell
             *          = number of particles in a Frame

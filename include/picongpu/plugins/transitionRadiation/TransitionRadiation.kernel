@@ -27,15 +27,15 @@ namespace picongpu
      * @tparam T_ParBox box with particles
      * @tparam T_DBox box with float data
      * @tparam T_DBoxComplex box with complex data
-     * @tparam T_Mapping ABSOLUTELY NO FUCKING CLUE
-     * @tparam T_Acc ABSOLUTELY NO FUCKING CLUE
-     * @param acc ABSOLUTELY NO FUCKING CLUE
+     * @tparam T_Mapping MappingDescription object
+     * @tparam T_Acc alpaka accelerator
+     * @param acc alpaka accelerator
      * @param incTransRad output array for storage incoherent transition radiation
      * @param cohTransRadPara output array for storage of parallel parts of coherent transition radiation
      * @param cohTransRadPerp output array for storage of perpendicular parts of coherent transition radiation
      * @param numParticles output array for amount of particles
      * @param globalOffset offset of simulation
-     * @param mapper description of cells
+     * @param mapper MappingDesction object
      * @param freqFkt frequency functor
      * @param simBoxSize size of simulation box
      */
@@ -175,7 +175,7 @@ namespace picongpu
                     * particles in this frame.
                     */
                     onlyMaster(
-                        [&](
+                        [ & ](
                             uint32_t const,
                             uint32_t const
                         )
@@ -195,7 +195,7 @@ namespace picongpu
                     ForEachIdx< ParticleDomCfg > forEachParticle{ workerIdx };
 
                     forEachParticle(
-                        [&](
+                        [ & ](
                             uint32_t const linearIdx,
                             uint32_t const
                         )
@@ -205,7 +205,7 @@ namespace picongpu
                             {
                                 auto par = frame[ linearIdx ];
                                 // get particle momenta
-                                float3_X const particle_momentum = par[ momentum_ ];
+                                float3_X const particleMomentum = par[ momentum_ ];
                                 /* initializes "saveParticleAt" flag with -1
                                 * because "counter_s" will never be -1
                                 * therefore, if a particle is saved, a value of counter
@@ -217,7 +217,7 @@ namespace picongpu
                                 int saveParticleAt = -1;
 
                                 // only moving particles create transition radiation
-                                if( ( particle_momentum * particle_momentum ).sumOfComponents( ) > 0.0)
+                                if( ( particleMomentum * particleMomentum ).sumOfComponents( ) > 0.0)
                                 {
                                     if( transitionRadiation::getTransitionRadiationMask( par ) )
                                         saveParticleAt = nvidia::atomicAllInc(
@@ -249,12 +249,12 @@ namespace picongpu
                                         );
 
                                         // add global position of cell with local position of particle in cell
-                                        float3_X particle_location;
+                                        float3_X particleLocation;
                                         // set z component to zero in case of simDim==DIM2
-                                        particle_location[ 2 ] = 0.0;
+                                        particleLocation[ 2 ] = 0.0;
                                         // run over all components and compute gobal position
                                         for( int i = 0; i < simDim; ++i )
-                                            particle_location[ i ] = ( 
+                                            particleLocation[ i ] = ( 
                                                 float_X( globalPos[ i ] ) + pos[ i ] 
                                             ) * cellSize[ i ];
 
@@ -268,16 +268,16 @@ namespace picongpu
                                         radWeighting_s[ saveParticleAt ] = weighting;
 
                                         // mass of macro-particle
-                                        float_X const particle_mass = attribute::getMass(
+                                        float_X const particleMass = attribute::getMass(
                                             weighting,
                                             par
                                         );
 
                                         // using transition radiation particle class
                                         transitionRadiation::Particle const particle(
-                                            particle_location,
-                                            particle_momentum,
-                                            particle_mass
+                                            particleLocation,
+                                            particleMomentum,
+                                            particleMass
                                         );
 
                                         // create calculator for TR calculations
@@ -287,11 +287,11 @@ namespace picongpu
                                         );
 
                                         // calculate values for transition radiation
-                                        energyPara_s[ saveParticleAt ] = calculator.calcEPara( );
+                                        energyPara_s[ saveParticleAt ] = calculator.calcEnergyPara( );
 
-                                        energyPerp_s[ saveParticleAt ] = calculator.calcEPerp( );
+                                        energyPerp_s[ saveParticleAt ] = calculator.calcEnergyPerp( );
 
-                                        formfactorExponent_s[ saveParticleAt ] = calculator.calcFExponent( );
+                                        formfactorExponent_s[ saveParticleAt ] = calculator.calcFormFactorExponent( );
                                     }
                                 } // only moving particles
                              } // only threads with particle
@@ -300,7 +300,7 @@ namespace picongpu
                     __syncthreads( );
 
                     // run over all  valid omegas for this thread
-                    for( int o = workerIdx; o < transitionRadiation::frequencies::N_omega; o += T_numWorkers )
+                    for( int o = workerIdx; o < transitionRadiation::frequencies::nOmega; o += T_numWorkers )
                     {
                         float_X itrSum = 0.0;
                         float_X totalParticles = 0.0;
@@ -313,7 +313,7 @@ namespace picongpu
                         for( int j = 0; j < counter_s; ++j )
                         {
                             float_X const omega = freqFkt( o );
-                            complex_X const formfactor = transitionRadiation::formFactor(
+                            complex_X const formfactor = transitionRadiation::calcFormFactor(
                                 omega, 
                                 formfactorExponent_s[ j ]
                             ) * macroParticleFormFactor( 
@@ -332,7 +332,7 @@ namespace picongpu
                             ctrSumPerp += energyPerp_s[ j ] * formfactor;
                         }
 
-                        int const index = theta_idx * transitionRadiation::frequencies::N_omega + o;
+                        int const index = theta_idx * transitionRadiation::frequencies::nOmega + o;
                         incTransRad[ index ] += itrSum; 
                         numParticles[ index ] += totalParticles;
                         cohTransRadPara[ index ] += ctrSumPara; 

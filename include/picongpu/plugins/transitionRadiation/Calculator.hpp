@@ -95,7 +95,7 @@ namespace picongpu
              */
             HDINLINE 
             float_X 
-            calcEPerp( ) const
+            calcEnergyPerp( ) const
             {
                 float_X const uSquared = particle.getU( ) * particle.getU( );
                 float_X const a = uSquared * parMomCosTheta * parMomSinTheta * 
@@ -133,7 +133,7 @@ namespace picongpu
              */
             HDINLINE
             float_X 
-            calcEPara( ) const
+            calcEnergyPara( ) const
             {
                 float_X const a = particle.getU( ) * parMomCosTheta;
                 float_X const b = particle.getU( ) * parMomSinTheta * parMomCosPhi;
@@ -169,7 +169,7 @@ namespace picongpu
              */
             HDINLINE
             complex_X 
-            calcFExponent( ) const
+            calcFormFactorExponent( ) const
             {
                 // If case for longitudinal moving particles... leads to 0 later in the kernel
                 if ( math::abs( parMomCosTheta ) <= DIV_BY_ZERO_MINIMUM )
@@ -198,7 +198,7 @@ namespace picongpu
          */
         HDINLINE
         complex_X 
-        formFactor(
+        calcFormFactor(
             float_X const omega, 
             complex_X const exponent
         )

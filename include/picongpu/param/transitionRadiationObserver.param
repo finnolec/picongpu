@@ -78,7 +78,7 @@ namespace picongpu
              * index_a = index / split_distance
              * index_b = index % split_distance
              */
-            constexpr int N_angle_split = parameters::N_phis;
+            constexpr int N_angle_split = parameters::nPhi;
             /** get index for computing angle theta: */
             const int my_index_theta = observation_id_extern / N_angle_split;
             /** get index for computing angle phi: */
@@ -97,13 +97,9 @@ namespace picongpu
             /** maximum phi angle [rad] */
             constexpr picongpu::float_64 angle_phi_end   = parameters::phiMax;
 
-
-            /* compute step with between two angles for range [angle_??_start : angle_??_end] */
-            /** number of theta angles */
-            constexpr int N_theta = parameters::N_observer / N_angle_split;
             /** step width angle theta */
             const picongpu::float_64 delta_angle_theta =  (angle_theta_end -
-                            angle_theta_start) / (N_theta-1.0);
+                            angle_theta_start) / (parameters::nTheta-1.0);
             /** step width angle phi */
             const picongpu::float_64 delta_angle_phi   =  (angle_phi_end -
                             angle_phi_start)   / (N_angle_split-1.0);

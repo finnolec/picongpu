@@ -46,7 +46,7 @@ namespace picongpu
 
                 HDINLINE float_X operator( )( const unsigned int ID )
                 {
-                    return ( ID < radiation_frequencies::N_omega ) ?  frequencies[ ID ] : 0.0;
+                    return ( ID < listFrequencies::nOmega ) ?  frequencies[ ID ] : 0.0;
                 }
 
             private:
@@ -71,7 +71,7 @@ namespace picongpu
                 HINLINE void Init( const std::string path )
                 {
 
-                    frequencyBuffer = new GridBuffer< float_X, DIM1 >( DataSpace< DIM1 >( N_omega ) );
+                    frequencyBuffer = new GridBuffer< float_X, DIM1 >( DataSpace< DIM1 >( nOmega ) );
 
 
                     DBoxType frequencyDB = frequencyBuffer->getHostBuffer( ).getDataBox( );
@@ -88,7 +88,7 @@ namespace picongpu
                     }
 
 
-                    for( i = 0; i < N_omega && !freqListFile.eof( ); ++i )
+                    for( i = 0; i < nOmega && !freqListFile.eof( ); ++i )
                     {
                         freqListFile >> frequencyDB[ i ];
                         // verbose output of loaded frequencies if verbose level PHYSICS is set:
@@ -96,7 +96,7 @@ namespace picongpu
                         frequencyDB[ i ] *= UNIT_TIME;
                     }
 
-                    if( i != N_omega )
+                    if( i != nOmega )
                     {
                         throw std::runtime_error( std::string( "The number of frequencies in the list and the number of frequencies in the parameters differ.\n" ) );
                     }
@@ -114,7 +114,7 @@ namespace picongpu
                 GridBuffer< float_X, DIM1 > * frequencyBuffer;
             }; // InitFreqFunctor
 
-            //! Returns frequency params as string
+            //! @return frequency params as string
             HDINLINE
             std::string 
             getParameters( )

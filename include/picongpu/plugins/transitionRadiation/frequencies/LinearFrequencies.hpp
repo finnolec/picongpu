@@ -36,7 +36,7 @@ namespace picongpu
 
                 HDINLINE float_X operator( )( const int ID )
                 {
-                    return omega_min + float_X( ID ) * delta_omega;
+                    return omegaMin + float_X( ID ) * deltaOmega;
                 }
             }; // FreqFunctor
 
@@ -56,15 +56,15 @@ namespace picongpu
                 }
             }; // InitFreqFunctor
             
-            //! Returns frequency params as string
+            //! @return frequency params as string
             HDINLINE
             std::string 
             getParameters( void )
             {
                 std::string params = std::string( "lin\t" );
-                params += std::to_string( N_omega ) + "\t";
-                params += std::to_string( SI::omega_min ) + "\t";
-                params += std::to_string( SI::omega_max ) + "\t";
+                params += std::to_string( nOmega ) + "\t";
+                params += std::to_string( SI::omegaMin ) + "\t";
+                params += std::to_string( SI::omegaMax ) + "\t";
                 return params; 
             }
         } // namespace linearFrequencies
