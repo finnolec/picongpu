@@ -1,4 +1,4 @@
-/* Copyright 2017-2019 Rene Widera
+/* Copyright 2017-2019 Rene Widera, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *

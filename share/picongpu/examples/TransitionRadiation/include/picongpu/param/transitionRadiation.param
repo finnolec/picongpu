@@ -1,0 +1,171 @@
+/* Copyright 2013-2019 Rene Widera, Richard Pausch, Finn-Ole Carstens
+ *
+ * This file is part of PIConGPU.
+ *
+ * PIConGPU is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * PIConGPU is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with PIConGPU.
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/** @file
+ *
+ * Definition of frequency space, number of observers, filters, form factors and
+ * window functions of the radiation plugin.
+ *
+ * All values set here determine what the radiation plugin will compute.
+ * The observation direction is defined in a seperate file `radiationObserver.param`.
+ * On the comand line the plugin still needs to be called for each species the radiation
+ * should be computed for.
+ */
+#pragma once
+
+/**
+ * radiation verbose level:
+ * 0=nothing, 1=physics, 2=simulation_state, 4=memory, 8=critical
+ */
+#define PIC_VERBOSE_RADIATION 3
+
+#include "picongpu/plugins/radiation/debug/PIConGPUVerboseLogRadiation.hpp"
+#include "picongpu/algorithms/Gamma.def"
+#include "picongpu/traits/attribute/GetMass.hpp"
+#include "picongpu/particles/manipulators/manipulators.def"
+
+namespace picongpu
+{
+    namespace transitionRadiation
+    {
+        namespace linearFrequencies
+        {
+            namespace SI
+            {
+                //! mimimum frequency of the linear frequency scale in units of [1/s]
+                constexpr float_64 omegaMin = 0.0;
+                //! maximum frequency of the linear frequency scale in units of [1/s]
+                constexpr float_64 omegaMax = 1.06e16;
+            }
+
+            //! number of frequency values to compute in the linear frequency [unitless]
+            constexpr unsigned int nOmega = 512;
+        }
+
+        namespace logFrequencies
+        {
+            namespace SI
+            {
+                //! mimimum frequency of the logarithmic frequency scale in units of [1/s]
+                constexpr float_64 omegaMin = 1.0e13;
+                //! maximum frequency of the logarithmic frequency scale in units of [1/s]
+                constexpr float_64 omegaMax = 1.0e16;
+            }
+
+            //! number of frequency values to compute in the logarithmic frequency [unitless] 
+            constexpr unsigned int nOmega = 128;
+        }
+
+
+        namespace listFrequencies
+        {
+            //! path to text file with frequencies
+            constexpr char listLocation[] = "/path/to/frequency_list";
+            //! number of frequency values to compute if frequencies are given in a file [unitless]
+            constexpr unsigned int nOmega = 512;
+        }
+
+
+        /** selected mode of frequency scaling:
+         *
+         * options:
+         * - linearFrequencies
+         * - logFrequencies
+         * - listFrequencies
+         */
+        namespace frequencies = logFrequencies;
+
+        ///////////////////////////////////////////////////
+
+
+        /** correct treatment of coherent radiation from macro particles
+         *
+         * Choose different form factors in order to consider different particle shapes for radiation
+         *  - macroParticleFormFactorCIC_3D ... CIC charge distribution
+         *  - macroParticleFormFactorTSC_3D ... TSC charge distribution
+         *  - macroParticleFormFactorPCS_3D ... PCS charge distribution
+         *  - macroParticleFormFactorCIC_1Dy ... only CIC charge distribution in y
+         *  - macroParticleFormFactorGauss_spherical ... symmetric Gauss charge distribution
+         *  - macroParticleFormFactorGauss_cell ... Gauss charge distribution according to cell size
+         *  - macroParticleFormFactorincoherent ... only incoherent radiation
+         *  - macroParticleFormFactorcoherent ... only coherent radiation
+         */
+        namespace macroParticleFormFactorCIC_3D { }
+        namespace macroParticleFormFactorTSC_3D { }
+        namespace macroParticleFormFactorPCS_3D { }
+        namespace macroParticleFormFactorCIC_1Dy { }
+        namespace macroParticleFormFactorGaussSpherical { }
+        namespace macroParticleFormFactorGaussCell { }
+        namespace macroParticleFormFactorIncoherent { }
+        namespace macroParticleFormFactorCoherent { }
+
+        namespace macroParticleFormFactor = macroParticleFormFactorGaussSpherical;
+
+        ///////////////////////////////////////////////////////////
+
+        namespace parameters
+        {
+            // number of observation directions 
+            constexpr unsigned int nPhi = 64;
+            constexpr unsigned int nTheta = 64;
+            constexpr unsigned int nObserver = nPhi * nTheta;
+
+            // theta goes from 0 to pi
+            constexpr float_64 thetaMin = 0.0 ; 
+            constexpr float_64 thetaMax = picongpu::PI; 
+
+            // phi goes from 0 to 2*pi
+            constexpr float_64 phiMin = 0.0;
+            constexpr float_64 phiMax = 2 * picongpu::PI;
+        } /* end namespace parameters */
+
+    
+        //! example of a filter for the relativistic Lorentz factor gamma
+        struct GammaFilterFunctor
+        {
+            //! Gamma value above which the radiation is calculated
+            static constexpr float_X filterGamma = 5.0;
+
+            template< typename T_Particle >
+            HDINLINE void operator()( T_Particle& particle )
+            {
+                if(
+                    picongpu::gamma<float_X>(
+                        particle[ picongpu::momentum_ ],
+                        picongpu::traits::attribute::getMass(
+                            particle[ picongpu::weighting_ ],
+                            particle
+                        )
+                    ) >= filterGamma
+                )
+                    particle[ picongpu::transitionRadiationMask_ ] = true;
+            }
+        };
+
+        /** filter to (de)select particles for the radiation calculation
+         *
+         * to activate the filter:
+         *   - goto file `speciesDefinition.param`
+         *   - add the attribute `radiationMask` to the particle species
+         */
+        using GammaFilter = picongpu::particles::manipulators::generic::Free<
+            GammaFilterFunctor
+        >;
+    } //namespace transitionRadiation
+}//namespace picongpu

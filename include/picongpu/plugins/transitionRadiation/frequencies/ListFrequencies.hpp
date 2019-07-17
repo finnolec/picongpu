@@ -1,4 +1,4 @@
-/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch, Axel Huebl
+/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch, Axel Huebl, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -115,7 +115,7 @@ namespace picongpu
             }; // InitFreqFunctor
 
             //! @return frequency params as string
-            HDINLINE
+            HINLINE
             std::string 
             getParameters( )
             {

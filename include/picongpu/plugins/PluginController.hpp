@@ -212,7 +212,7 @@ private:
 
     /* define species plugins */
     using UnspecializedSpeciesPlugins = bmpl::vector <
-        TransitionRadiation<bmpl::_1>,
+        transitionRadiation::TransitionRadiation<bmpl::_1>,
         plugins::multi::Master< EnergyParticles<bmpl::_1> >,
         plugins::multi::Master< CalcEmittance<bmpl::_1> >,
         plugins::multi::Master< BinEnergyParticles<bmpl::_1> >,

@@ -1,4 +1,4 @@
-/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch
+/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -66,7 +66,7 @@ namespace picongpu
 
 
             //! @return frequency params as string
-            HDINLINE
+            HINLINE
             std::string 
             getParameters( void )
             {
