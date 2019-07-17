@@ -24,7 +24,7 @@ namespace picongpu
 {
     namespace transitionRadiation
     {
-        namespace radFormFactor_baseShape_3D
+        namespace macroParticleFormFactorbaseShape_3D
         {
             /** general form factor class of discrete charge distribution of PIC particle shape of order T_shapeOrder
              *
@@ -32,7 +32,7 @@ namespace picongpu
              */
 
             template< uint32_t T_shapeOrder >
-            struct radFormFactor
+            struct FormFactor
             {
                 /** Form Factor for T_shapeOrder-order particle shape charge distribution of N discrete electrons:
                  * \f[ | \mathcal{F} |^2 = N + (N*N - N) * (sinc^2(n_x * L_x * \omega) * sinc^2(n_y * L_y * \omega) * sinc^2(n_z * L_z * \omega))^T_shapeOrder \f]
@@ -58,32 +58,32 @@ namespace picongpu
                     return math::sqrt( N + ( N * N - N ) * util::pow( sincValue , 2 * T_shapeOrder ) );
                 }
             };
-        } // radFormFactor_baseShape_3D
+        } // macroParticleFormFactorbaseShape_3D
 
 
-        namespace radFormFactor_CIC_3D
+        namespace macroParticleFormFactorCIC_3D
         {
-            struct radFormFactor : public radFormFactor_baseShape_3D::radFormFactor< 1 >
+            struct FormFactor : public macroParticleFormFactorbaseShape_3D::FormFactor< 1 >
             { };
-        } // radFormFactor_CIC_3D
+        } // macroParticleFormFactorCIC_3D
 
-        namespace radFormFactor_TSC_3D
+        namespace macroParticleFormFactorTSC_3D
         {
-            struct radFormFactor : public radFormFactor_baseShape_3D::radFormFactor< 2 >
+            struct FormFactor : public macroParticleFormFactorbaseShape_3D::FormFactor< 2 >
             { };
-        } // radFormFactor_TSC_3D
+        } // macroParticleFormFactorTSC_3D
 
-        namespace radFormFactor_PCS_3D
+        namespace macroParticleFormFactorPCS_3D
         {
-            struct radFormFactor : public radFormFactor_baseShape_3D::radFormFactor< 3 >
+            struct FormFactor : public macroParticleFormFactorbaseShape_3D::FormFactor< 3 >
             { };
 
-        } // radFormFactor_PCS_3D
+        } // macroParticleFormFactorPCS_3D
 
 
-        namespace radFormFactor_CIC_1Dy
+        namespace macroParticleFormFactorCIC_1Dy
         {
-            struct radFormFactor
+            struct FormFactor
             {
                 /** Form Factor for 1-d CIC charge distribution iy y of N discrete electrons:
                  * \f[ | \mathcal{F} |^2 = N + (N*N - N) * sinc^2(n_y * L_y * \omega) \f]
@@ -108,12 +108,12 @@ namespace picongpu
                     );
                 }
             };
-        } // radFormFactor_CIC_1Dy
+        } // macroParticleFormFactorCIC_1Dy
 
 
-        namespace radFormFactor_Gauss_spherical
+        namespace macroParticleFormFactorGaussSpherical
         {
-            struct radFormFactor
+            struct FormFactor
             {
                 /** Form Factor for point-symmetric Gauss-shaped charge distribution of N discrete electrons:
                 * \f[ <rho(r)> = N*q_e* 1/sqrt(2*pi*sigma^2) * exp(-0.5 * r^2/sigma^2) \f]
@@ -134,12 +134,12 @@ namespace picongpu
                     );
                 }
             };
-        } // radFormFactor_Gauss_spherical
+        } // macroParticleFormFactorGauss_spherical
 
 
-        namespace radFormFactor_Gauss_cell
+        namespace macroParticleFormFactorGaussCell
         {
-            struct radFormFactor
+            struct FormFactor
             {
                 /** Form Factor for per-dimension Gauss-shaped charge distribution of N discrete electrons:
                 * \f[ <rho(r)> = N*q_e* product[d={x,y,z}](1/sqrt(2*pi*sigma_d^2) * exp(-0.5 * d^2/sigma_d^2)) \f]
@@ -165,13 +165,13 @@ namespace picongpu
                     );
                 }
             };
-        } // radFormFactor_Gauss_cell
+        } // macroParticleFormFactorGauss_cell
 
 
 
-        namespace radFormFactor_incoherent
+        namespace macroParticleFormFactorIncoherent
         {
-            struct radFormFactor
+            struct FormFactor
             {
                 /** Form Factor for an incoherent charge distribution:
                 *
@@ -185,12 +185,12 @@ namespace picongpu
                     return math::sqrt(N);
                 }
             };
-        } // radFormFactor_incoherent
+        } // macroParticleFormFactorincoherent
 
 
-        namespace radFormFactor_coherent
+        namespace macroParticleFormFactorCoherent
         {
-            struct radFormFactor
+            struct FormFactor
             {
                 /** Form Factor for a coherent charge distribution:
                 *
@@ -204,6 +204,6 @@ namespace picongpu
                     return N;
                 }
             };
-        } // radFormFactor_coherent
+        } // macroParticleFormFactorcoherent
     } // namespace transitionRadiation
 } // namespace picongpu

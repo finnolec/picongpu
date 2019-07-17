@@ -16,8 +16,9 @@
 #include <pmacc/traits/HasIdentifier.hpp>
 #include <pmacc/traits/GetNumWorkers.hpp>
 
-#include "picongpu/plugins/transitionRadiation/frequencies/radiation_log_freq.hpp"
-
+#include "picongpu/plugins/transitionRadiation/frequencies/LogFrequencies.hpp"
+#include "picongpu/plugins/transitionRadiation/frequencies/LinearFrequencies.hpp"
+#include "picongpu/plugins/transitionRadiation/frequencies/ListFrequencies.hpp"
 #include <pmacc/math/Complex.hpp>
 
 #include <boost/filesystem.hpp>

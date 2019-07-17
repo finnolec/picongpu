@@ -14,7 +14,9 @@
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
 
-#include "picongpu/plugins/transitionRadiation/frequencies/radiation_log_freq.hpp"
+// #include "picongpu/plugins/transitionRadiation/frequencies/LogFrequencies.hpp"
+// #include "picongpu/plugins/transitionRadiation/frequencies/LinearFrequencies.hpp"
+// #include "picongpu/plugins/transitionRadiation/frequencies/ListFrequencies.hpp"
 
 
 namespace picongpu
@@ -306,7 +308,7 @@ namespace picongpu
                         complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
 
                         // create a form factor object for physical correct coherence effects within macro-particles
-                        transitionRadiation::radFormFactor::radFormFactor const macroParticleFormFactor{ };
+                        transitionRadiation::macroParticleFormFactor::FormFactor const macroParticleFormFactor{ };
 
                         for( int j = 0; j < counter_s; ++j )
                         {

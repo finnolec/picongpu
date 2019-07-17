@@ -45,7 +45,7 @@ namespace picongpu
 {
     namespace transitionRadiation
     {
-        namespace rad_linear_frequencies
+        namespace linearFrequencies
         {
             namespace SI
             {
@@ -59,7 +59,7 @@ namespace picongpu
             constexpr unsigned int N_omega = 512;
         }
 
-        namespace rad_log_frequencies
+        namespace logFrequencies
         {
             namespace SI
             {
@@ -72,37 +72,27 @@ namespace picongpu
             /** number of frequency values to compute in the logarithmic frequency [unitless] 
              * N_omega must be larger than 1
             */
-            constexpr unsigned int N_omega = 2048;
+            constexpr unsigned int N_omega = 512;
         }
 
 
-        namespace rad_frequencies_from_list
+        namespace listFrequencies
         {
             /** path to text file with frequencies */
             constexpr char listLocation[] = "/path/to/frequency_list";
             /** number of frequency values to compute if frequencies are given in a file [unitless] */
-            constexpr unsigned int N_omega = 2048;
+            constexpr unsigned int N_omega = 512;
         }
 
 
         /** selected mode of frequency scaling:
          *
          * options:
-         * - rad_linear_frequencies
-         * - rad_log_frequencies
-         * - rad_frequencies_from_list
+         * - linearFrequencies
+         * - logFrequencies
+         * - listFrequencies
          */
-        namespace frequencies = rad_log_frequencies;
-
-
-        namespace radiationNyquist
-        {
-            /** Nyquist factor: fraction of the local Nyquist frequency above which the spectra is set to zero
-             * should be in (0, 1).
-             */
-            constexpr float_32 NyquistFactor = 0.5;
-        }
-
+        namespace frequencies = logFrequencies;
 
         ///////////////////////////////////////////////////
 
@@ -110,25 +100,25 @@ namespace picongpu
         /** correct treatment of coherent radiation from macro particles
          *
          * Choose different form factors in order to consider different particle shapes for radiation
-         *  - radFormFactor_CIC_3D ... CIC charge distribution
-         *  - radFormFactor_TSC_3D ... TSC charge distribution
-         *  - radFormFactor_PCS_3D ... PCS charge distribution
-         *  - radFormFactor_CIC_1Dy ... only CIC charge distribution in y
-         *  - radFormFactor_Gauss_spherical ... symmetric Gauss charge distribution
-         *  - radFormFactor_Gauss_cell ... Gauss charge distribution according to cell size
-         *  - radFormFactor_incoherent ... only incoherent radiation
-         *  - radFormFactor_coherent ... only coherent radiation
+         *  - macroParticleFormFactorCIC_3D ... CIC charge distribution
+         *  - macroParticleFormFactorTSC_3D ... TSC charge distribution
+         *  - macroParticleFormFactorPCS_3D ... PCS charge distribution
+         *  - macroParticleFormFactorCIC_1Dy ... only CIC charge distribution in y
+         *  - macroParticleFormFactorGauss_spherical ... symmetric Gauss charge distribution
+         *  - macroParticleFormFactorGauss_cell ... Gauss charge distribution according to cell size
+         *  - macroParticleFormFactorincoherent ... only incoherent radiation
+         *  - macroParticleFormFactorcoherent ... only coherent radiation
          */
-        namespace radFormFactor_CIC_3D { }
-        namespace radFormFactor_TSC_3D { }
-        namespace radFormFactor_PCS_3D { }
-        namespace radFormFactor_CIC_1Dy { }
-        namespace radFormFactor_Gauss_spherical { }
-        namespace radFormFactor_Gauss_cell { }
-        namespace radFormFactor_incoherent { }
-        namespace radFormFactor_coherent { }
+        namespace macroParticleFormFactorCIC_3D { }
+        namespace macroParticleFormFactorTSC_3D { }
+        namespace macroParticleFormFactorPCS_3D { }
+        namespace macroParticleFormFactorCIC_1Dy { }
+        namespace macroParticleFormFactorGaussSpherical { }
+        namespace macroParticleFormFactorGaussCell { }
+        namespace macroParticleFormFactorIncoherent { }
+        namespace macroParticleFormFactorCoherent { }
 
-        namespace radFormFactor = radFormFactor_Gauss_spherical;
+        namespace macroParticleFormFactor = macroParticleFormFactorGaussSpherical;
 
 
         ///////////////////////////////////////////////////////////
@@ -192,28 +182,5 @@ namespace picongpu
         using GammaFilter = picongpu::particles::manipulators::generic::Free<
             GammaFilterFunctor
         >;
-
-        //////////////////////////////////////////////////
-
-
-        /** add a window function weighting to the radiation in order
-         * to avoid ringing effects from sharpe boundaries
-         * default: no window function via `radWindowFunctionNone`
-         *
-         * Choose different window function in order to get better ringing reduction
-         * radWindowFunctionTriangle
-         * radWindowFunctionHamming
-         * radWindowFunctionTriplett
-         * radWindowFunctionGauss
-         * radWindowFunctionNone
-         */
-        namespace radWindowFunctionTriangle { }
-        namespace radWindowFunctionHamming { }
-        namespace radWindowFunctionTriplett { }
-        namespace radWindowFunctionGauss { }
-        namespace radWindowFunctionNone { }
-
-        namespace radWindowFunction = radWindowFunctionNone;
-
     } //namespace transitionRadiation
 }//namespace picongpu

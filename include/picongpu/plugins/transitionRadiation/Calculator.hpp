@@ -10,7 +10,7 @@ namespace picongpu
         using complex_X = pmacc::math::Complex< float_X >;
         using complex_64 = pmacc::math::Complex< float_64 >;
 
-        /** Arbitrary margin which is necessary to prevent division by 0 error
+        /* Arbitrary margin which is necessary to prevent division by 0 error
          * created by particles moving in the plane of the foil.
          */
         float_X const DIV_BY_ZERO_MINIMUM = 1.e-7;
@@ -82,10 +82,12 @@ namespace picongpu
                 );
             }
 
-            /** Calculates perpendicular part to movement direction of normalized energy
+            /** Perpendicular part of normalized energy
+             * 
+             * Calculates perpendicular part to movement direction of normalized energy
              * determined by formula:
-             * E_perp = (u^2 cosPsi sinPsi sinPhi cosTheta) / 
-             *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
+             * @f[E_{perp} = (u^2 \cos{\psi} \sin{\psi} \sin{\phi} \cos{\theta}) / 
+             *          ((\sqrt{1 + u^2} - u \sin{\psi} \cos{\phi} \sin{\theta})^2 - u^2 \cos{\phi}^2 \cos{\theta}^2)@f]
              * where Psi is the azimuth angle of the particle momentum and theta is
              * the azimuth angle of the detector position to the movement direction y
              * 
@@ -118,10 +120,12 @@ namespace picongpu
                 return a * ( 1.0 / denominator );
             }
 
-            /** Calculates parallel part to movement direction of normalized energy
+            /** Parallel part of normalized energy
+             * 
+             * Calculates parallel part to movement direction of normalized energy
              * determined by formula:
-             * E_perp = (u cosPsi (u sinPsi cosPhi - sqrt(1 + u^2) sinTheta)) / 
-             *          ((sqrt(1 + u^2) - u sinPsi cosPhi sinTheta)^2 - u^2 cosPsi^2 cosTheta^2)
+             * @f[E_{para} = (u \cos{\psi} (u \sin{\psi} \cos{\phi} - \sqrt{1 + u^2} \sin{\theta}) / 
+             *          ((\sqrt{1 + u^2} - u \sin{\psi} \cos{\phi} \sin{\theta})^2 - u^2 \cos{\phi}^2 \cos{\theta}^2)@f]
              * where Psi is the azimuth angle of the particle momentum and theta is
              * the azimuth angle of the detector position to the movement direction y
              * 
@@ -154,11 +158,13 @@ namespace picongpu
                 return a * ( b - c ) * ( 1.0 / denominator );
             }
 
-            /** Calculates the exponent of the formfactor divided by \omega
+            /** Exponent of form factor
+             * 
+             * Calculates the exponent of the formfactor divided by \omega
              * It represents the phase of a single electron in the bunch, but it is mostly
              * calculated for performance reasons.
-             * F_exp = - i z ( 1 / v - sinTheta sinPsi cos(Phi_P - Phi_D) / c ) / (cosPsi)
-             *          - i sinTheta rho cos(Phi_P - Phi_D)
+             * \f[ F_exp = - i z ( 1 / v - \sin{\theta} \sin{\psi} \cos{\phi_P - \phi_D} / c ) / \cos{\phi}
+             *          - i \sin{\theta} \rho \cos{\phi_P - \phi_D} \f]
              * 
              */
             HDINLINE
@@ -180,8 +186,12 @@ namespace picongpu
             }
         }; // class Calculator
 
-        /** Calculates of the electron bunch with the exponent calculated by the 
-         * Calculator class. F = exp{ F_exp * \omega }
+        /** Formfactor
+         * 
+         * Calculates of the electron bunch with the exponent calculated by the 
+         * Calculator class. 
+         * 
+         * @f[F = \exp{ F_{exp} * \omega }@f]
          * 
          * @param omega observed frequency
          * @param exponent exponent of exponential function
