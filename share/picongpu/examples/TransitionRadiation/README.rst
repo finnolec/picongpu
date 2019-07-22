@@ -3,10 +3,13 @@ TransitionRadiation : Transtion Radiation
 
 .. sectionauthor:: Finn-Ole Carstens <f.carstens (at) hzdr.de>
 
-This example simulates an electron bunch moving in a 45° angle in the x-y plane and calculates the coherent and incoherent transition radiation created by this bunch.
+This example simulates the transition radiation created by an electron bunch.
 The implemented transition radiation follows the studies from [Schroeder2004] and [Downer2018].
 The transition radiation is computed for an infinitely large interface perpendicular to the y-axis of the simulation.
-The result can be interpreted with the according python script `lib/python/picongpu/plugins/plot_mpl/transition_radiation_visualizer.py`.
+
+The electron bunch in this setup is moving with a 45° angle in the x-y plane with a Lorentz-factor of $\gamma = 20$.
+The bunch has a Gaussian distribution with $\sigma_y = 3.0 \mu m$.
+The results can be interpreted with the according python script `lib/python/picongpu/plugins/plot_mpl/transition_radiation_visualizer.py`.
 
 References
 ----------
