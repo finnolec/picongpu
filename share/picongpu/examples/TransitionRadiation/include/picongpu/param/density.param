@@ -38,7 +38,7 @@ namespace picongpu
          * unit: ELEMENTS/m^3
          *
          */
-        constexpr float_64 BASE_DENSITY_SI = 1.0e23;
+        constexpr float_64 BASE_DENSITY_SI = 1.0e22;
 
     }
 

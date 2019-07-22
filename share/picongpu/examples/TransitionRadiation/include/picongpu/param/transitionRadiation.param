@@ -55,7 +55,7 @@ namespace picongpu
             }
 
             //! number of frequency values to compute in the linear frequency [unitless]
-            constexpr unsigned int nOmega = 512;
+            constexpr unsigned int nOmega = 128;
         }
 
         namespace logFrequencies
