@@ -187,10 +187,17 @@ if __name__ == "__main__":
                   "\t-p, --path\t<path to run_directory>\n"
                   "\t-i, --iteration\t<iteration>\n"
                   "\t-s, --species\t<particle species>\n"
-                  "\t-t, --type\t<figure type\n"
+                  "\t-t, --type\t<figure type>\n"
+                  "\t\tavailable figure types:\n"
+                  "\t\t -'spectrum'\n"
+                  "\t\t -'sliceovertheta'\n"
+                  "\t\t -'sliceoverphi'\n"
+                  "\t\t -'heatmap'\n"
                   "\t-P, --phi\t<index of polar angle phi>\n"
                   "\t-T, --theta\t<index of azimuth angle theta>\n"
                   "\t-O, --omega\t<index of frequency omega>")
+
+
 
         path = None
         iteration = None

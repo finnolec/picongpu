@@ -218,6 +218,7 @@ class Visualizer(object):
         for i, reader in enumerate(self.data_reader):
             try:
                 d = reader.get(**kwargs)
+                print(d)
                 self.data[i] = d
             except IndexError:
                 # iteration is not there, so the data value

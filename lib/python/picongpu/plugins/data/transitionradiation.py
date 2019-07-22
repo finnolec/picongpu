@@ -187,27 +187,27 @@ class TransitionRadiationData(DataReader):
         if type == "spectrum":
             # find phi and theta with maximum intensity if they are not given as parameters
             if theta is None and phi is None:
-                maxIndex = np.argmax(self.data[:, :], 1)[0]
-                theta = int(np.floor(maxIndex / len(self.phis)))
-                phi = maxIndex % len(self.phis)
+                maxIndex = np.argmax(self.data[:, :], 0)
+                theta = int(np.floor(maxIndex[0] / len(self.phis)))
+                phi = maxIndex[0] % len(self.phis)
             elif theta is None and phi is not None:
-                theta = np.argmax(self.data[phi::len(self.phis), :])
+                theta = np.argmax(self.data[phi::len(self.phis), :], 0)[0]
             elif theta is not None and phi is None:
-                phi = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis):, :])
+                phi = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis):, :], 0)[0]
 
             print("Spectrum is plotted at phi={:.2e} and theta={:.2e}".format(self.phis[phi], self.thetas[theta]))
             return self.omegas, self.data[theta * len(self.phis) + phi, :]
         elif type == "sliceovertheta":
             # find phi and omega with maximum intensity if they are not given as parameters
             if omega is None and phi is None:
-                maxIndex = np.argmax(self.data[:, :], 1)
+                maxIndex = np.argmax(self.data[:, :], 0)
                 phi = maxIndex[0] % len(self.phis)
-                omega = maxIndex[1]
+                omega = 0
             if omega is not None and phi is None:
                 maxIndex = np.argmax(self.data[:, omega])
                 phi = maxIndex % len(self.phis)
             if omega is None and phi is not None:
-                omega = np.argmax(self.data[phi::len(self.phis), :], 1)[1]
+                omega = 0
 
             print("Angular intensity distribution is sliced at phi={:.2e} "
                   "with omega={:.2e}.".format(self.phis[phi], self.omegas[omega]))
@@ -215,11 +215,11 @@ class TransitionRadiationData(DataReader):
         elif type == "sliceoverphi":
             # find theta and omega with maximum intensity if they are not given as parameters
             if theta is None and omega is None:
-                maxIndex = np.argmax(self.data[:, :], 1)
+                maxIndex = np.argmax(self.data[:, :], 0)
                 theta = int(np.floor(maxIndex[0] / len(self.phis)))
-                omega = maxIndex[1]
+                omega = 0
             if theta is not None and omega is None:
-                omega = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis), :], 1)[1]
+                omega = 0
             if theta is None and omega is not None:
                 maxIndex = np.argmax(self.data[:, omega])
                 theta = int(np.floor(maxIndex / len(self.phis)))
@@ -230,7 +230,8 @@ class TransitionRadiationData(DataReader):
         elif type == "heatmap":
             # find omega with maximum intensity if it is not given as parameter
             if omega is None:
-                omega = np.argmax(self.data[:, :], 1)[1]
+                omega = 0
+                print("theta: ", theta, "phi: ", phi, "omega: ", omega)
             # meshgrids for visualization
             theta_mesh, phi_mesh = np.meshgrid(self.thetas, self.phis)
 
