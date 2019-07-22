@@ -3,8 +3,8 @@ TransitionRadiation : Transtion Radiation
 
 .. sectionauthor:: Finn-Ole Carstens <f.carstens (at) hzdr.de>
 
-This example simulates the transition radiation created by an electron bunch.
-The implemented transition radiation follows the studies from [Schroeder2004] and [Downer2018].
+This example simulates the coherent and incoherent transition radiation created by an electron bunch in-situ.
+The implemented transition radiation follows the studies from [Schroeder2004]_ and [Downer2018]_.
 The transition radiation is computed for an infinitely large interface perpendicular to the y-axis of the simulation.
 
 The electron bunch in this setup is moving with a 45° angle in the x-y plane with a Lorentz-factor of $\gamma = 20$.

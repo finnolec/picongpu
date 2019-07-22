@@ -1,4 +1,4 @@
-/* Copyright 2013-2019 Rene Widera, Richard Pausch
+/* Copyright 2013-2019 Rene Widera, Richard Pausch, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -162,7 +162,7 @@ namespace picongpu
          *
          * to activate the filter:
          *   - goto file `speciesDefinition.param`
-         *   - add the attribute `radiationMask` to the particle species
+         *   - add the attribute `transitionRadiationMask` to the particle species
          */
         using GammaFilter = picongpu::particles::manipulators::generic::Free<
             GammaFilterFunctor
