@@ -251,17 +251,6 @@ if __name__ == "__main__":
             type = "spectrum"
             print("Figure type was not given, will use", type)
 
-        # check for specified angles and frequencies
-        # if omega is not None and type is "spectrum":
-        #     print("A fixed omega was given for a spectrum over the frequency. It will be ignored.")
-        #     omega = None
-        # if theta is None and type is "spectrum":
-        #     print("No fixed azimuth angle theta was given for the spectrum. The spectrum "
-        #           "will be created at the maximum of the spectral power depending on theta.")
-        # if phi is None and type is "spectrum":
-        #     print("No fixed polar angle phi was given for the spectrum. The spectrum "
-        #           "will be created at the maximum of the spectral power depending on phi.")
-
         # create pyplot axes object and visualize data
         _, ax = plt.subplots(1, 1)
         Visualizer(path, ax).visualize(iteration=iteration, species=species, type=type,

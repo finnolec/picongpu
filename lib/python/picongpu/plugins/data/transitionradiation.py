@@ -2,7 +2,7 @@
 This file is part of the PIConGPU.
 
 Copyright 2017-2019 PIConGPU contributors
-Authors: Axel Huebl
+Authors: Axel Huebl, Finn-Ole Carstens
 License: GPLv3+
 """
 from .base_reader import DataReader
