@@ -39,8 +39,6 @@ namespace picongpu
         position< position_pic >,
         momentum,
         weighting,
-        particleId,
-        momentumPrev1,
         transitionRadiationMask
     >;
 
