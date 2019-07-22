@@ -1,4 +1,4 @@
-/* Copyright 2017-2019 Rene Widera
+/* Copyright 2017-2019 Rene Widera, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -28,14 +28,14 @@ namespace picongpu
 {
     namespace transitionRadiation
     {
-        /** read the `radiationMask` of a species */
+        /** read the `transitionRadiationMask` of a species */
         template< bool hasTransitionRadiationMask >
         struct GetTransitionRadiationMask
         {
-            /** get the attribute value of `radiationMask`
+            /** get the attribute value of `transitionRadiationMask`
              *
              * @param particle particle to be used
-             * @return value of the attribute `radiationMask`
+             * @return value of the attribute `transitionRadiationMask`
              */
             template< typename T_Particle >
             HDINLINE bool operator()( const T_Particle& particle ) const
@@ -47,12 +47,12 @@ namespace picongpu
         /** specialization
          *
          * specialization for the case that the species not owns the attribute
-         * `radiationMask`
+         * `transitionRadiationMask`
          */
         template< >
         struct GetTransitionRadiationMask< false >
         {
-            /** get the attribute value of `radiationMask`
+            /** get the attribute value of `transitionRadiationMask`
              *
              * @param particle to be used
              * @return always true
@@ -64,14 +64,14 @@ namespace picongpu
             }
         };
 
-        /** get the value of the particle attribute `radiationMask`
+        /** get the value of the particle attribute `transitionRadiationMask`
          *
-         * Allow to read out the value of the attribute `radiationMask` also if
+         * Allow to read out the value of the attribute `transitionRadiationMask` also if
          * it is not defined for the particle.
          *
          * @tparam T_Particle particle type
          * @param particle valid particle
-         * @return particle attribute value `radiationMask`, always `true` if attribute `radiationMask` is not defined
+         * @return particle attribute value `transitionRadiationMask`, always `true` if attribute `transitionRadiationMask` is not defined
          */
         template< typename T_Particle >
         HDINLINE bool getTransitionRadiationMask( const T_Particle& particle )

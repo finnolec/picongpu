@@ -1,4 +1,4 @@
-/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch
+/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -26,20 +26,20 @@ namespace picongpu
 {
     namespace transitionRadiation
     {
-        namespace rad_log_frequencies
+        namespace logFrequencies
         {
             class FreqFunctor
             {
             public:
-                FreqFunctor(void)
+                FreqFunctor( void )
                 {
-                    omega_log_min = math::log(omega_min);
-                    delta_omega_log = (math::log(omega_max) - omega_log_min) / float_X(N_omega - 1);
+                    omega_log_min = math::log( omegaMin );
+                    delta_omega_log = ( math::log( omegaMax ) - omega_log_min ) / float_X( nOmega - 1 );
                 }
 
-                HDINLINE float_X operator()(const int ID)
+                HDINLINE float_X operator( )( const int ID )
                 {
-                    return  math::exp(omega_log_min + (float_X(ID)) * delta_omega_log) ;
+                    return  math::exp( omega_log_min + ( float_X( ID ) ) * delta_omega_log );
                 }
 
             private:
@@ -51,36 +51,31 @@ namespace picongpu
             class InitFreqFunctor
             {
             public:
-                InitFreqFunctor(void)
-                { 
-                }
+                InitFreqFunctor( void )
+                { }
 
-                HINLINE void Init(const std::string path )
-                { 
-                }
+                HINLINE void Init( const std::string path )
+                { }
 
 
-                HINLINE FreqFunctor getFunctor(void)
+                HINLINE FreqFunctor getFunctor( void )
                 {
-                    return FreqFunctor();
+                    return FreqFunctor( );
                 }
             }; // InitFreqFunctor
 
 
-            /** Getter for parameters in output file
-             * 
-             * return parameters as string
-             */
-            HDINLINE
+            //! @return frequency params as string
+            HINLINE
             std::string 
             getParameters( void )
             {
                 std::string params = std::string( "log\t" );
-                params += std::to_string( transitionRadiation::frequencies::N_omega ) + "\t";
-                params += std::to_string( transitionRadiation::frequencies::SI::omega_min ) + "\t";
-                params += std::to_string( transitionRadiation::frequencies::SI::omega_max ) + "\t";
+                params += std::to_string( nOmega ) + "\t";
+                params += std::to_string( SI::omegaMin ) + "\t";
+                params += std::to_string( SI::omegaMax ) + "\t";
                 return params; 
             }
-        } // namespace rad_log_frequencies
+        } // namespace logFrequencies
     } // namespace transitionRadiation
 } // namespace picongpu

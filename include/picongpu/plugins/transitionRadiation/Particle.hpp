@@ -12,7 +12,7 @@ namespace picongpu
          */
         class Particle
         {
-        public:
+        private:
             float3_X const & momentum;
             float3_X const & location;
             float_X const mass;
