@@ -187,10 +187,17 @@ if __name__ == "__main__":
                   "\t-p, --path\t<path to run_directory>\n"
                   "\t-i, --iteration\t<iteration>\n"
                   "\t-s, --species\t<particle species>\n"
-                  "\t-t, --type\t<figure type\n"
+                  "\t-t, --type\t<figure type>\n"
+                  "\t\tavailable figure types:\n"
+                  "\t\t -'spectrum'\n"
+                  "\t\t -'sliceovertheta'\n"
+                  "\t\t -'sliceoverphi'\n"
+                  "\t\t -'heatmap'\n"
                   "\t-P, --phi\t<index of polar angle phi>\n"
                   "\t-T, --theta\t<index of azimuth angle theta>\n"
                   "\t-O, --omega\t<index of frequency omega>")
+
+
 
         path = None
         iteration = None
@@ -243,17 +250,6 @@ if __name__ == "__main__":
         if type is None:
             type = "spectrum"
             print("Figure type was not given, will use", type)
-
-        # check for specified angles and frequencies
-        # if omega is not None and type is "spectrum":
-        #     print("A fixed omega was given for a spectrum over the frequency. It will be ignored.")
-        #     omega = None
-        # if theta is None and type is "spectrum":
-        #     print("No fixed azimuth angle theta was given for the spectrum. The spectrum "
-        #           "will be created at the maximum of the spectral power depending on theta.")
-        # if phi is None and type is "spectrum":
-        #     print("No fixed polar angle phi was given for the spectrum. The spectrum "
-        #           "will be created at the maximum of the spectral power depending on phi.")
 
         # create pyplot axes object and visualize data
         _, ax = plt.subplots(1, 1)

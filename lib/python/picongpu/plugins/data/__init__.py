@@ -13,4 +13,5 @@ __all__ = [
     "RadiationData",
     "FieldSliceData",
     "EmittanceData",
+    "TransitionRadiationData",
 ]
