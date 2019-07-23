@@ -57,7 +57,7 @@ namespace transitionRadiation
      * These are the standard spherical coordinates.
      *
      * The example setup describes an detector array of
-     * 256x256 detectors ranging from 0 to pi for the azimuth angle
+     * 128X128 detectors ranging from 0 to pi for the azimuth angle
      * theta and from 0 to 2 pi for the polar angle phi.
      *
      * @param    observation_id_extern
@@ -65,8 +65,7 @@ namespace transitionRadiation
      *           to compute the observation direction
      *
      * @return   unit vector pointing in observation direction
-     *           type: vector_64
-     *
+     *           type: float3_X
      */
 
     HDINLINE float3_X observationDirection(const int observation_id_extern)
