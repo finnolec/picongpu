@@ -44,6 +44,8 @@
 
 #include <boost/filesystem.hpp>
 
+#include "picongpu/particles/traits/SpeciesEligibleForSolver.hpp"
+
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -609,4 +611,58 @@ namespace transitionRadiation
     };
     
 } // namespace transitionRadiation
+
+namespace particles
+{
+namespace traits
+{
+    template<
+        typename T_Species,
+        typename T_UnspecifiedSpecies
+    >
+    struct SpeciesEligibleForSolver<
+        T_Species,
+        transitionRadiation::TransitionRadiation< T_UnspecifiedSpecies >
+    >
+    {
+        using FrameType = typename T_Species::FrameType;
+
+        // this plugin needs at least the weighting and momentum attributes
+        using RequiredIdentifiers = MakeSeq_t<
+            weighting,
+            momentum,
+            position< >
+        >;
+
+        using SpeciesHasIdentifiers = typename pmacc::traits::HasIdentifiers<
+            FrameType,
+            RequiredIdentifiers
+        >::type;
+
+        // this plugin needs a mass ratio for energy calculation from momentum
+        using SpeciesHasMass = typename pmacc::traits::HasFlag<
+            FrameType,
+            massRatio<>
+        >::type;
+
+        // transition radiation requires charged particles
+        using SpeciesHasCharge = typename pmacc::traits::HasFlag<
+            FrameType,
+            chargeRatio<>
+        >::type;
+
+        // this plugin needs the transitionRadiationMask flag 
+        using SpeciesHasMask = typename pmacc::traits::HasFlag<
+            FrameType,
+            transitionRadiationMask
+        >::type;
+
+        using type = typename bmpl::and_<
+            SpeciesHasIdentifiers,
+            SpeciesHasMass,
+            SpeciesHasCharge
+        >;
+    };
+} // namespace traits
+} // namespace particles
 } // namespace picongpu
