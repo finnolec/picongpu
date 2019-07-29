@@ -1,6 +1,6 @@
 /* Copyright 2013-2019 Axel Huebl, Benjamin Schneider, Felix Schmitt,
  *                     Heiko Burau, Rene Widera, Richard Pausch,
- *                     Benjamin Worpitz, Erik Zenker
+ *                     Benjamin Worpitz, Erik Zenker, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -216,7 +216,7 @@ private:
         plugins::multi::Master< BinEnergyParticles<bmpl::_1> >,
         CountParticles<bmpl::_1>,
         PngPlugin< Visualisation<bmpl::_1, PngCreator> >,
-        transitionRadiation::TransitionRadiation<bmpl::_1>
+        plugins::transitionRadiation::TransitionRadiation<bmpl::_1>
 #if(ENABLE_HDF5 == 1)
         , plugins::radiation::Radiation<bmpl::_1>
         , plugins::multi::Master< ParticleCalorimeter<bmpl::_1> >

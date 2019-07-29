@@ -21,6 +21,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
     /** Particle class for transition radiation calculation.
@@ -218,4 +220,5 @@ namespace transitionRadiation
     }; // class Particle
     
 } // namespace transitionRadiation
+} // namespace plugins
 } // namespace picongpu

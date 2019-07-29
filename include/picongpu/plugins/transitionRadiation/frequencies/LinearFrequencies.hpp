@@ -24,6 +24,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
 namespace linearFrequencies
@@ -70,4 +72,5 @@ namespace linearFrequencies
     
 } // namespace linearFrequencies
 } // namespace transitionRadiation
+} // namespace plugins
 } // namespace picongpu

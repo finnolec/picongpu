@@ -1,4 +1,4 @@
-/* Copyright 2013-2019 Axel Huebl, Heiko Burau, Rene Widera, Marco Garten
+/* Copyright 2013-2019 Axel Huebl, Heiko Burau, Rene Widera, Marco Garten, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -64,5 +64,4 @@
 #include "picongpu/param/particleCalorimeter.param"
 #include "picongpu/param/isaac.param"
 #include "picongpu/param/radiationObserver.param"
-#include "picongpu/param/transitionRadiationObserver.param"
 #include "picongpu/param/particleMerger.param"
