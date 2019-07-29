@@ -92,20 +92,20 @@ namespace transitionRadiation
 
         using radLog = plugins::radiation::PIConGPUVerboseRadiation;
 
-        GridBuffer< float_X, DIM1 > * incTransRad;
-        GridBuffer< complex_X, DIM1 > * cohTransRadPara;
-        GridBuffer< complex_X, DIM1 > * cohTransRadPerp;
-        GridBuffer< float_X, DIM1 > * numParticles;
+        GridBuffer< float_X, DIM1 > * incTransRad = nullptr;
+        GridBuffer< complex_X, DIM1 > * cohTransRadPara = nullptr;
+        GridBuffer< complex_X, DIM1 > * cohTransRadPerp = nullptr;
+        GridBuffer< float_X, DIM1 > * numParticles = nullptr;
 
         transitionRadiation::frequencies::InitFreqFunctor freqInit;
         transitionRadiation::frequencies::FreqFunctor freqFkt;
 
-        float_X * tmpITR;
-        complex_X * tmpCTRpara;
-        complex_X * tmpCTRperp;
-        float_X * tmpNum;
-        float_X * theTransRad; 
-        MappingDesc * cellDescription;
+        float_X * tmpITR = nullptr;
+        complex_X * tmpCTRpara = nullptr;
+        complex_X * tmpCTRperp = nullptr;
+        float_X * tmpNum = nullptr;
+        float_X * theTransRad = nullptr; 
+        MappingDesc * cellDescription = nullptr;
         std::string notifyPeriod;
         uint32_t timeStep;
 
@@ -116,11 +116,11 @@ namespace transitionRadiation
         std::string folderTransRad;
         std::string pathOmegaList;
 
-        float3_X * detectorPositions;
-        float_X * detectorFrequencies;
+        float3_X * detectorPositions = nullptr;
+        float_X * detectorFrequencies = nullptr;
 
-        bool isMaster;
-        uint32_t currentStep;
+        bool isMaster = false;
+        uint32_t currentStep = 0;
 
         mpi::MPIReduce reduce;
 
@@ -131,21 +131,7 @@ namespace transitionRadiation
             speciesName( T_ParticlesType::FrameType::getName( ) ),
             pluginPrefix( speciesName + std::string( "_transRad" ) ),
             folderTransRad( "transRad" ),
-            filenamePrefix( pluginPrefix ),
-            incTransRad( nullptr ),
-            cohTransRadPara( nullptr ),
-            cohTransRadPerp( nullptr ),
-            numParticles( nullptr ),
-            cellDescription( nullptr ),
-            tmpITR( nullptr ),
-            tmpCTRpara( nullptr ),
-            tmpCTRperp( nullptr ),
-            tmpNum( nullptr ),
-            theTransRad( nullptr ),
-            detectorPositions( nullptr ),
-            detectorFrequencies( nullptr ),
-            isMaster( false ),
-            currentStep( 0 )
+            filenamePrefix( pluginPrefix )
         {
             Environment< >::get( ).PluginConnector( ).registerPlugin( this );
         }
@@ -260,13 +246,13 @@ namespace transitionRadiation
         void 
         pluginLoad( )
         {
-            
-            tmpITR = new float_X[ elementsTransitionRadiation( ) ];
-            tmpCTRpara = new complex_X[ elementsTransitionRadiation( ) ];
-            tmpCTRperp = new complex_X[ elementsTransitionRadiation( ) ];
-            tmpNum = new float_X[ elementsTransitionRadiation( ) ];
             if( !notifyPeriod.empty( ) )
             {
+                tmpITR = new float_X[ elementsTransitionRadiation( ) ];
+                tmpCTRpara = new complex_X[ elementsTransitionRadiation( ) ];
+                tmpCTRperp = new complex_X[ elementsTransitionRadiation( ) ];
+                tmpNum = new float_X[ elementsTransitionRadiation( ) ];
+
                 /*only rank 0 create a file*/
                 isMaster = reduce.hasResult( mpi::reduceMethods::Reduce( ) );
                 pmacc::Filesystem<simDim>& fs = Environment<simDim>::get( ).Filesystem( );
@@ -325,19 +311,22 @@ namespace transitionRadiation
         void 
         pluginUnload( )
         {
-            if( isMaster )
+            if ( !notifyPeriod.empty( ) )
             {
-                __deleteArray( theTransRad );
+                if( isMaster )
+                {
+                    __deleteArray( theTransRad );
+                }
+                CUDA_CHECK( cudaGetLastError( ) );
+                __delete( incTransRad );
+                __delete( cohTransRadPara );
+                __delete( cohTransRadPerp );
+                __delete( numParticles );
+                __deleteArray( tmpITR );
+                __deleteArray( tmpCTRpara );
+                __deleteArray( tmpCTRperp );
+                __deleteArray( tmpNum );
             }
-            CUDA_CHECK( cudaGetLastError( ) );
-            __delete( incTransRad );
-            __delete( cohTransRadPara );
-            __delete( cohTransRadPerp );
-            __delete( numParticles );
-            __deleteArray( tmpITR );
-            __deleteArray( tmpCTRpara );
-            __deleteArray( tmpCTRperp );
-            __deleteArray( tmpNum );
         }
 
         //! Moves transition radiation data from GPUs to CPUs.
@@ -663,7 +652,8 @@ namespace traits
         using type = typename bmpl::and_<
             SpeciesHasIdentifiers,
             SpeciesHasMass,
-            SpeciesHasCharge
+            SpeciesHasCharge,
+            SpeciesHasMask
         >;
     };
 } // namespace traits
