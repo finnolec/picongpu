@@ -34,7 +34,7 @@ class TransitionRadiationData(DataReader):
         self.thetas = None
         self.phis = None
 
-    def get_data_path(self, species, iteration=None):
+    def get_data_path(self, species=None, iteration=None):
         """
         Return the path to the underlying data file.
 
@@ -244,7 +244,6 @@ class TransitionRadiationData(DataReader):
             # find omega with maximum intensity if it is not given as parameter
             if omega is None:
                 omega = 0
-                print("theta: ", theta, "phi: ", phi, "omega: ", omega)
             # meshgrids for visualization
             theta_mesh, phi_mesh = np.meshgrid(self.thetas, self.phis)
 

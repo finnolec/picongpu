@@ -1,4 +1,4 @@
-/* Copyright 2017-2019 Finn-Ole Carstens
+/* Copyright 2013-2019 Heiko Burau, Rene Widera, Richard Pausch, Finn-Ole Carstens
  *
  * This file is part of PIConGPU.
  *
@@ -107,7 +107,7 @@ namespace transitionRadiation
             return calcPosRho( );
         }
 
-        //! @return parallel component to z of location in cylindrical coordinates
+        //! @return parallel component to y of location in cylindrical coordinates
         HDINLINE
         float_X 
         getPosPara( ) const
@@ -132,7 +132,7 @@ namespace transitionRadiation
         ) const
         {
             float_X const gamma = calcGamma(momentum);
-            return picongpu::math::sqrt(1 - 1 / (gamma * gamma) );
+            return picongpu::math::sqrt(1.0 - 1.0 / (gamma * gamma) );
         }
 
         //! @return gamma = E/(mc^2)
@@ -155,9 +155,9 @@ namespace transitionRadiation
             float3_X const & momentum
         ) const
         {
-            float_X const gamma1 = calcGamma( momentum );
-            float_X const beta1 = calcBeta( momentum );
-            return gamma1 * beta1;
+            float_X const gamma = calcGamma( momentum );
+            float_X const beta = calcBeta( momentum );
+            return gamma * beta;
         }
 
         //! @return polar angle phi of momentum
@@ -165,6 +165,7 @@ namespace transitionRadiation
         float_X 
         calcMomPhi( ) const
         {
+            // add pi to atan2 function, because phi is in range from 0 to 2 pi
             return picongpu::math::atan2(
                 momentum.x( ), 
                 momentum.z( )
@@ -176,7 +177,7 @@ namespace transitionRadiation
         float_X 
         calcMomTheta( ) const
         {
-            //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<z
+            //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<y
             float_X const momAbs = getMomAbs( );
             if( momAbs <= momentum.y( ) )
                 return 0.0;
@@ -212,6 +213,7 @@ namespace transitionRadiation
         float_X 
         calcPosPhi( ) const
         {
+            // add pi to atan2 function, because phi is in range from 0 to 2 pi
             return picongpu::math::atan2(
                 location.x( ), 
                 location.z( )

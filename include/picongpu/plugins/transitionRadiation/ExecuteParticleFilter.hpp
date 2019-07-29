@@ -58,7 +58,7 @@ namespace transitionRadiation
 
     /** specialization
      *
-     * specialization for the case that the species not owns the attribute
+     * specialization for the case that the species does not have the attribute
      * `transitionRadiationMask`
      */
     template< >
