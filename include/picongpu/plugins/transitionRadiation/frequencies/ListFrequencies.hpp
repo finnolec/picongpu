@@ -113,7 +113,7 @@ namespace listFrequencies
         }
 
     private:
-        GridBuffer< float_X, DIM1 > * frequencyBuffer;
+        GridBuffer< float_X, DIM1 > * frequencyBuffer = nullptr;
     }; // InitFreqFunctor
 
     //! @return frequency params as string

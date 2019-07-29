@@ -38,8 +38,7 @@ namespace picongpu
     using DefaultParticleAttributes = MakeSeq_t<
         position< position_pic >,
         momentum,
-        weighting,
-        transitionRadiationMask
+        weighting
     >;
 
     /*########################### end particle attributes ########################*/
@@ -57,7 +56,8 @@ namespace picongpu
         shape< UsedParticleShape >,
         interpolation< UsedField2Particle >,
         massRatio< MassRatioElectrons >,
-        chargeRatio< ChargeRatioElectrons >
+        chargeRatio< ChargeRatioElectrons >,
+        transitionRadiationMask
     >;
 
     /* define species electrons */
