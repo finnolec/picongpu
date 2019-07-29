@@ -58,6 +58,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
     using namespace pmacc;
@@ -88,7 +90,7 @@ namespace transitionRadiation
     
         using SuperCellSize = MappingDesc::SuperCellSize;
 
-        using radLog = PIConGPUVerboseRadiation;
+        using radLog = plugins::radiation::PIConGPUVerboseRadiation;
 
         GridBuffer< float_X, DIM1 > * incTransRad;
         GridBuffer< complex_X, DIM1 > * cohTransRadPara;
@@ -611,6 +613,7 @@ namespace transitionRadiation
     };
     
 } // namespace transitionRadiation
+} // namespace plugins
 
 namespace particles
 {
@@ -622,7 +625,7 @@ namespace traits
     >
     struct SpeciesEligibleForSolver<
         T_Species,
-        transitionRadiation::TransitionRadiation< T_UnspecifiedSpecies >
+        plugins::transitionRadiation::TransitionRadiation< T_UnspecifiedSpecies >
     >
     {
         using FrameType = typename T_Species::FrameType;

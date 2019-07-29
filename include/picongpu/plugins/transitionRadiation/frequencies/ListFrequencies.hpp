@@ -27,6 +27,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
 namespace listFrequencies
@@ -92,7 +94,7 @@ namespace listFrequencies
             {
                 freqListFile >> frequencyDB[ i ];
                 // verbose output of loaded frequencies if verbose level PHYSICS is set:
-                log< PIConGPUVerboseRadiation::PHYSICS >("freq: %1% \t %2%") % i % frequencyDB[ i ];
+                log< plugins::radiation::PIConGPUVerboseRadiation::PHYSICS >("freq: %1% \t %2%") % i % frequencyDB[ i ];
                 frequencyDB[ i ] *= UNIT_TIME;
             }
 
@@ -126,4 +128,5 @@ namespace listFrequencies
     
 } // namespace listFrequencies
 } // namespace transitionRadiation
+} // namespace plugins
 } // namespace picongpu

@@ -24,6 +24,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
     using complex_X = pmacc::math::Complex< float_X >;
@@ -65,6 +67,7 @@ namespace transitionRadiation
             particle( particleSet ),
             lookDirection( lookDirection ),
             parMomPhi( particle.getMomPhi( ) ),
+            // one has to add pi to the polar angle, because phi is in the range of 0 to 2 \pi
             detectorPhi( 
                 picongpu::math::atan2(
                     lookDirection.z( ), 
@@ -75,8 +78,8 @@ namespace transitionRadiation
                 picongpu::math::sqrt( 1 + particle.getU( ) * particle.getU( ) ) 
             )
         { 
-            // Frequent calculations
-            // Momentum Space for Particle:
+            // frequent calculations
+            // momentum Space for Particle:
             picongpu::math::sincos( 
                 particle.getMomTheta( ), 
                 parMomSinTheta, 
@@ -88,12 +91,9 @@ namespace transitionRadiation
                 parMomCosPhi
             );
             
-            // Detector Position
-            float_X const detectorTheta = picongpu::math::acos( 
-                lookDirection.y( ) / picongpu::math::sqrt( ( 
-                    lookDirection * lookDirection
-                ).sumOfComponents( ) )
-            );
+            // detector Position since lookDirection is normalized
+            float_X const detectorTheta = picongpu::math::acos( lookDirection.y( ) );
+            
             picongpu::math::sincos( 
                 detectorTheta, 
                 detectorSinTheta, 
@@ -107,7 +107,7 @@ namespace transitionRadiation
          * determined by formula:
          * @f[E_{perp} = (u^2 \cos{\psi} \sin{\psi} \sin{\phi} \cos{\theta}) / 
          *          ((\sqrt{1 + u^2} - u \sin{\psi} \cos{\phi} \sin{\theta})^2 - u^2 \cos{\phi}^2 \cos{\theta}^2)@f]
-         * where Psi is the azimuth angle of the particle momentum and theta is
+         * where \psi is the azimuth angle of the particle momentum and \theta is
          * the azimuth angle of the detector position to the movement direction y
          * 
          * @return perpendicular part of normalized energy
@@ -116,6 +116,7 @@ namespace transitionRadiation
         float_X 
         calcEnergyPerp( ) const
         {
+            // a, x and y are temporary variables without an explicit physical meaning
             float_X const uSquared = particle.getU( ) * particle.getU( );
             float_X const a = uSquared * parMomCosTheta * parMomSinTheta * 
                 parMomSinPhi * detectorCosTheta;
@@ -136,7 +137,7 @@ namespace transitionRadiation
                     denominator = DIV_BY_ZERO_MINIMUM;
             }
 
-            return a * ( 1.0 / denominator );
+            return a / denominator;
         }
 
         /** Parallel part of normalized energy
@@ -145,7 +146,7 @@ namespace transitionRadiation
          * determined by formula:
          * @f[E_{para} = (u \cos{\psi} (u \sin{\psi} \cos{\phi} - \sqrt{1 + u^2} \sin{\theta}) / 
          *          ((\sqrt{1 + u^2} - u \sin{\psi} \cos{\phi} \sin{\theta})^2 - u^2 \cos{\phi}^2 \cos{\theta}^2)@f]
-         * where Psi is the azimuth angle of the particle momentum and theta is
+         * where \psi is the azimuth angle of the particle momentum and \theta is
          * the azimuth angle of the detector position to the movement direction y
          * 
          * @return parallel part of normalized energy
@@ -154,6 +155,7 @@ namespace transitionRadiation
         float_X 
         calcEnergyPara( ) const
         {
+            // a, b, c, x and y are just temporary variables without an explicit physical meaning
             float_X const a = particle.getU( ) * parMomCosTheta;
             float_X const b = particle.getU( ) * parMomSinTheta * parMomCosPhi;
             float_X const c = parSqrtOnePlusUSquared * detectorSinTheta;
@@ -174,7 +176,7 @@ namespace transitionRadiation
                     denominator = DIV_BY_ZERO_MINIMUM;
             }
 
-            return a * ( b - c ) * ( 1.0 / denominator );
+            return a * ( b - c ) / denominator;
         }
 
         /** Exponent of form factor
@@ -228,11 +230,11 @@ namespace transitionRadiation
         else
             return complex_X( 
                 math::exp( 
-                    //precisionCast< float_64 >( exponent * omega )
                     exponent * omega
                 ) 
             );
     }
     
 } // namespace transitionRadiation
+} // namespace plugins
 } // namespace picongpu

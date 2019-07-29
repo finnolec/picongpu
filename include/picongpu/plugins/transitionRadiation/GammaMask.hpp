@@ -26,6 +26,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
     /** read the `transitionRadiationMask` of a species */
@@ -84,4 +86,5 @@ namespace transitionRadiation
     }
     
 } // namespace transitionRadiation
+} // namespace plugins
 } // namespace picongpu

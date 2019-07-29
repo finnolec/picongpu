@@ -23,6 +23,8 @@
 
 namespace picongpu
 {
+namespace plugins
+{
 namespace transitionRadiation
 {
 namespace macroParticleFormFactorbaseShape_3D
@@ -49,14 +51,14 @@ namespace macroParticleFormFactorbaseShape_3D
          * @param observer_unit_vec = observation direction
          * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
          */
-        HDINLINE float_X operator()( const float_X N, const float_X omega, vector_X const & observer_unit_vec ) const
+        HDINLINE float_X operator()( const float_X N, const float_X omega, plugins::radiation::vector_X const & observer_unit_vec ) const
         {
             float_X sincValue = float_X( 1.0 );
             for( uint32_t d = 0; d < DIM3; ++d )
                 sincValue *= math::sinc( observer_unit_vec[d] * cellSize[d] / ( SPEED_OF_LIGHT * float_X( 2.0 ) ) * omega );
 
             // here we combine sinc^2(..) with (...)^T_shapeOrder to ...^(2 * T_shapeOrder)
-            return math::sqrt( N + ( N * N - N ) * util::details::pow( sincValue , 2 * T_shapeOrder ) );
+            return math::sqrt( N + ( N * N - N ) * plugins::radiation::util::details::pow( sincValue , 2 * T_shapeOrder ) );
         }
     };
 
@@ -103,7 +105,7 @@ namespace macroParticleFormFactorCIC_1Dy
          * @param observer_unit_vec = observation direction
          * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
          */
-        HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
+        HDINLINE float_X operator()(const float_X N, const float_X omega, const plugins::radiation::vector_X observer_unit_vec) const
         {
             float_X const sinc = math::sinc( CELL_HEIGHT / ( SPEED_OF_LIGHT * float_X( 2.0 ) ) * omega );
             return math::sqrt( N + ( N * N - N ) * sinc * sinc );
@@ -126,7 +128,7 @@ namespace macroParticleFormFactorGaussSpherical
         * @param observer_unit_vec = observation direction
         * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
         */
-        HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
+        HDINLINE float_X operator()(const float_X N, const float_X omega, const plugins::radiation::vector_X observer_unit_vec) const
         {
             /* currently a fixed sigma of DELTA_T * c is used to describe the distribution - might become a parameter */
             float_X const exponent = omega * float_X( 0.5 ) * DELTA_T;
@@ -151,7 +153,7 @@ namespace macroParticleFormFactorGaussCell
         * @param observer_unit_vec = observation direction
         * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 ) \f$
         */
-        HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
+        HDINLINE float_X operator()(const float_X N, const float_X omega, const plugins::radiation::vector_X observer_unit_vec) const
         {
             float_X const widthExponent = observer_unit_vec.x() * CELL_WIDTH / ( SPEED_OF_LIGHT * float_X(2.0) ) * omega;
             float_X const heightExponent = observer_unit_vec.y() * CELL_HEIGHT / ( SPEED_OF_LIGHT * float_X(2.0) ) * omega;
@@ -183,7 +185,7 @@ namespace macroParticleFormFactorIncoherent
         * @param observer_unit_vec = observation direction
         * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 == \sqrt(weighting) \f$
         */
-        HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
+        HDINLINE float_X operator()(const float_X N, const float_X omega, const plugins::radiation::vector_X observer_unit_vec) const
         {
             return math::sqrt(N);
         }
@@ -203,7 +205,7 @@ namespace macroParticleFormFactorCoherent
         * @param observer_unit_vec = observation direction
         * @return the Form Factor: \f$ \sqrt( | \mathcal{F} |^2 == \sqrt(weighting) \f$
         */
-        HDINLINE float_X operator()(const float_X N, const float_X omega, const vector_X observer_unit_vec) const
+        HDINLINE float_X operator()(const float_X N, const float_X omega, const plugins::radiation::vector_X observer_unit_vec) const
         {
             return N;
         }
@@ -211,4 +213,5 @@ namespace macroParticleFormFactorCoherent
 
 } // macroParticleFormFactorcoherent
 } // namespace transitionRadiation
+} // namespace plugins
 } // namespace picongpu

@@ -19,17 +19,17 @@
 
 /** @file
  *
- * Definition of frequency space, number of observers, filters, form factors and
- * window functions of the radiation plugin.
+ * Definition of frequency space, number of observers, filters and form factors of 
+ * the transition radiation plugin.
  *
  * All values set here determine what the radiation plugin will compute.
- * The observation direction is defined in a seperate file `radiationObserver.param`.
- * On the comand line the plugin still needs to be called for each species the radiation
- * should be computed for.
+ * On the comand line the plugin still needs to be called for each species the 
+ * transition radiation should be computed for.
  */
 #pragma once
 
 /**
+ * Uses the same verbose level schemes as the radiation plugin.
  * radiation verbose level:
  * 0=nothing, 1=physics, 2=simulation_state, 4=memory, 8=critical
  */
@@ -41,6 +41,8 @@
 #include "picongpu/particles/manipulators/manipulators.def"
 
 namespace picongpu
+{
+namespace plugins
 {
 namespace transitionRadiation
 {
@@ -55,9 +57,9 @@ namespace linearFrequencies
     }
 
     //! number of frequency values to compute in the linear frequency [unitless]
-    constexpr unsigned int nOmega = 128;
+    constexpr unsigned int nOmega = 512;
 
-}
+} // namespace linearFrequencies
 
 namespace logFrequencies
 {
@@ -66,13 +68,13 @@ namespace logFrequencies
         //! mimimum frequency of the logarithmic frequency scale in units of [1/s]
         constexpr float_64 omegaMin = 1.0e13;
         //! maximum frequency of the logarithmic frequency scale in units of [1/s]
-        constexpr float_64 omegaMax = 1.0e16;
+        constexpr float_64 omegaMax = 1.0e17;
     }
 
     //! number of frequency values to compute in the logarithmic frequency [unitless] 
     constexpr unsigned int nOmega = 256;
 
-}
+} // namespace logFrequencies
 
 
 namespace listFrequencies
@@ -82,7 +84,7 @@ namespace listFrequencies
     //! number of frequency values to compute if frequencies are given in a file [unitless]
     constexpr unsigned int nOmega = 512;
 
-}
+} // namespace listFrequencies
 
 
     /** selected mode of frequency scaling:
@@ -136,7 +138,6 @@ namespace listFrequencies
         // phi goes from 0 to 2*pi
         constexpr float_64 phiMin = 0.0;
         constexpr float_64 phiMax = 2 * picongpu::PI;
-
     } /* end namespace parameters */
 
 
@@ -172,5 +173,78 @@ namespace listFrequencies
         GammaFilterFunctor
     >;
 
-} //namespace transitionRadiation
-}//namespace picongpu
+    /** Compute observation angles
+     *
+     * This function is used in the transition radiation plugin kernel to compute
+     * the observation directions given as a unit vector pointing
+     * towards a 'virtual' detector
+     *
+     * This default setup is an example of a 2D detector array. It computes
+     * observation directions for 2D virtual detector field
+     * with its center pointing toward the +y direction (for theta=0, phi=0)
+     * with observation angles ranging from
+     * theta = [angle_theta_start : angle_theta_end]
+     * phi   = [angle_phi_start   : angle_phi_end  ]
+     * Every observation_id_extern index moves the phi angle from its
+     * start value toward its end value until the observation_id_extern
+     * reaches N_split. After that the theta angle moves further from its
+     * start value towards its end value while phi is reset to its start
+     * value.
+     *
+     * The unit vector pointing towards the observing virtual detector
+     * can be described using theta and phi by:
+     * x_value = sin(theta) * cos(phi)
+     * y_value = cos(theta)
+     * z_value = sin(theta) * sin(phi)
+     * These are the standard spherical coordinates.
+     *
+     * The example setup describes an detector array of
+     * 128X128 detectors ranging from 0 to pi for the azimuth angle
+     * theta and from 0 to 2 pi for the polar angle phi.
+     *
+     * @param    observation_id_extern
+     *           int index that identifies each block on the GPU
+     *           to compute the observation direction
+     *
+     * @return   unit vector pointing in observation direction
+     *           type: float3_X
+     */
+    HDINLINE float3_X observationDirection(const int observation_id_extern)
+    {
+        /* generate two indices from single block index */
+        /** split distance of given index
+         * pseudo-code:
+         * index_a = index / split_distance
+         * index_b = index % split_distance
+         */
+        /** get index for computing angle theta: */
+        const int indexTheta = observation_id_extern / parameters::nPhi;
+        /** get index for computing angle phi: */
+        const int indexPhi = observation_id_extern % parameters::nPhi;
+
+        /** step width angle theta */
+        const picongpu::float_64 deltaTheta = ( parameters::thetaMax - 
+            parameters::thetaMin ) / ( parameters::nTheta - 1.0 );
+        /** step width angle phi */
+        const picongpu::float_64 deltaPhi = ( parameters::phiMax -
+            parameters::phiMin ) / ( parameters::nPhi - 1.0 );
+
+        /** compute observation angles theta */
+        const picongpu::float_64 theta( indexTheta * deltaTheta + parameters::thetaMin );
+        /** compute observation angles phi */
+        const picongpu::float_64 phi( indexPhi * deltaPhi - parameters::phiMin );
+
+        /* helper functions for efficient trigonometric calculations */
+        picongpu::float_32 sinPhi;
+        picongpu::float_32 cosPhi;
+        picongpu::float_32 sinTheta;
+        picongpu::float_32 cosTheta;
+        math::sincos( precisionCast< picongpu::float_32 >( phi ), sinPhi, cosPhi );
+        math::sincos( precisionCast< picongpu::float_32 >( theta ), sinTheta, cosTheta );
+        /** compute observation unit vector */
+        return float3_X( sinTheta * cosPhi , cosTheta, sinTheta * sinPhi ) ;
+    }     
+    
+} // namespace transitionRadiation
+} // namespace plugins
+} // namespace picongpu
