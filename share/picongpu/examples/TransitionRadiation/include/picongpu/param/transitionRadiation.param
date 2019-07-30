@@ -40,10 +40,24 @@
 #include "picongpu/traits/attribute/GetMass.hpp"
 #include "picongpu/particles/manipulators/manipulators.def"
 
+
 namespace picongpu
 {
 namespace plugins
 {
+// initiate the formfactor namespaces from the radiation plugin
+namespace radiation
+{
+    namespace radFormFactor_CIC_3D { }
+    namespace radFormFactor_TSC_3D { }
+    namespace radFormFactor_PCS_3D { }
+    namespace radFormFactor_CIC_1Dy { }
+    namespace radFormFactor_Gauss_spherical { }
+    namespace radFormFactor_Gauss_cell { }
+    namespace radFormFactor_incoherent { }
+    namespace radFormFactor_coherent { }
+} // namespace radiation
+
 namespace transitionRadiation
 {
 namespace linearFrequencies
@@ -100,27 +114,19 @@ namespace listFrequencies
 
 
     /** correct treatment of coherent radiation from macro particles
-     *
+     * 
+     * These formfactors are the same as in the radiation plugin!
      * Choose different form factors in order to consider different particle shapes for radiation
-     *  - macroParticleFormFactorCIC_3D ... CIC charge distribution
-     *  - macroParticleFormFactorTSC_3D ... TSC charge distribution
-     *  - macroParticleFormFactorPCS_3D ... PCS charge distribution
-     *  - macroParticleFormFactorCIC_1Dy ... only CIC charge distribution in y
-     *  - macroParticleFormFactorGauss_spherical ... symmetric Gauss charge distribution
-     *  - macroParticleFormFactorGauss_cell ... Gauss charge distribution according to cell size
-     *  - macroParticleFormFactorincoherent ... only incoherent radiation
-     *  - macroParticleFormFactorcoherent ... only coherent radiation
+     *  - radFormFactor_CIC_3D ... CIC charge distribution
+     *  - radFormFactor_TSC_3D ... TSC charge distribution
+     *  - radFormFactor_PCS_3D ... PCS charge distribution
+     *  - radFormFactor_CIC_1Dy ... only CIC charge distribution in y
+     *  - radFormFactor_Gauss_spherical ... symmetric Gauss charge distribution
+     *  - radFormFactor_Gauss_cell ... Gauss charge distribution according to cell size
+     *  - radFormFactor_incoherent ... only incoherent radiation
+     *  - radFormFactor_coherent ... only coherent radiation
      */
-    namespace macroParticleFormFactorCIC_3D { }
-    namespace macroParticleFormFactorTSC_3D { }
-    namespace macroParticleFormFactorPCS_3D { }
-    namespace macroParticleFormFactorCIC_1Dy { }
-    namespace macroParticleFormFactorGaussSpherical { }
-    namespace macroParticleFormFactorGaussCell { }
-    namespace macroParticleFormFactorIncoherent { }
-    namespace macroParticleFormFactorCoherent { }
-
-    namespace macroParticleFormFactor = macroParticleFormFactorGaussSpherical;
+    namespace macroParticleFormFactor = ::picongpu::plugins::radiation::radFormFactor_Gauss_spherical;
 
     ///////////////////////////////////////////////////////////
 
