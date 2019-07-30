@@ -64,7 +64,9 @@ namespace transitionRadiation
         float_X 
         getU( ) const
         {
-            return calcU( getMomentum( ) );
+            float_X const gamma = calcGamma( momentum );
+            float_X const beta = calcBeta( momentum );
+            return gamma * beta;
         }
 
         //! @return velocity v = beta * c
@@ -72,7 +74,7 @@ namespace transitionRadiation
         float_X 
         getVel( ) const
         {
-            return calcBeta( getMomentum( ) ) * picongpu::SPEED_OF_LIGHT;
+            return calcBeta( momentum ) * picongpu::SPEED_OF_LIGHT;
         }
 
         //! @return polar angle phi of momentum
@@ -80,7 +82,11 @@ namespace transitionRadiation
         float_X 
         getMomPhi( ) const
         {
-            return calcMomPhi( );
+            // add pi to atan2 function, because phi is in range from 0 to 2 pi
+            return picongpu::math::atan2(
+                momentum.x( ), 
+                momentum.z( )
+            ) + picongpu::PI;
         }
 
         //! @return azimuth angle psi of momentum
@@ -88,7 +94,12 @@ namespace transitionRadiation
         float_X 
         getMomTheta( ) const
         {
-            return calcMomTheta( );
+            //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<y
+            float_X const momAbs = getMomAbs( );
+            if( momAbs <= momentum.y( ) )
+                return 0.0;
+            else
+                return picongpu::math::acos( momentum.y( ) * ( 1.0 / momAbs ) );
         }
 
         //! @return absolute value of momentum
@@ -96,7 +107,11 @@ namespace transitionRadiation
         float_X 
         getMomAbs( ) const
         {
-            return calcMomAbs( );
+            return picongpu::math::sqrt( 
+                momentum.x( ) * momentum.x( ) + 
+                momentum.y( ) * momentum.y( ) + 
+                momentum.z( ) * momentum.z( ) 
+            );
         }
         
         //! @return radial, perpendicular component of location in cylindrical coordinates
@@ -104,7 +119,10 @@ namespace transitionRadiation
         float_X 
         getPosPerp( ) const
         {
-            return calcPosRho( );
+            return picongpu::math::sqrt(
+                location.x( ) * location.x( ) + 
+                location.z( ) * location.z( )
+            );
         }
 
         //! @return parallel component to y of location in cylindrical coordinates
@@ -120,7 +138,11 @@ namespace transitionRadiation
         float_X 
         getPosPhi( ) const
         {
-            return calcPosPhi( );
+            // add pi to atan2 function, because phi is in range from 0 to 2 pi
+            return picongpu::math::atan2(
+                location.x( ), 
+                location.z( )
+            ) + picongpu::PI;
         }
 
     private:
@@ -142,82 +164,10 @@ namespace transitionRadiation
             float3_X const & momentum
         ) const
         {
-            float_X const x = 1.0 / ( mass * picongpu::SPEED_OF_LIGHT ) * ( mass * picongpu::SPEED_OF_LIGHT );
+            float_X const massTimesC = mass * picongpu::SPEED_OF_LIGHT;
             return picongpu::math::sqrt( 
-                1.0 + ( momentum * momentum ).sumOfComponents( ) * x 
+                1.0 + ( momentum * momentum ).sumOfComponents( ) / ( massTimesC * massTimesC )
             );
-        }
-
-        //! @return normalized momentum u = gamma * beta
-        HDINLINE 
-        float_X 
-        calcU(
-            float3_X const & momentum
-        ) const
-        {
-            float_X const gamma = calcGamma( momentum );
-            float_X const beta = calcBeta( momentum );
-            return gamma * beta;
-        }
-
-        //! @return polar angle phi of momentum
-        HDINLINE
-        float_X 
-        calcMomPhi( ) const
-        {
-            // add pi to atan2 function, because phi is in range from 0 to 2 pi
-            return picongpu::math::atan2(
-                momentum.x( ), 
-                momentum.z( )
-            ) + picongpu::PI;
-        }
-
-        //! @return azimuth angle psi of momentum
-        HDINLINE
-        float_X 
-        calcMomTheta( ) const
-        {
-            //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<y
-            float_X const momAbs = getMomAbs( );
-            if( momAbs <= momentum.y( ) )
-                return 0.0;
-            else
-                return picongpu::math::acos( momentum.y( ) * ( 1.0 / momAbs ) );
-        }
-
-        //! @return absolute value of momentum
-        HDINLINE
-        float_X 
-        calcMomAbs( ) const
-        {
-            return picongpu::math::sqrt( 
-                momentum.x( ) * momentum.x( ) + 
-                momentum.y( ) * momentum.y( ) + 
-                momentum.z( ) * momentum.z( ) 
-            );
-        }
-
-        //! @return radial component of location in cylindrical coordinates
-        HDINLINE
-        float_X 
-        calcPosRho( ) const
-        {
-            return picongpu::math::sqrt(
-                location.x( ) * location.x( ) + 
-                location.z( ) * location.z( )
-            );
-        }
-
-        //! @return radial angle phi of location in cylindrical coordinates
-        HDINLINE
-        float_X 
-        calcPosPhi( ) const
-        {
-            // add pi to atan2 function, because phi is in range from 0 to 2 pi
-            return picongpu::math::atan2(
-                location.x( ), 
-                location.z( )
-            ) + picongpu::PI;
         }
     }; // class Particle
     
