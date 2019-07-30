@@ -130,10 +130,10 @@ namespace transitionRadiation
             pluginName( "TransitionRadiation: calculate transition radiation of species" ),
             speciesName( T_ParticlesType::FrameType::getName( ) ),
             pluginPrefix( speciesName + std::string( "_transRad" ) ),
-            folderTransRad( "transRad" )
+            folderTransRad( "transRad" ),
+            filenamePrefix( pluginPrefix )
         {
             Environment< >::get( ).PluginConnector( ).registerPlugin( this );
-            std::cout << "Oy";
         }
 
         virtual 

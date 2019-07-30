@@ -39,7 +39,7 @@ namespace transitionRadiation
     /** Calculator class for calculation of transition radiation.
      * 
      * @param particleSet transitionRadiation::Particle to compute transition radiation for
-     * @param lookDirection vector with observation direction
+     * @param lookDirection vector of observation direction
      */
     class Calculator
     {
