@@ -32,8 +32,8 @@ namespace transitionRadiation
     using complex_64 = pmacc::math::Complex< float_64 >;
 
     /* Arbitrary margin which is necessary to prevent division by 0 error
-        * created by particles moving in the plane of the foil.
-        */
+     * created by particles moving in the plane of the foil.
+     */
     float_X const DIV_BY_ZERO_MINIMUM = 1.e-7;
 
     /** Calculator class for calculation of transition radiation.
@@ -56,6 +56,7 @@ namespace transitionRadiation
         float_X detectorSinTheta;
         float_X detectorCosTheta;
         float_X const detectorPhi;
+        float_X const uSquared;
         float_X const parSqrtOnePlusUSquared;
 
     public: 
@@ -74,8 +75,9 @@ namespace transitionRadiation
                     lookDirection.x( )
                 ) + picongpu::PI
             ),
+            uSquared( particle.getU( ) * particle.getU( ) ),
             parSqrtOnePlusUSquared( 
-                picongpu::math::sqrt( 1 + particle.getU( ) * particle.getU( ) ) 
+                picongpu::math::sqrt( 1 + uSquared ) 
             )
         { 
             // frequent calculations
@@ -117,7 +119,6 @@ namespace transitionRadiation
         calcEnergyPerp( ) const
         {
             // a, x and y are temporary variables without an explicit physical meaning
-            float_X const uSquared = particle.getU( ) * particle.getU( );
             float_X const a = uSquared * parMomCosTheta * parMomSinTheta * 
                 parMomSinPhi * detectorCosTheta;
 
@@ -224,11 +225,10 @@ namespace transitionRadiation
         complex_X const exponent
     )
     {
-        // If case for longitudinal moving particles
-        if ( exponent.get_real() == -1.0 )
-            return complex_X( 0.0, 0.0 );
-        else
-            return complex_X( 
+        // preventing division by 0
+        const bool longMovingParticle = exponent.get_real() == -1.0;
+        return float_X( longMovingParticle ) * complex_X( 0.0, 0.0 ) + 
+            float_X( !longMovingParticle ) * complex_X( 
                 math::exp( 
                     exponent * omega
                 ) 
