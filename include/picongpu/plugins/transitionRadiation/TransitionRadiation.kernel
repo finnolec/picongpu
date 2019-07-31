@@ -333,7 +333,6 @@ namespace transitionRadiation
                         complex_X ctrSumPerp = complex_X( 0.0, 0.0 );
 
                         // create a form factor object for physical correct coherence effects within macro-particles
-                        //picongpu::plugins::radiation::macroParticleFormFactor::radFormFactor const macroParticleFormFactor{ };
                         macroParticleFormFactor::radFormFactor const macroParticleFormFactor{ };
 
                         for( int j = 0; j < counter_s; ++j )
