@@ -77,8 +77,8 @@ class TransitionRadiationData(DataReader):
 
     def _get_for_iteration(self, iteration=None, **kwargs):
         """
-        Returns data for transition radiation visualization as specified with "type" for
-        transition_radiation_visualizer.py
+        Returns data for transition radiation visualization as specified with
+        "type" for transition_radiation_visualizer.py
 
         Parameters
         ----------
@@ -97,7 +97,8 @@ class TransitionRadiationData(DataReader):
 
         # Do loading once and store them in ram
         if self.data is None:
-            data_file_path = self.get_data_path(species=kwargs["species"], iteration=iteration)
+            data_file_path = self.get_data_path(species=kwargs["species"],
+                                                iteration=iteration)
 
             # Actual loading of data
             self.data = np.loadtxt(data_file_path)
@@ -107,19 +108,23 @@ class TransitionRadiationData(DataReader):
             parameters = f.readlines()[0].split("\t")
             f.close()
 
-            # Create discretized arrays or angles and frequency as they are discretized for the
-            # calculation in PIConGPU. This is necessary for the labels for the axes.
+            # Create discretized arrays or angles and frequency as they are
+            # discretized for the
+            # calculation in PIConGPU. This is necessary for the labels for
+            # the axes.
             indexOffset = 2
             if parameters[1] == "log":
-                self.omegas = np.logspace(np.log10(float(parameters[1 + indexOffset])),
-                                          np.log10(float(parameters[2 + indexOffset])),
-                                          int(parameters[0 + indexOffset]))
+                self.omegas = np.logspace(
+                    np.log10(float(parameters[1 + indexOffset])),
+                    np.log10(float(parameters[2 + indexOffset])),
+                    int(parameters[0 + indexOffset]))
             elif parameters[1] == "lin":
                 self.omegas = np.linspace(float(parameters[1 + indexOffset]),
                                           float(parameters[2 + indexOffset]),
                                           int(parameters[0 + indexOffset]))
             elif parameters[1] == "list":
-                self.omegas = np.loadtxt(self.get_data_path() + parameters[0 + indexOffset])
+                self.omegas = np.loadtxt(
+                    self.get_data_path() + parameters[0 + indexOffset])
                 indexOffset += 2
             self.phis = np.linspace(float(parameters[4 + indexOffset]),
                                     float(parameters[5 + indexOffset]),
@@ -132,7 +137,8 @@ class TransitionRadiationData(DataReader):
 
     def get_data(self, iteration=None, **kwargs):
         """
-        Calculates data as specified with "type" for the plot from transition_radiation_visualizer.py.
+        Calculates data as specified with "type" for the plot from
+        transition_radiation_visualizer.py.
 
         Parameters
         ----------
@@ -151,11 +157,14 @@ class TransitionRadiationData(DataReader):
                 name of figure type. valid figure types are:
                     'spectrum' - (default) plots transition radiation spectrum
                         at angles theta and phi over the frequency omega
-                    'sliceovertheta' - shows angular distribution of transition radiation
+                    'sliceovertheta' - shows angular distribution of
+                    transition radiation
                         at a fixed angle phi and frequency omega
-                    'sliceoverphi' - shows angular distribution of transition radiation
+                    'sliceoverphi' - shows angular distribution of
+                    transition radiation
                         at a fixed angle theta and frequency omega
-                    'heatmap' - shows angular distribution as heatmap over both observation angles
+                    'heatmap' - shows angular distribution as heatmap over
+                    both observation angles
             phi: int
                 index of polar angle for a fixed value
             theta: int
@@ -165,13 +174,15 @@ class TransitionRadiationData(DataReader):
 
         Returns
         -------
-        A tuple of the x and y values for the plot as one dimensional arrays for normal figures
+        A tuple of the x and y values for the plot as one dimensional arrays
+        for normal figures
         (not heatmaps) and as colormeshes for heatmaps.
         """
         if iteration is None:
             raise ValueError("Can't return data for an unknown iteration!")
         if self.data is None:
-            self.data = self._get_for_iteration(kwargs["species"], iteration, **kwargs)
+            self.data = self._get_for_iteration(kwargs["species"], iteration,
+                                                **kwargs)
 
         # Specify plot type
         type = kwargs["type"]
@@ -198,7 +209,8 @@ class TransitionRadiationData(DataReader):
                 raise ValueError("Invalid index for Omega!")
 
         if type == "spectrum":
-            # find phi and theta with maximum intensity if they are not given as parameters
+            # find phi and theta with maximum intensity if they are not
+            # given as parameters
             if theta is None and phi is None:
                 maxIndex = np.argmax(self.data[:, :], 0)
                 theta = int(np.floor(maxIndex[0] / len(self.phis)))
@@ -206,12 +218,16 @@ class TransitionRadiationData(DataReader):
             elif theta is None and phi is not None:
                 theta = np.argmax(self.data[phi::len(self.phis), :], 0)[0]
             elif theta is not None and phi is None:
-                phi = np.argmax(self.data[theta * len(self.phis):(theta + 1) * len(self.phis):, :], 0)[0]
+                phi = np.argmax(self.data[
+                                theta * len(self.phis):(theta + 1) * len(
+                                    self.phis):, :], 0)[0]
 
-            print("Spectrum is plotted at phi={:.2e} and theta={:.2e}".format(self.phis[phi], self.thetas[theta]))
+            print("Spectrum is plotted at phi={:.2e} and theta={:.2e}".format(
+                self.phis[phi], self.thetas[theta]))
             return self.omegas, self.data[theta * len(self.phis) + phi, :]
         elif type == "sliceovertheta":
-            # find phi and omega with maximum intensity if they are not given as parameters
+            # find phi and omega with maximum intensity if they are not
+            # given as parameters
             if omega is None and phi is None:
                 maxIndex = np.argmax(self.data[:, :], 0)
                 phi = maxIndex[0] % len(self.phis)
@@ -223,10 +239,12 @@ class TransitionRadiationData(DataReader):
                 omega = 0
 
             print("Angular intensity distribution is sliced at phi={:.2e} "
-                  "with omega={:.2e}.".format(self.phis[phi], self.omegas[omega]))
+                  "with omega={:.2e}.".format(self.phis[phi],
+                                              self.omegas[omega]))
             return self.thetas, self.data[phi::len(self.phis), omega]
         elif type == "sliceoverphi":
-            # find theta and omega with maximum intensity if they are not given as parameters
+            # find theta and omega with maximum intensity if they are not
+            # given as parameters
             if theta is None and omega is None:
                 maxIndex = np.argmax(self.data[:, :], 0)
                 theta = int(np.floor(maxIndex[0] / len(self.phis)))
@@ -238,8 +256,11 @@ class TransitionRadiationData(DataReader):
                 theta = int(np.floor(maxIndex / len(self.phis)))
 
             print("Angular intensity distribution is sliced at theta={:.2e} "
-                  "with omega={:.2e}.".format(self.thetas[theta], self.omegas[omega]))
-            return self.phis, self.data[theta * len(self.phis):(theta + 1) * len(self.phis), omega]
+                  "with omega={:.2e}.".format(self.thetas[theta],
+                                              self.omegas[omega]))
+            return self.phis, self.data[
+                              theta * len(self.phis):(theta + 1) * len(
+                                  self.phis), omega]
         elif type == "heatmap":
             # find omega with maximum intensity if it is not given as parameter
             if omega is None:
@@ -248,7 +269,8 @@ class TransitionRadiationData(DataReader):
             theta_mesh, phi_mesh = np.meshgrid(self.thetas, self.phis)
 
             print("Heatmap is for omega={:.2e}.".format(self.omegas[omega]))
-            return theta_mesh, phi_mesh, self.data[::, omega].reshape((len(self.thetas), len(self.phis))).transpose()
+            return theta_mesh, phi_mesh, self.data[::, omega].reshape(
+                (len(self.thetas), len(self.phis))).transpose()
         else:
             raise ValueError("Illegal type of figure!")
 
