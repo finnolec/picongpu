@@ -192,8 +192,6 @@ class TransitionRadiationData(DataReader):
         phi = kwargs["phi"]
         omega = kwargs["omega"]
 
-        print(kwargs)
-
         # Cast parameters to int and check for legitimacy
         if theta is not None:
             theta = int(theta)
