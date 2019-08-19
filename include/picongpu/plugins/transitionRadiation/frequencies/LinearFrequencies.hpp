@@ -57,19 +57,19 @@ namespace linearFrequencies
             return FreqFunctor( );
         }
     }; // InitFreqFunctor
-    
+
     //! @return frequency params as string
     HINLINE
-    std::string 
+    std::string
     getParameters( void )
     {
         std::string params = std::string( "lin\t" );
         params += std::to_string( nOmega ) + "\t";
         params += std::to_string( SI::omegaMin ) + "\t";
         params += std::to_string( SI::omegaMax ) + "\t";
-        return params; 
+        return params;
     }
-    
+
 } // namespace linearFrequencies
 } // namespace transitionRadiation
 } // namespace plugins

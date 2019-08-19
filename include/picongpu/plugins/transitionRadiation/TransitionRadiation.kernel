@@ -47,7 +47,7 @@ namespace plugins
 namespace transitionRadiation
 {
 /** Kernel for computation of transition radiation on GPUs.
- * 
+ *
  * @tparam T_numWorkers maximal CUDA threads
  * @tparam T_ParBox box with particles
  * @tparam T_DBox box with float data
@@ -158,7 +158,7 @@ namespace transitionRadiation
                     superCellsCount,
                     superCellIndex
                 ) + guardingSuperCells;
-                    
+
 
                 // -guardingSuperCells remove guarding block
                 DataSpace< simDim > const superCellOffset(
@@ -279,8 +279,8 @@ namespace transitionRadiation
                                         particleLocation[ 2 ] = 0.0;
                                         // run over all components and compute gobal position
                                         for( int i = 0; i < simDim; ++i )
-                                            particleLocation[ i ] = ( 
-                                                float_X( globalPos[ i ] ) + pos[ i ] 
+                                            particleLocation[ i ] = (
+                                                float_X( globalPos[ i ] ) + pos[ i ]
                                             ) * cellSize[ i ];
 
                                         /* get macro-particle weighting
@@ -320,7 +320,7 @@ namespace transitionRadiation
                                     }
                                 } // only moving particles
                             } // only threads with particle
-                        } 
+                        }
                     ); // for each particle
                     __syncthreads( );
 
@@ -339,17 +339,17 @@ namespace transitionRadiation
                         {
                             float_X const omega = freqFkt( o );
                             complex_X const formfactor = transitionRadiation::calcFormFactor(
-                                omega, 
+                                omega,
                                 formfactorExponent_s[ j ]
-                            ) * macroParticleFormFactor( 
+                            ) * macroParticleFormFactor(
                                 radWeighting_s[ j ],
                                 omega,
                                 look
                             );
 
-                            itrSum += radWeighting_s[ j ] * ( 
-                                energyPerp_s[ j ] * energyPerp_s[ j ] + 
-                                energyPara_s[ j ] * energyPara_s[ j ] 
+                            itrSum += radWeighting_s[ j ] * (
+                                energyPerp_s[ j ] * energyPerp_s[ j ] +
+                                energyPara_s[ j ] * energyPara_s[ j ]
                             );
                             totalParticles += radWeighting_s[ j ];
 
@@ -358,9 +358,9 @@ namespace transitionRadiation
                         }
 
                         int const index = theta_idx * transitionRadiation::frequencies::nOmega + o;
-                        incTransRad[ index ] += itrSum; 
+                        incTransRad[ index ] += itrSum;
                         numParticles[ index ] += totalParticles;
-                        cohTransRadPara[ index ] += ctrSumPara; 
+                        cohTransRadPara[ index ] += ctrSumPara;
                         cohTransRadPerp[ index ] += ctrSumPerp;
                     }
 
@@ -375,10 +375,10 @@ namespace transitionRadiation
                     particlesInFrame = frameSize;
                     frame = pb.getPreviousFrame( frame );
                 } // while frame is valid
-            } // for all supercells 
+            } // for all supercells
         }
     }; // struct KernelTransRad
-    
+
 } // namespace transitionRadiation
 } // namespace plugins
 } // namespace picongpu

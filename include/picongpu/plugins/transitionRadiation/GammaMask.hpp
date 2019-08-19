@@ -84,7 +84,7 @@ namespace transitionRadiation
         >::type::value;
         return GetTransitionRadiationMask< hasTransitionRadiationMask >{}( particle );
     }
-    
+
 } // namespace transitionRadiation
 } // namespace plugins
 } // namespace picongpu

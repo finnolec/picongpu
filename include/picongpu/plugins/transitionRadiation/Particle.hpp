@@ -26,7 +26,7 @@ namespace plugins
 namespace transitionRadiation
 {
     /** Particle class for transition radiation calculation.
-     * 
+     *
      * @param locationSet global position of the macro-particle
      * @param momentumSet momentum of macro-particle
      * @param charge
@@ -39,29 +39,29 @@ namespace transitionRadiation
         float_X const mass;
 
     public:
-        HDINLINE 
-        Particle( 
-            float3_X const & locationSet, 
+        HDINLINE
+        Particle(
+            float3_X const & locationSet,
             float3_X const & momentumSet,
             float_X const massSet
         ) :
             location( locationSet ),
             momentum( momentumSet ),
             mass( massSet )
-        { 
+        {
         }
 
         //! @return momentum
-        HDINLINE 
-        float3_X 
+        HDINLINE
+        float3_X
         getMomentum( ) const
         {
             return momentum;
         }
 
         //! @return normalized momentum
-        HDINLINE 
-        float_X 
+        HDINLINE
+        float_X
         getU( ) const
         {
             float_X const gamma = calcGamma( momentum );
@@ -71,7 +71,7 @@ namespace transitionRadiation
 
         //! @return velocity v = beta * c
         HDINLINE
-        float_X 
+        float_X
         getVel( ) const
         {
             return calcBeta( momentum ) * picongpu::SPEED_OF_LIGHT;
@@ -79,19 +79,19 @@ namespace transitionRadiation
 
         //! @return polar angle phi of momentum
         HDINLINE
-        float_X 
+        float_X
         getMomPhi( ) const
         {
             // add pi to atan2 function, because phi is in range from 0 to 2 pi
             return picongpu::math::atan2(
-                momentum.x( ), 
+                momentum.x( ),
                 momentum.z( )
             ) + picongpu::PI;
         }
 
         //! @return azimuth angle psi of momentum
         HDINLINE
-        float_X 
+        float_X
         getMomTheta( ) const
         {
             //because of floating point precision x^2+y^2+z^2<y^2 for x,z<<y
@@ -104,30 +104,30 @@ namespace transitionRadiation
 
         //! @return absolute value of momentum
         HDINLINE
-        float_X 
+        float_X
         getMomAbs( ) const
         {
-            return picongpu::math::sqrt( 
-                momentum.x( ) * momentum.x( ) + 
-                momentum.y( ) * momentum.y( ) + 
-                momentum.z( ) * momentum.z( ) 
+            return picongpu::math::sqrt(
+                momentum.x( ) * momentum.x( ) +
+                momentum.y( ) * momentum.y( ) +
+                momentum.z( ) * momentum.z( )
             );
         }
-        
+
         //! @return radial, perpendicular component of location in cylindrical coordinates
         HDINLINE
-        float_X 
+        float_X
         getPosPerp( ) const
         {
             return picongpu::math::sqrt(
-                location.x( ) * location.x( ) + 
+                location.x( ) * location.x( ) +
                 location.z( ) * location.z( )
             );
         }
 
         //! @return parallel component to y of location in cylindrical coordinates
         HDINLINE
-        float_X 
+        float_X
         getPosPara( ) const
         {
             return location.y( );
@@ -135,20 +135,20 @@ namespace transitionRadiation
 
         //! @return polar angle of location in cylindrical coordinates
         HDINLINE
-        float_X 
+        float_X
         getPosPhi( ) const
         {
             // add pi to atan2 function, because phi is in range from 0 to 2 pi
             return picongpu::math::atan2(
-                location.x( ), 
+                location.x( ),
                 location.z( )
             ) + picongpu::PI;
         }
 
     private:
         //! @return beta=v/c
-        HDINLINE 
-        float_X 
+        HDINLINE
+        float_X
         calcBeta(
             float3_X const & momentum
         ) const
@@ -158,19 +158,19 @@ namespace transitionRadiation
         }
 
         //! @return gamma = E/(mc^2)
-        HDINLINE 
-        float_X 
+        HDINLINE
+        float_X
         calcGamma(
             float3_X const & momentum
         ) const
         {
             float_X const massTimesC = mass * picongpu::SPEED_OF_LIGHT;
-            return picongpu::math::sqrt( 
+            return picongpu::math::sqrt(
                 1.0 + ( momentum * momentum ).sumOfComponents( ) / ( massTimesC * massTimesC )
             );
         }
     }; // class Particle
-    
+
 } // namespace transitionRadiation
 } // namespace plugins
 } // namespace picongpu

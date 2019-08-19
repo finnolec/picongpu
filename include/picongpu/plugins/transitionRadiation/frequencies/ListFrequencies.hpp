@@ -85,7 +85,7 @@ namespace listFrequencies
 
             if( !freqListFile )
             {
-                throw std::runtime_error( std::string( "The radiation-frequency-file " ) + 
+                throw std::runtime_error( std::string( "The radiation-frequency-file " ) +
                     path + std::string( " could not be found.\n" ) );
             }
 
@@ -118,14 +118,14 @@ namespace listFrequencies
 
     //! @return frequency params as string
     HINLINE
-    std::string 
+    std::string
     getParameters( )
     {
         std::string params = std::string( "list\t" );
         params += std::string( listLocation ) + std::string( "\t" );
-        return params; 
+        return params;
     }
-    
+
 } // namespace listFrequencies
 } // namespace transitionRadiation
 } // namespace plugins
