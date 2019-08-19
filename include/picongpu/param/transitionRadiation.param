@@ -19,11 +19,11 @@
 
 /** @file
  *
- * Definition of frequency space, number of observers, filters and form factors of 
+ * Definition of frequency space, number of observers, filters and form factors of
  * the transition radiation plugin.
  *
  * All values set here determine what the radiation plugin will compute.
- * On the comand line the plugin still needs to be called for each species the 
+ * On the comand line the plugin still needs to be called for each species the
  * transition radiation should be computed for.
  */
 #pragma once
@@ -85,7 +85,7 @@ namespace logFrequencies
         constexpr float_64 omegaMax = 1.0e17;
     }
 
-    //! number of frequency values to compute in the logarithmic frequency [unitless] 
+    //! number of frequency values to compute in the logarithmic frequency [unitless]
     constexpr unsigned int nOmega = 256;
 
 } // namespace logFrequencies
@@ -114,7 +114,7 @@ namespace listFrequencies
 
 
     /** correct treatment of coherent radiation from macro particles
-     * 
+     *
      * These formfactors are the same as in the radiation plugin!
      * Choose different form factors in order to consider different particle shapes for radiation
      *  - ::picongpu::plugins::radiation::radFormFactor_CIC_3D ... CIC charge distribution
@@ -132,14 +132,14 @@ namespace listFrequencies
 
     namespace parameters
     {
-        // number of observation directions 
+        // number of observation directions
         constexpr unsigned int nPhi = 128;
         constexpr unsigned int nTheta = 128;
         constexpr unsigned int nObserver = nPhi * nTheta;
 
         // theta goes from 0 to pi
-        constexpr float_64 thetaMin = 0.0; 
-        constexpr float_64 thetaMax = picongpu::PI; 
+        constexpr float_64 thetaMin = 0.0;
+        constexpr float_64 thetaMax = picongpu::PI;
 
         // phi goes from 0 to 2*pi
         constexpr float_64 phiMin = 0.0;
@@ -229,7 +229,7 @@ namespace listFrequencies
         const int indexPhi = observation_id_extern % parameters::nPhi;
 
         /** step width angle theta */
-        const picongpu::float_64 deltaTheta = ( parameters::thetaMax - 
+        const picongpu::float_64 deltaTheta = ( parameters::thetaMax -
             parameters::thetaMin ) / ( parameters::nTheta - 1.0 );
         /** step width angle phi */
         const picongpu::float_64 deltaPhi = ( parameters::phiMax -
@@ -249,8 +249,8 @@ namespace listFrequencies
         math::sincos( precisionCast< picongpu::float_32 >( theta ), sinTheta, cosTheta );
         /** compute observation unit vector */
         return float3_X( sinTheta * cosPhi , cosTheta, sinTheta * sinPhi ) ;
-    }     
-    
+    }
+
 } // namespace transitionRadiation
 } // namespace plugins
 } // namespace picongpu

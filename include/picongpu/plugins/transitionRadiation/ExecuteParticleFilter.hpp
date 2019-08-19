@@ -93,7 +93,7 @@ namespace transitionRadiation
 
         return ExecuteParticleFilter< hasRadiationFilter >{ }( species, currentStep );
     }
-    
+
 } // namespace transitionRadiation
 } // namespace plugins
 } // namespace picongpu
