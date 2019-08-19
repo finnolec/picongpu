@@ -46,7 +46,7 @@ namespace transitionRadiation
 
     private:
         transitionRadiation::Particle const & particle;
-        float3_X const lookDirection;
+        float3_X const & lookDirection;
 
         float_X parMomSinTheta;
         float_X parMomCosTheta;
@@ -63,7 +63,7 @@ namespace transitionRadiation
         HDINLINE
         Calculator(
             transitionRadiation::Particle const & particleSet,
-            float3_X const lookDirection
+            float3_X const & lookDirection
         ) : 
             particle( particleSet ),
             lookDirection( lookDirection ),
