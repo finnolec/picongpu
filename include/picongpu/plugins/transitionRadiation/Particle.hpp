@@ -35,13 +35,16 @@ namespace transitionRadiation
     {
     private:
         float3_X const & momentum;
-        float3_X const & location;
+        float3_X location;
         float_X const mass;
+        float_X gamma;
+        float3_X beta;
+        float_X betaAbs;
 
     public:
         HDINLINE
         Particle(
-            float3_X const & locationSet,
+            float3_X const locationSet,
             float3_X const & momentumSet,
             float_X const massSet
         ) :
@@ -49,6 +52,9 @@ namespace transitionRadiation
             momentum( momentumSet ),
             mass( massSet )
         {
+            gamma = calcGamma( );
+            beta = calcBeta( );
+            betaAbs = math::sqrt( ( beta * beta ).sumOfComponents( ) );
         }
 
         //! @return momentum
@@ -64,9 +70,7 @@ namespace transitionRadiation
         float_X
         getU( ) const
         {
-            float_X const gamma = calcGamma( momentum );
-            float_X const beta = calcBeta( momentum );
-            return gamma * beta;
+            return gamma * betaAbs;
         }
 
         //! @return velocity v = beta * c
@@ -74,7 +78,15 @@ namespace transitionRadiation
         float_X
         getVel( ) const
         {
-            return calcBeta( momentum ) * picongpu::SPEED_OF_LIGHT;
+            return betaAbs * picongpu::SPEED_OF_LIGHT;
+        }
+
+        //! propagates the current window to the foil position
+        HDINLINE
+        void
+        propagate( const float_X & propagationDistance )
+        {
+            location += propagationDistance * beta;
         }
 
         //! @return polar angle phi of momentum
@@ -146,23 +158,19 @@ namespace transitionRadiation
         }
 
     private:
+        // gamma has to be calculated before calling this function
         //! @return beta=v/c
         HDINLINE
-        float_X
-        calcBeta(
-            float3_X const & momentum
-        ) const
+        float3_X
+        calcBeta( ) const
         {
-            float_X const gamma = calcGamma(momentum);
-            return picongpu::math::sqrt(1.0 - 1.0 / (gamma * gamma) );
+            return momentum * (1.0 / (mass * picongpu::SPEED_OF_LIGHT * gamma));
         }
 
         //! @return gamma = E/(mc^2)
         HDINLINE
         float_X
-        calcGamma(
-            float3_X const & momentum
-        ) const
+        calcGamma( ) const
         {
             float_X const massTimesC = mass * picongpu::SPEED_OF_LIGHT;
             return picongpu::math::sqrt(
