@@ -302,7 +302,7 @@ namespace transitionRadiation
                                         );
 
                                         // using transition radiation particle class
-                                        transitionRadiation::Particle const particle(
+                                        transitionRadiation::Particle particle(
                                             particleLocation,
                                             particleMomentum,
                                             particleMass
