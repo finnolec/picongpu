@@ -144,6 +144,17 @@ namespace listFrequencies
         // phi goes from 0 to 2*pi
         constexpr float_64 phiMin = 0.0;
         constexpr float_64 phiMax = 2 * picongpu::PI;
+<<<<<<< HEAD
+=======
+
+        namespace SI
+        {
+            // z position of the foil to calculate transition radiation at
+            // leave at 0 for no virtual particle propagation
+            constexpr float_64 foilPosition = 0.0;
+        }
+
+>>>>>>> virtualPropagation
     } /* end namespace parameters */
 
 

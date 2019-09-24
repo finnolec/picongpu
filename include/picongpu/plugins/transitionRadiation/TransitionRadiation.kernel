@@ -147,6 +147,9 @@ namespace transitionRadiation
             // get absolute number of relevant super cells
             int const numSuperCells = superCellsCount.productOfComponents( );
 
+            // propagation distance for the particle bunch
+            float_X const propagationDistance = parameters::foilPosition - globalOffset[ 1 ];
+
 
             /* go over all super cells on GPU
             * but ignore all guarding supercells
@@ -154,7 +157,7 @@ namespace transitionRadiation
             for( int superCellIndex = 0; superCellIndex <= numSuperCells; ++superCellIndex )
             {
                 // select SuperCell and add one sided guard again
-                DataSpace< simDim > const superCell = DataSpaceOperations<simDim>::map(
+                DataSpace< simDim > const superCell = DataSpaceOperations< simDim >::map(
                     superCellsCount,
                     superCellIndex
                 ) + guardingSuperCells;
@@ -304,6 +307,10 @@ namespace transitionRadiation
                                             particleMomentum,
                                             particleMass
                                         );
+
+                                        // only propagate particles if it is set up in transitionRadiation.param
+                                        if(  parameters::foilPosition != 0.0 )
+                                            particle.propagate( propagationDistance );
 
                                         // create calculator for TR calculations
                                         transitionRadiation::Calculator const calculator =  transitionRadiation::Calculator(
