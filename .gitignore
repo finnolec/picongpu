@@ -17,9 +17,17 @@
 # original backup files
 *.orig
 
+# clion project files
+.idea/
+
+# pycharm project files
+lib/python/.idea/
+
 # doxygen output
 docs/xml/
 docs/doxygen_sqlite3.db
 docs/html/
+docs/latex/
+xml/
 # sphinx & breathe output
 docs/build/
