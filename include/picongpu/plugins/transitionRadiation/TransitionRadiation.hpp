@@ -34,7 +34,6 @@
 
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
-#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/math/Complex.hpp>
 #include <pmacc/math/operation.hpp>
 #include <pmacc/mpi/MPIReduce.hpp>
@@ -45,13 +44,14 @@
 #include <boost/filesystem.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
-
-#include <math.h>
+#include <vector>
 
 
 namespace picongpu
@@ -87,19 +87,19 @@ namespace picongpu
 
                 using radLog = plugins::radiation::PIConGPUVerboseRadiation;
 
-                GridBuffer<float_X, DIM1>* incTransRad = nullptr;
-                GridBuffer<complex_X, DIM1>* cohTransRadPara = nullptr;
-                GridBuffer<complex_X, DIM1>* cohTransRadPerp = nullptr;
-                GridBuffer<float_X, DIM1>* numParticles = nullptr;
+                std::unique_ptr<GridBuffer<float_X, DIM1>> incTransRad;
+                std::unique_ptr<GridBuffer<complex_X, DIM1>> cohTransRadPara;
+                std::unique_ptr<GridBuffer<complex_X, DIM1>> cohTransRadPerp;
+                std::unique_ptr<GridBuffer<float_X, DIM1>> numParticles;
 
                 transitionRadiation::frequencies::InitFreqFunctor freqInit;
                 transitionRadiation::frequencies::FreqFunctor freqFkt;
 
-                float_X* tmpITR = nullptr;
-                complex_X* tmpCTRpara = nullptr;
-                complex_X* tmpCTRperp = nullptr;
-                float_X* tmpNum = nullptr;
-                float_X* theTransRad = nullptr;
+                std::vector<float_X> tmpITR;
+                std::vector<complex_X> tmpCTRpara;
+                std::vector<complex_X> tmpCTRperp;
+                std::vector<float_X> tmpNum;
+                std::vector<float_X> theTransRad;
                 MappingDesc* cellDescription = nullptr;
                 std::string notifyPeriod;
                 uint32_t timeStep;
@@ -130,9 +130,7 @@ namespace picongpu
                     Environment<>::get().PluginConnector().registerPlugin(this);
                 }
 
-                virtual ~TransitionRadiation()
-                {
-                }
+                ~TransitionRadiation() override = default;
 
                 /** Plugin management
                  *
@@ -143,7 +141,7 @@ namespace picongpu
                  *
                  * @param currentStep current step of simulation
                  */
-                void notify(uint32_t currentStep)
+                void notify(uint32_t currentStep) override
                 {
                     log<radLog::SIMULATION_STATE>("Transition Radition (%1%): calculate time step %2% ") % speciesName
                         % currentStep;
@@ -167,7 +165,7 @@ namespace picongpu
                  *
                  * @param desc boost::program_options description
                  */
-                void pluginRegisterHelp(po::options_description& desc)
+                void pluginRegisterHelp(po::options_description& desc) override
                 {
                     desc.add_options()(
                         (pluginPrefix + ".period").c_str(),
@@ -179,7 +177,7 @@ namespace picongpu
                  *
                  * @return name of plugin
                  */
-                std::string pluginGetName() const
+                std::string pluginGetName() const override
                 {
                     return pluginName;
                 }
@@ -188,7 +186,7 @@ namespace picongpu
                  *
                  * @param cellDescription
                  */
-                void setMappingDescription(MappingDesc* cellDescription)
+                void setMappingDescription(MappingDesc* cellDescription) override
                 {
                     this->cellDescription = cellDescription;
                 }
@@ -224,14 +222,14 @@ namespace picongpu
                  * transition radiation calculation and create a folder for transition
                  * radiation storage.
                  */
-                void pluginLoad()
+                void pluginLoad() override
                 {
                     if(!notifyPeriod.empty())
                     {
-                        tmpITR = new float_X[elementsTransitionRadiation()];
-                        tmpCTRpara = new complex_X[elementsTransitionRadiation()];
-                        tmpCTRperp = new complex_X[elementsTransitionRadiation()];
-                        tmpNum = new float_X[elementsTransitionRadiation()];
+                        tmpITR.resize(elementsTransitionRadiation());
+                        tmpCTRpara.resize(elementsTransitionRadiation());
+                        tmpCTRperp.resize(elementsTransitionRadiation());
+                        tmpNum.resize(elementsTransitionRadiation());
 
                         /*only rank 0 create a file*/
                         isMaster = reduce.hasResult(mpi::reduceMethods::Reduce());
@@ -239,19 +237,21 @@ namespace picongpu
 
                         Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
 
-                        incTransRad = new GridBuffer<float_X, DIM1>(DataSpace<DIM1>(elementsTransitionRadiation()));
-                        cohTransRadPara
-                            = new GridBuffer<complex_X, DIM1>(DataSpace<DIM1>(elementsTransitionRadiation()));
-                        cohTransRadPerp
-                            = new GridBuffer<complex_X, DIM1>(DataSpace<DIM1>(elementsTransitionRadiation()));
-                        numParticles = new GridBuffer<float_X, DIM1>(DataSpace<DIM1>(elementsTransitionRadiation()));
+                        incTransRad = std::make_unique<GridBuffer<float_X, DIM1>>(
+                            DataSpace<DIM1>(elementsTransitionRadiation()));
+                        cohTransRadPara = std::make_unique<GridBuffer<complex_X, DIM1>>(
+                            DataSpace<DIM1>(elementsTransitionRadiation()));
+                        cohTransRadPerp = std::make_unique<GridBuffer<complex_X, DIM1>>(
+                            DataSpace<DIM1>(elementsTransitionRadiation()));
+                        numParticles = std::make_unique<GridBuffer<float_X, DIM1>>(
+                            DataSpace<DIM1>(elementsTransitionRadiation()));
 
                         freqInit.Init(listFrequencies::listLocation);
                         freqFkt = freqInit.getFunctor();
 
                         if(isMaster)
                         {
-                            theTransRad = new float_X[elementsTransitionRadiation()];
+                            theTransRad.resize(elementsTransitionRadiation());
                             /* save detector position / observation direction */
                             detectorPositions = new float3_X[transitionRadiation::parameters::nObserver];
                             for(uint32_t detectorIndex = 0; detectorIndex < transitionRadiation::parameters::nObserver;
@@ -277,27 +277,6 @@ namespace picongpu
                             fs.createDirectory(folderTransRad);
                             fs.setDirectoryPermissions(folderTransRad);
                         }
-                    }
-                }
-
-                //! Implementation of base class function. Deletes buffers andf arrays.
-                void pluginUnload()
-                {
-                    if(!notifyPeriod.empty())
-                    {
-                        if(isMaster)
-                        {
-                            __deleteArray(theTransRad);
-                        }
-                        CUDA_CHECK(cuplaGetLastError());
-                        __delete(incTransRad);
-                        __delete(cohTransRadPara);
-                        __delete(cohTransRadPerp);
-                        __delete(numParticles);
-                        __deleteArray(tmpITR);
-                        __deleteArray(tmpCTRpara);
-                        __deleteArray(tmpCTRperp);
-                        __deleteArray(tmpNum);
                     }
                 }
 
@@ -335,25 +314,25 @@ namespace picongpu
                 {
                     reduce(
                         pmacc::math::operation::Add(),
-                        tmpITR,
+                        tmpITR.data(),
                         incTransRad->getHostBuffer().getBasePointer(),
                         elementsTransitionRadiation(),
                         mpi::reduceMethods::Reduce());
                     reduce(
                         pmacc::math::operation::Add(),
-                        tmpCTRpara,
+                        tmpCTRpara.data(),
                         cohTransRadPara->getHostBuffer().getBasePointer(),
                         elementsTransitionRadiation(),
                         mpi::reduceMethods::Reduce());
                     reduce(
                         pmacc::math::operation::Add(),
-                        tmpCTRperp,
+                        tmpCTRperp.data(),
                         cohTransRadPerp->getHostBuffer().getBasePointer(),
                         elementsTransitionRadiation(),
                         mpi::reduceMethods::Reduce());
                     reduce(
                         pmacc::math::operation::Add(),
-                        tmpNum,
+                        tmpNum.data(),
                         numParticles->getHostBuffer().getBasePointer(),
                         elementsTransitionRadiation(),
                         mpi::reduceMethods::Reduce());
@@ -370,7 +349,9 @@ namespace picongpu
                         o_step << currentStep;
 
                         // write totalRad data to txt
-                        writeFile(theTransRad, folderTransRad + "/" + filenamePrefix + "_" + o_step.str() + ".dat");
+                        writeFile(
+                            theTransRad.data(),
+                            folderTransRad + "/" + filenamePrefix + "_" + o_step.str() + ".dat");
                     }
                 }
 
@@ -381,7 +362,12 @@ namespace picongpu
                     // collect data GPU -> CPU -> Master
                     copyRadiationDeviceToHost();
                     collectRadiationOnMaster();
-                    sumTransitionRadiation(theTransRad, tmpITR, tmpCTRpara, tmpCTRperp, tmpNum);
+                    sumTransitionRadiation(
+                        theTransRad.data(),
+                        tmpITR.data(),
+                        tmpCTRpara.data(),
+                        tmpCTRperp.data(),
+                        tmpNum.data());
                 }
 
                 /** Final transition radiation calculation on CPU side

@@ -70,7 +70,7 @@
 #endif
 
 #if((ENABLE_OPENPMD == 1) && (openPMD_HAVE_HDF5 == 1))
-// needs to be openPMD-api only in the future to support adios
+// Radiation postprocessing is still native hdf5, so only enable the plugin for this backend
 #    include "picongpu/plugins/radiation/Radiation.hpp"
 #    include "picongpu/plugins/radiation/VectorTypes.hpp"
 #endif
@@ -84,6 +84,7 @@
 #include <pmacc/mappings/kernel/MappingDescription.hpp>
 
 #include <list>
+#include <memory>
 
 
 namespace picongpu
@@ -96,7 +97,7 @@ namespace picongpu
     class PluginController : public ILightweightPlugin
     {
     private:
-        std::list<ISimulationPlugin*> plugins;
+        std::list<std::shared_ptr<ISimulationPlugin>> plugins;
 
         template<typename T_Type>
         struct PushBack
@@ -104,7 +105,7 @@ namespace picongpu
             template<typename T>
             void operator()(T& list)
             {
-                list.push_back(new T_Type());
+                list.push_back(std::make_shared<T_Type>());
             }
         };
 
@@ -195,11 +196,13 @@ namespace picongpu
             plugins::multi::Master<BinEnergyParticles<bmpl::_1>>,
             CountParticles<bmpl::_1>,
             PngPlugin<Visualisation<bmpl::_1, PngCreator>>,
-            plugins::transitionRadiation::TransitionRadiation<bmpl::_1>,
+            plugins::transitionRadiation::TransitionRadiation<bmpl::_1>
 #if((ENABLE_OPENPMD == 1) && (openPMD_HAVE_HDF5 == 1))
-            plugins::radiation::Radiation<bmpl::_1>,
+            ,
+            plugins::radiation::Radiation<bmpl::_1>
 #endif
 #if(ENABLE_OPENPMD == 1)
+            ,
             plugins::xrayScattering::XrayScattering<bmpl::_1>,
             plugins::multi::Master<ParticleCalorimeter<bmpl::_1>>,
             plugins::multi::Master<PhaseSpace<particles::shapes::Counter::ChargeAssignment, bmpl::_1>>
@@ -243,40 +246,34 @@ namespace picongpu
             init();
         }
 
-        virtual ~PluginController()
-        {
-        }
+        ~PluginController() override = default;
 
-        void setMappingDescription(MappingDesc* cellDescription)
+        void setMappingDescription(MappingDesc* cellDescription) override
         {
             PMACC_ASSERT(cellDescription != nullptr);
 
-            for(std::list<ISimulationPlugin*>::iterator iter = plugins.begin(); iter != plugins.end(); ++iter)
+            for(auto iter = plugins.begin(); iter != plugins.end(); ++iter)
             {
                 (*iter)->setMappingDescription(cellDescription);
             }
         }
 
-        virtual void pluginRegisterHelp(po::options_description&)
+        void pluginRegisterHelp(po::options_description&) override
         {
             // no help required at the moment
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return "PluginController";
         }
 
-        void notify(uint32_t)
+        void notify(uint32_t) override
         {
         }
 
-        virtual void pluginUnload()
+        void pluginUnload() override
         {
-            for(std::list<ISimulationPlugin*>::iterator iter = plugins.begin(); iter != plugins.end(); ++iter)
-            {
-                __delete(*iter);
-            }
             plugins.clear();
         }
     };

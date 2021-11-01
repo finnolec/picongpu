@@ -30,7 +30,6 @@
 #include <boost/mpl/size.hpp>
 #include <boost/mpl/transform.hpp>
 #include <boost/mpl/vector.hpp>
-#include <boost/type_traits.hpp>
 
 namespace pmacc
 {
@@ -51,9 +50,9 @@ namespace pmacc
         {
         };
 
-        typedef T_MPLSeq MPLSeq;
-        typedef bmpl::back_inserter<bmpl::vector<>> Inserter;
-        typedef typename bmpl::transform<MPLSeq, Op<bmpl::_1>, Inserter>::type type;
+        using MPLSeq = T_MPLSeq;
+        using Inserter = bmpl::back_inserter<bmpl::vector<>>;
+        using type = typename bmpl::transform<MPLSeq, Op<bmpl::_1>, Inserter>::type;
     };
 
 } // namespace pmacc

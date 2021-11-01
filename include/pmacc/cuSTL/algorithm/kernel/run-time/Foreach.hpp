@@ -62,19 +62,19 @@ namespace pmacc
                 template<>
                 struct MaxCudaBlockDim<DIM1>
                 {
-                    typedef math::CT::Size_t<1024, 1, 1> type;
+                    using type = math::CT::Size_t<1024, 1, 1>;
                 };
 
                 template<>
                 struct MaxCudaBlockDim<DIM2>
                 {
-                    typedef math::CT::Size_t<32, 32, 1> type;
+                    using type = math::CT::Size_t<32, 32, 1>;
                 };
 
                 template<>
                 struct MaxCudaBlockDim<DIM3>
                 {
-                    typedef math::CT::Size_t<8, 8, 8> type;
+                    using type = math::CT::Size_t<8, 8, 8>;
                 };
 
                 /** Check if MaxCudaBlockDim holds the cupla specification limits
@@ -140,7 +140,7 @@ namespace pmacc
         PMACC_VERIFY(this->_blockDim.y() <= cudaSpecs::MaxNumThreadsPerBlockDim::y::value);                           \
         PMACC_VERIFY(this->_blockDim.z() <= cudaSpecs::MaxNumThreadsPerBlockDim::z::value);                           \
                                                                                                                       \
-        typename math::Size_t<3>::BaseType blockSize(this->_blockDim.x(), this->_blockDim.y(), this->_blockDim.z());  \
+        math::Size_t<3> blockSize(this->_blockDim.x(), this->_blockDim.y(), this->_blockDim.z());                     \
         uint32_t numWorkers = traits::GetNumWorkers<cudaSpecs::MaxNumThreadsPerBlockDim::x::value>::value;            \
         if(numWorkers > blockSize.productOfComponents())                                                              \
             numWorkers = blockSize.productOfComponents();                                                             \

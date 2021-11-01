@@ -28,13 +28,11 @@
 #include "pmacc/cuSTL/container/assigner/DeviceMemAssigner.hpp"
 #include "pmacc/cuSTL/container/copier/D2DCopier.hpp"
 #include "pmacc/cuSTL/container/copier/Memcopy.hpp"
-
-#include <boost/assert.hpp>
-#include <boost/type_traits/is_same.hpp>
-#include <boost/utility/enable_if.hpp>
+#include "pmacc/static_assert.hpp"
 
 #include <exception>
 #include <sstream>
+#include <type_traits>
 #include <utility>
 
 
@@ -57,21 +55,18 @@ namespace pmacc
                   assigner::DeviceMemAssigner<>>
         {
         private:
-            typedef CartBuffer<
+            using Base = CartBuffer<
                 Type,
                 T_dim,
                 allocator::DeviceMemAllocator<Type, T_dim>,
                 copier::D2DCopier<T_dim>,
-                assigner::DeviceMemAssigner<>>
-                Base;
+                assigner::DeviceMemAssigner<>>;
 
         protected:
-            HDINLINE DeviceBuffer()
-            {
-            }
+            HINLINE DeviceBuffer() = default;
 
         public:
-            typedef typename Base::PitchType PitchType;
+            using PitchType = typename Base::PitchType;
 
             /* constructors
              *
@@ -80,16 +75,16 @@ namespace pmacc
              * @param x,y,z convenient wrapper
              *
              */
-            HDINLINE DeviceBuffer(const math::Size_t<T_dim>& size) : Base(size)
+            HINLINE DeviceBuffer(const math::Size_t<T_dim>& size) : Base(size)
             {
             }
-            HDINLINE DeviceBuffer(size_t x) : Base(x)
+            HINLINE DeviceBuffer(size_t x) : Base(x)
             {
             }
-            HDINLINE DeviceBuffer(size_t x, size_t y) : Base(x, y)
+            HINLINE DeviceBuffer(size_t x, size_t y) : Base(x, y)
             {
             }
-            HDINLINE DeviceBuffer(size_t x, size_t y, size_t z) : Base(x, y, z)
+            HINLINE DeviceBuffer(size_t x, size_t y, size_t z) : Base(x, y, z)
             {
             }
             /**
@@ -101,43 +96,40 @@ namespace pmacc
              *                  Ignored for device side creation!y
              * @param pitch Pitch in bytes (number of bytes in the lower dimensions)
              */
-            HDINLINE DeviceBuffer(
-                Type* ptr,
+            HINLINE DeviceBuffer(
+                std::shared_ptr<Type> ptr,
                 const math::Size_t<T_dim>& size,
                 bool ownMemory,
                 PitchType pitch = PitchType::create(0))
             {
-                this->dataPointer = ptr;
+                this->sharedPtr = ptr;
+                this->shiftedPtr = ptr.get();
                 this->_size = size;
                 if(T_dim >= 2)
                     this->pitch[0] = (pitch[0]) ? pitch[0] : size.x() * sizeof(Type);
                 if(T_dim == 3)
                     this->pitch[1] = (pitch[1]) ? pitch[1] : this->pitch[0] * size.y();
-#ifndef __CUDA_ARCH__
-                this->refCount = new int;
-                *this->refCount = (ownMemory) ? 1 : 2;
-#endif
             }
-            HDINLINE DeviceBuffer(const Base& base) : Base(base)
+            HINLINE DeviceBuffer(const Base& base) : Base(base)
             {
             }
-            HDINLINE DeviceBuffer(DeviceBuffer&& obj) : Base(std::move(static_cast<Base&>(obj)))
+            HINLINE DeviceBuffer(DeviceBuffer&& obj) : Base(std::move(static_cast<Base&>(obj)))
             {
             }
 
-            HDINLINE DeviceBuffer& operator=(DeviceBuffer&& rhs)
+            HINLINE DeviceBuffer& operator=(DeviceBuffer&& rhs)
             {
                 Base::operator=(std::move(static_cast<Base&>(rhs)));
                 return *this;
             }
 
             template<typename HBuffer>
-            HINLINE typename boost::
-                enable_if<boost::is_same<typename HBuffer::memoryTag, allocator::tag::host>, DeviceBuffer&>::type
+            HINLINE typename std::
+                enable_if_t<std::is_same<typename HBuffer::memoryTag, allocator::tag::host>::value, DeviceBuffer&>
                 operator=(const HBuffer& rhs)
             {
-                BOOST_STATIC_ASSERT((boost::is_same<typename HBuffer::type, Type>::value));
-                BOOST_STATIC_ASSERT(HBuffer::dim == T_dim);
+                PMACC_CASSERT(std::is_same<typename HBuffer::type, Type>::value);
+                PMACC_CASSERT(HBuffer::dim == T_dim);
                 if(rhs.size() != this->size())
                     throw std::invalid_argument(static_cast<std::stringstream&>(
                                                     std::stringstream()
@@ -146,7 +138,7 @@ namespace pmacc
                                                     .str());
 
                 cuplaWrapper::Memcopy<T_dim>()(
-                    this->dataPointer,
+                    this->getDataPointer(),
                     this->pitch,
                     rhs.getDataPointer(),
                     rhs.getPitch(),

@@ -1,4 +1,4 @@
-/* Copyright 2019-2020 Axel Huebl, Benjamin Worpitz, René Widera, Sergei Bastrakov
+/* Copyright 2019-2021 Axel Huebl, Benjamin Worpitz, René Widera, Sergei Bastrakov
  *
  * This file is part of alpaka.
  *
@@ -25,15 +25,12 @@
 
 #include <type_traits>
 
-//-----------------------------------------------------------------------------
 //! The alpaka accelerator library.
 namespace alpaka
 {
-    //-----------------------------------------------------------------------------
     //! The kernel traits.
     namespace traits
     {
-        //#############################################################################
         //! The kernel execution task creation trait.
         template<
             typename TAcc,
@@ -43,7 +40,6 @@ namespace alpaka
             typename TSfinae = void*/>
         struct CreateTaskKernel;
 
-        //#############################################################################
         //! The trait for getting the size of the block shared dynamic memory of a kernel.
         //!
         //! \tparam TKernelFnObj The kernel function object.
@@ -58,7 +54,6 @@ namespace alpaka
 #    pragma clang diagnostic ignored                                                                                  \
         "-Wdocumentation" // clang does not support the syntax for variadic template arguments "args,..."
 #endif
-            //-----------------------------------------------------------------------------
             //! \param kernelFnObj The kernel object for which the block shared memory size should be calculated.
             //! \param blockThreadExtent The block thread extent.
             //! \param threadElemExtent The thread element extent.
@@ -86,68 +81,43 @@ namespace alpaka
             }
         };
 
-        namespace detail
-        {
-            //#############################################################################
-            //! Functor to get OpenMP schedule defined by kernel class.
-            //! When no schedule is defined, return a default one.
-            template<class TKernel, class = void>
-            struct GetOmpSchedule
-            {
-                ALPAKA_FN_HOST static auto get()
-                {
-                    return alpaka::omp::Schedule{};
-                }
-            };
-
-            //! Functor to get OpenMP schedule for kernel classes with
-            //! ompSchedule static member.
-            //! That member is never odr-used by alpaka.
-            template<class TKernel>
-            struct GetOmpSchedule<TKernel, meta::Void<decltype(TKernel::ompSchedule)>>
-            {
-                ALPAKA_FN_HOST static auto get()
-                {
-                    // Just having return TKernel::ompSchedule here would be
-                    // a non-odr use of that variable, since it would be an
-                    // argument of the copy constructor. So have to manually
-                    // create a new identical object and then return it.
-                    return alpaka::omp::Schedule{TKernel::ompSchedule.kind, TKernel::ompSchedule.chunkSize};
-                }
-            };
-        } // namespace detail
-
-        //#############################################################################
-        //! The trait for getting the schedule to use when a kernel is run using
-        //! the CpuOmp2Blocks accelerator.
+        //! The trait for getting the schedule to use when a kernel is run using the CpuOmp2Blocks accelerator.
         //!
-        //! Has no effect on other accelerators or when run using OpenMP
-        //! implementation not supporting at least version 3.0.
+        //! Has no effect on other accelerators.
         //!
-        //! A user could either specialize this trait for their kernel, or define
-        //! a public static member ompSchedule of type alpaka::omp::Schedule
-        //! inside it, which would be picked up by this implementation.
-        //! In the latter case, alpaka never odr-uses that member.
+        //! A user could either specialize this trait for their kernel, or define a public static member
+        //! ompScheduleKind of type alpaka::omp::Schedule, and additionally also int member ompScheduleChunkSize. In
+        //! the latter case, alpaka never odr-uses these members.
+        //!
+        //! In case schedule kind and chunk size are compile-time constants, setting then inside kernel may benefit
+        //! performance.
         //!
         //! \tparam TKernelFnObj The kernel function object.
         //! \tparam TAcc The accelerator.
         //!
-        //! The default implementation returns 0.
+        //! The default implementation behaves as if the trait was not specialized.
         template<typename TKernelFnObj, typename TAcc, typename TSfinae = void>
         struct OmpSchedule
         {
+        private:
+            //! Type returned when the trait is not specialized
+            struct TraitNotSpecialized
+            {
+            };
+
+        public:
 #if BOOST_COMP_CLANG
 #    pragma clang diagnostic push
 #    pragma clang diagnostic ignored                                                                                  \
         "-Wdocumentation" // clang does not support the syntax for variadic template arguments "args,..."
 #endif
-            //-----------------------------------------------------------------------------
             //! \param kernelFnObj The kernel object for which the schedule should be returned.
             //! \param blockThreadExtent The block thread extent.
             //! \param threadElemExtent The thread element extent.
             //! \tparam TArgs The kernel invocation argument types pack.
             //! \param args,... The kernel invocation arguments.
-            //! \return The OpenMP schedule information.
+            //! \return The OpenMP schedule information as an alpaka::omp::Schedule object,
+            //!         returning an object of any other type is treated as if the trait is not specialized.
 #if BOOST_COMP_CLANG
 #    pragma clang diagnostic pop
 #endif
@@ -157,14 +127,14 @@ namespace alpaka
                 TKernelFnObj const& kernelFnObj,
                 Vec<TDim, Idx<TAcc>> const& blockThreadExtent,
                 Vec<TDim, Idx<TAcc>> const& threadElemExtent,
-                TArgs const&... args) -> alpaka::omp::Schedule
+                TArgs const&... args) -> TraitNotSpecialized
             {
                 alpaka::ignore_unused(kernelFnObj);
                 alpaka::ignore_unused(blockThreadExtent);
                 alpaka::ignore_unused(threadElemExtent);
                 alpaka::ignore_unused(args...);
 
-                return detail::GetOmpSchedule<TKernelFnObj>::get();
+                return TraitNotSpecialized{};
             }
         };
     } // namespace traits
@@ -174,7 +144,6 @@ namespace alpaka
 #    pragma clang diagnostic ignored                                                                                  \
         "-Wdocumentation" // clang does not support the syntax for variadic template arguments "args,..."
 #endif
-    //-----------------------------------------------------------------------------
     //! \tparam TAcc The accelerator type.
     //! \param kernelFnObj The kernel object for which the block shared memory size should be calculated.
     //! \param blockThreadExtent The block thread extent.
@@ -205,13 +174,13 @@ namespace alpaka
 #    pragma clang diagnostic ignored                                                                                  \
         "-Wdocumentation" // clang does not support the syntax for variadic template arguments "args,..."
 #endif
-    //-----------------------------------------------------------------------------
     //! \tparam TAcc The accelerator type.
     //! \param kernelFnObj The kernel object for which the block shared memory size should be calculated.
     //! \param blockThreadExtent The block thread extent.
     //! \param threadElemExtent The thread element extent.
     //! \param args,... The kernel invocation arguments.
-    //! \return The OpenMP schedule information.
+    //! \return The OpenMP schedule information as an alpaka::omp::Schedule object if the kernel specialized the
+    //!         OmpSchedule trait, an object of another type if the kernel didn't specialize the trait.
 #if BOOST_COMP_CLANG
 #    pragma clang diagnostic pop
 #endif
@@ -220,7 +189,7 @@ namespace alpaka
         TKernelFnObj const& kernelFnObj,
         Vec<TDim, Idx<TAcc>> const& blockThreadExtent,
         Vec<TDim, Idx<TAcc>> const& threadElemExtent,
-        TArgs const&... args) -> omp::Schedule
+        TArgs const&... args)
     {
         return traits::OmpSchedule<TKernelFnObj, TAcc>::getOmpSchedule(
             kernelFnObj,
@@ -237,7 +206,6 @@ namespace alpaka
 
     namespace detail
     {
-        //#############################################################################
         //! Check that the return of TKernelFnObj is void
         template<typename TAcc, typename TSfinae = void>
         struct CheckFnReturnType
@@ -254,7 +222,6 @@ namespace alpaka
             }
         };
     } // namespace detail
-    //-----------------------------------------------------------------------------
     //! Creates a kernel execution task.
     //!
     //! \tparam TAcc The accelerator type.
@@ -293,7 +260,6 @@ namespace alpaka
 #    pragma clang diagnostic ignored                                                                                  \
         "-Wdocumentation" // clang does not support the syntax for variadic template arguments "args,..."
 #endif
-    //-----------------------------------------------------------------------------
     //! Executes the given kernel in the given queue.
     //!
     //! \tparam TAcc The accelerator type.

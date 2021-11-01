@@ -23,8 +23,6 @@
 
 #include "pmacc/types.hpp"
 
-#include <boost/type_traits/add_const.hpp>
-
 namespace pmacc
 {
     namespace cursor
@@ -34,14 +32,14 @@ namespace pmacc
         {
             _Functor functor;
 
-            typedef typename ::pmacc::result_of::Functor<_Functor, ArgType>::type type;
+            using Reference = typename ::pmacc::result_of::Functor<_Functor, ArgType>::type;
 
             HDINLINE FunctorAccessor(const _Functor& functor) : functor(functor)
             {
             }
 
             template<typename TCursor>
-            HDINLINE type operator()(TCursor& cursor)
+            HDINLINE Reference operator()(TCursor& cursor)
             {
                 return this->functor(*cursor);
             }

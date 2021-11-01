@@ -26,8 +26,8 @@
 #include "pmacc/types.hpp"
 
 #include <boost/mpl/void.hpp>
-#include <boost/type_traits/add_const.hpp>
-#include <boost/type_traits/remove_reference.hpp>
+
+#include <type_traits>
 
 namespace mpl = boost::mpl;
 
@@ -50,13 +50,13 @@ namespace pmacc
             , _Navigator
         {
         public:
-            typedef typename _Accessor::type type;
-            typedef typename boost::remove_reference<type>::type ValueType;
-            typedef _Accessor Accessor;
-            typedef _Navigator Navigator;
-            typedef _Marker Marker;
-            typedef Cursor<Accessor, Navigator, Marker> This;
-            typedef This result_type;
+            using Reference = typename _Accessor::Reference;
+            using ValueType = std::remove_reference_t<Reference>;
+            using Accessor = _Accessor;
+            using Navigator = _Navigator;
+            using Marker = _Marker;
+            using This = Cursor<Accessor, Navigator, Marker>;
+            using result_type = This;
 
         protected:
             Marker marker;
@@ -75,7 +75,7 @@ namespace pmacc
              * Typically a reference to the current selected single datum.
              */
             HDINLINE
-            type operator*()
+            Reference operator*()
             {
                 return Accessor::operator()(this->marker);
             }
@@ -86,7 +86,7 @@ namespace pmacc
              * the same as for the non-const method above.
              */
             HDINLINE
-            type operator*() const
+            Reference operator*() const
             {
                 return Accessor::operator()(this->marker);
             }
@@ -135,13 +135,13 @@ namespace pmacc
 
             /* jump and access in one call */
             template<typename Jump>
-            HDINLINE type operator[](const Jump& jump)
+            HDINLINE Reference operator[](const Jump& jump)
             {
                 return *((*this)(jump));
             }
 
             template<typename Jump>
-            HDINLINE type operator[](const Jump& jump) const
+            HDINLINE Reference operator[](const Jump& jump) const
             {
                 return *((*this)(jump));
             }
@@ -187,7 +187,7 @@ namespace pmacc
 
         namespace traits
         {
-            /* type trait to get the cursor's dimension if it has one */
+            /* Reference trait to get the cursor's dimension if it has one */
             template<typename _Accessor, typename _Navigator, typename _Marker>
             struct dim<pmacc::cursor::Cursor<_Accessor, _Navigator, _Marker>>
             {

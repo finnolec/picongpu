@@ -70,7 +70,8 @@ namespace pmacc
         /**
          * Destructor.
          */
-        virtual ~DeviceBuffer(){};
+        ~DeviceBuffer() override = default;
+        ;
 
         HINLINE
         container::CartBuffer<
@@ -87,7 +88,12 @@ namespace pmacc
                 pitch[0] = cuplaData.pitch;
             if(DIM == 3)
                 pitch[1] = pitch[0] * this->getPhysicalMemorySize()[1];
-            container::DeviceBuffer<TYPE, DIM> result((TYPE*) cuplaData.ptr, this->getDataSpace(), false, pitch);
+            // pass data pointer without deletion policy
+            container::DeviceBuffer<TYPE, DIM> result(
+                std::shared_ptr<TYPE>((TYPE*) cuplaData.ptr, [](auto const*) {}),
+                this->getDataSpace(),
+                false,
+                pitch);
             return result;
         }
 
@@ -127,7 +133,7 @@ namespace pmacc
          *
          * @param size count of elements per dimension
          */
-        virtual void setCurrentSize(const size_t size) = 0;
+        void setCurrentSize(const size_t size) override = 0;
 
         /**
          * Returns the internal pitched cupla pointer.

@@ -25,6 +25,7 @@
 #include <pmacc/cuSTL/container/DeviceBuffer.hpp>
 #include <pmacc/math/vector/Float.hpp>
 
+#include <memory>
 #include <string>
 
 namespace picongpu
@@ -46,10 +47,9 @@ namespace picongpu
         int plane;
         float_X slicePoint;
         MappingDesc* cellDescription;
-        container::DeviceBuffer<float3_64, simDim - 1>* dBuffer_SI;
+        std::unique_ptr<container::DeviceBuffer<float3_64, simDim - 1>> dBuffer_SI;
 
-        void pluginLoad();
-        void pluginUnload();
+        void pluginLoad() override;
 
         template<typename TField>
         void printSlice(const TField& field, int nAxis, float slicePoint, std::string filename);
@@ -57,10 +57,10 @@ namespace picongpu
         friend class SliceFieldPrinterMulti<Field>;
 
     public:
-        void notify(uint32_t currentStep);
-        std::string pluginGetName() const;
-        void pluginRegisterHelp(po::options_description& desc);
-        void setMappingDescription(MappingDesc* desc)
+        void notify(uint32_t currentStep) override;
+        std::string pluginGetName() const override;
+        void pluginRegisterHelp(po::options_description& desc) override;
+        void setMappingDescription(MappingDesc* desc) override
         {
             this->cellDescription = desc;
         }

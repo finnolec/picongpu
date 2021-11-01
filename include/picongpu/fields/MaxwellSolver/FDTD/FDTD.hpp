@@ -25,7 +25,6 @@
 #include "picongpu/fields/FieldB.hpp"
 #include "picongpu/fields/FieldE.hpp"
 #include "picongpu/fields/LaserPhysics.hpp"
-#include "picongpu/fields/MaxwellSolver/CFLChecker.hpp"
 #include "picongpu/fields/MaxwellSolver/FDTD/FDTD.def"
 #include "picongpu/fields/MaxwellSolver/FDTD/FDTD.kernel"
 #include "picongpu/fields/MaxwellSolver/LaserChecker.hpp"
@@ -35,6 +34,7 @@
 #include "picongpu/fields/incidentField/Solver.hpp"
 #include "picongpu/traits/GetMargin.hpp"
 
+#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/traits/GetStringProperties.hpp>
 
 #include <memory>
@@ -58,7 +58,6 @@ namespace picongpu
 
                 FDTD(MappingDesc const cellDescription) : cellDescription(cellDescription)
                 {
-                    CFLChecker<FDTD>{}();
                     LaserChecker<FDTD>{}();
                     DataConnector& dc = Environment<>::get().DataConnector();
                     fieldE = dc.get<FieldE>(FieldE::getName(), true);
@@ -149,8 +148,6 @@ namespace picongpu
                     SuperCellSize,
                     typename traits::GetLowerMargin<T_Curl>::type,
                     typename traits::GetUpperMargin<T_Curl>::type>;
-                template<uint32_t T_Area>
-                using AreaMapper = pmacc::AreaMapping<T_Area, MappingDesc>;
 
                 /** Propagate B values in the given area by the first half of a time step
                  *
@@ -200,7 +197,7 @@ namespace picongpu
                 {
                     constexpr auto numWorkers = getNumWorkers();
                     using Kernel = fdtd::KernelUpdateField<numWorkers>;
-                    AreaMapper<T_Area> mapper{cellDescription};
+                    auto const mapper = pmacc::makeAreaMapper<T_Area>(cellDescription);
 
                     // The ugly transition from run-time to compile-time polymorphism is contained here
                     auto& absorber = absorber::Absorber::get();
@@ -236,7 +233,7 @@ namespace picongpu
                 {
                     constexpr auto numWorkers = getNumWorkers();
                     using Kernel = fdtd::KernelUpdateField<numWorkers>;
-                    auto mapper = AreaMapper<T_Area>{cellDescription};
+                    auto const mapper = pmacc::makeAreaMapper<T_Area>(cellDescription);
 
                     // The ugly transition from run-time to compile-time polymorphism is contained here
                     auto& absorber = absorber::Absorber::get();

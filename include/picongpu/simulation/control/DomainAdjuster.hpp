@@ -138,7 +138,7 @@ namespace picongpu
 
             // gather local sizes in the direction we are checking
             std::vector<uint64_t> allLocalSizes(numMpiRanks);
-            uint64_t lSize = static_cast<uint64_t>(m_localDomainSize[dim]);
+            auto lSize = static_cast<uint64_t>(m_localDomainSize[dim]);
             MPI_CHECK(MPI_Allgather(
                 &lSize,
                 1,
@@ -237,6 +237,10 @@ namespace picongpu
                         = static_cast<int>(std::max(absorberThickness(dim, 0), absorberThickness(dim, 1)));
                 }
 
+                // If this is the only device along the direction, both absorbers must fit
+                if(m_numDevices[dim] == 1)
+                    maxAbsorberCells = absorberThickness(dim, 0) + absorberThickness(dim, 1);
+
                 if(m_localDomainSize[dim] < maxAbsorberCells)
                 {
                     int const sCellSize = SuperCellSize::toRT()[dim];
@@ -246,11 +250,7 @@ namespace picongpu
 
                 if(validLocalSize != m_localDomainSize[dim])
                 {
-                    showMessage(
-                        dim,
-                        "Local grid size must be greater or equal than the largest absorber.",
-                        m_localDomainSize[dim],
-                        validLocalSize);
+                    showMessage(dim, "Local grid size must fit the absorber.", m_localDomainSize[dim], validLocalSize);
 
                     m_localDomainSize[dim] = validLocalSize;
                 }
@@ -320,7 +320,7 @@ namespace picongpu
             }
             else
             {
-                uint64_t localDomainSize = static_cast<uint64_t>(m_localDomainSize[dim]);
+                auto localDomainSize = static_cast<uint64_t>(m_localDomainSize[dim]);
                 pmacc::mpi::MPIReduce mpiReduce;
                 mpiReduce(
                     pmacc::math::operation::Add(),

@@ -28,8 +28,6 @@
 #include <alpaka/intrinsic/Traits.hpp>
 #include <alpaka/warp/Traits.hpp>
 
-#include <boost/type_traits.hpp>
-
 #include <climits>
 #include <type_traits>
 
@@ -109,9 +107,12 @@ namespace pmacc
             {
                 enum
                 {
-                    value = boost::is_same<T, int>::value || boost::is_same<T, unsigned int>::value
-                        || boost::is_same<T, long long int>::value || boost::is_same<T, unsigned long long int>::value
-                        || boost::is_same<T, float>::value
+                    value = std::is_same < T,
+                    int > ::value || std::is_same < T,
+                    unsigned int > ::value || std::is_same < T,
+                    long long int > ::value || std::is_same < T,
+                    unsigned long long int > ::value || std::is_same < T,
+                    float > ::value
                 };
             };
 
@@ -236,6 +237,7 @@ namespace pmacc
         {
             const auto mask = alpaka::warp::activemask(acc);
             const auto leader = alpaka::ffs(acc, static_cast<std::make_signed_t<decltype(mask)>>(mask)) - 1;
+            alpaka::ignore_unused(leader);
 
 #if CUPLA_DEVICE_COMPILE == 1
             if(getLaneId() == leader)

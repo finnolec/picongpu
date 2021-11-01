@@ -44,6 +44,9 @@ namespace picongpu
          * @param alpaka accelerator
          * @param particlesBox particle memory
          * @param mapper functor to map a block to a supercell
+         * @param beginCellIdxLocal only process particles with local domain cell index >=
+         * beginCellIdxLocal
+         * @param endCellIdxLocal only process particles with local domain cell index < endCellIdxLocal
          */
         template<
             typename T_ParticlesBox,
@@ -56,6 +59,8 @@ namespace picongpu
             T_ParticlesBox particlesBox,
             T_CalorimeterFunctor calorimeterFunctor,
             T_Mapper mapper,
+            pmacc::DataSpace<simDim> beginCellIdxLocal,
+            pmacc::DataSpace<simDim> endCellIdxLocal,
             T_Filter filter) const
         {
             constexpr uint32_t numWorkers = T_numWorkers;
@@ -78,6 +83,7 @@ namespace picongpu
 
             auto accFilter
                 = filter(acc, block - mapper.getGuardingSuperCells(), lockstep::Worker<numWorkers>{workerIdx});
+            auto const blockStartCellLocal = (block - mapper.getGuardingSuperCells()) * SuperCellSize::toRT();
 
             // number of particles in the current frame
             auto numParticles = particlesBox.getSuperCell(block).getSizeLastFrame();
@@ -87,18 +93,27 @@ namespace picongpu
                 auto forEachParticleInSuperCell = lockstep::makeForEach<maxParticlesInFrame, numWorkers>(workerIdx);
 
                 // loop over all particles in the frame
-                forEachParticleInSuperCell([&](uint32_t const linearIdx) {
-                    auto particle = particlesFrame[linearIdx];
-                    if(linearIdx >= numParticles)
+                forEachParticleInSuperCell(
+                    [&](uint32_t const linearIdx)
                     {
-                        particle.setHandleInvalid();
-                    }
+                        auto particle = particlesFrame[linearIdx];
+                        if(linearIdx >= numParticles)
+                        {
+                            particle.setHandleInvalid();
+                        }
 
-                    if(accFilter(acc, particle))
-                    {
-                        calorimeterFunctor(acc, particlesFrame, linearIdx);
-                    }
-                });
+                        if(accFilter(acc, particle))
+                        {
+                            // Check if it fits the internal cells range
+                            auto const cellInSuperCell
+                                = DataSpaceOperations<simDim>::template map<SuperCellSize>(particle[localCellIdx_]);
+                            auto const localCell = blockStartCellLocal + cellInSuperCell;
+                            for(uint32_t d = 0; d < simDim; d++)
+                                if((localCell[d] < beginCellIdxLocal[d]) || (localCell[d] >= endCellIdxLocal[d]))
+                                    return;
+                            calorimeterFunctor(acc, particlesFrame, linearIdx);
+                        }
+                    });
 
                 // independent for each worker
                 particlesFrame = particlesBox.getPreviousFrame(particlesFrame);

@@ -27,8 +27,8 @@
 #include <boost/mpl/begin_end.hpp>
 #include <boost/mpl/deref.hpp>
 #include <boost/mpl/transform.hpp>
-#include <boost/type_traits.hpp>
 
+#include <type_traits>
 #include <utility>
 
 
@@ -44,12 +44,12 @@ namespace pmacc
              *  @tparam itEnd iterator to the end of a mpl sequence
              *  @tparam isEnd true if itBegin == itEnd, else false
              */
-            template<typename itBegin, typename itEnd, bool isEnd = boost::is_same<itBegin, itEnd>::value>
+            template<typename itBegin, typename itEnd, bool isEnd = std::is_same<itBegin, itEnd>::value>
             struct CallFunctorOfIterator
             {
-                typedef typename boost::mpl::next<itBegin>::type nextIt;
-                typedef typename boost::mpl::deref<itBegin>::type Functor;
-                typedef CallFunctorOfIterator<nextIt, itEnd> NextCall;
+                using nextIt = typename boost::mpl::next<itBegin>::type;
+                using Functor = typename boost::mpl::deref<itBegin>::type;
+                using NextCall = CallFunctorOfIterator<nextIt, itEnd>;
 
                 PMACC_NO_NVCC_HDWARNING
                 template<typename... T_Types>
@@ -115,16 +115,16 @@ namespace pmacc
             {
             };
 
-            typedef typename bmpl::transform<T_MPLSeq, ReplacePlaceholder<bmpl::_1>>::type SolvedFunctors;
+            using SolvedFunctors = typename bmpl::transform<T_MPLSeq, ReplacePlaceholder<bmpl::_1>>::type;
 
-            typedef typename boost::mpl::begin<SolvedFunctors>::type begin;
-            typedef typename boost::mpl::end<SolvedFunctors>::type end;
+            using begin = typename boost::mpl::begin<SolvedFunctors>::type;
+            using end = typename boost::mpl::end<SolvedFunctors>::type;
 
 
-            typedef detail::CallFunctorOfIterator<begin, end> NextCall;
+            using NextCall = detail::CallFunctorOfIterator<begin, end>;
 
             /* this functor does nothing */
-            typedef detail::CallFunctorOfIterator<end, end> Functor;
+            using Functor = detail::CallFunctorOfIterator<end, end>;
 
             PMACC_NO_NVCC_HDWARNING
             template<typename... T_Types>

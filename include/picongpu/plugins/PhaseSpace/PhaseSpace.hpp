@@ -43,6 +43,7 @@
 #include <boost/mpl/int.hpp>
 #include <boost/mpl/min_max.hpp>
 
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -55,7 +56,7 @@ namespace picongpu
     namespace po = boost::program_options;
 
     template<class T_AssignmentFunction, class T_Species>
-    class PhaseSpace : public plugins::multi::ISlave
+    class PhaseSpace : public plugins::multi::IInstance
     {
     public:
         typedef T_AssignmentFunction AssignmentFunction;
@@ -63,15 +64,17 @@ namespace picongpu
 
         struct Help : public plugins::multi::IHelp
         {
-            /** creates an instance of ISlave
+            /** creates an instance
              *
-             * @tparam T_Slave type of the interface implementation (must inherit from ISlave)
              * @param help plugin defined help
              * @param id index of the plugin, range: [0;help->getNumPlugins())
              */
-            std::shared_ptr<ISlave> create(std::shared_ptr<IHelp>& help, size_t const id, MappingDesc* cellDescription)
+            std::shared_ptr<IInstance> create(
+                std::shared_ptr<IHelp>& help,
+                size_t const id,
+                MappingDesc* cellDescription) override
             {
-                return std::shared_ptr<ISlave>(
+                return std::shared_ptr<IInstance>(
                     new PhaseSpace<T_AssignmentFunction, Species>(help, id, cellDescription));
             }
 
@@ -109,7 +112,7 @@ namespace picongpu
             ///! method used by plugin controller to get --help description
             void registerHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
                 meta::ForEach<EligibleFilters, plugins::misc::AppendName<bmpl::_1>> getEligibleFilterNames;
                 getEligibleFilterNames(allowedFilters);
@@ -129,12 +132,12 @@ namespace picongpu
 
             void expandHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
             }
 
 
-            void validateOptions()
+            void validateOptions() override
             {
                 if(notifyPeriod.size() != filter.size())
                     throw std::runtime_error(
@@ -162,12 +165,12 @@ namespace picongpu
                 }
             }
 
-            size_t getNumPlugins() const
+            size_t getNumPlugins() const override
             {
                 return notifyPeriod.size();
             }
 
-            std::string getDescription() const
+            std::string getDescription() const override
             {
                 return description;
             }
@@ -177,7 +180,7 @@ namespace picongpu
                 return prefix;
             }
 
-            std::string getName() const
+            std::string getName() const override
             {
                 return name;
             }
@@ -218,10 +221,10 @@ namespace picongpu
         static constexpr uint32_t maxShared = 30000;
         static constexpr uint32_t num_pbins = maxShared / (sizeof(float_PS) * SuperCellsLongestEdge::value);
 
-        container::DeviceBuffer<float_PS, 2>* dBuffer = nullptr;
+        std::unique_ptr<container::DeviceBuffer<float_PS, 2>> dBuffer;
 
         /** reduce functor to a single host per plane */
-        pmacc::algorithm::mpi::Reduce<simDim>* planeReduce = nullptr;
+        std::unique_ptr<pmacc::algorithm::mpi::Reduce<simDim>> planeReduce;
         bool isPlaneReduceRoot = false;
         /** MPI communicator that contains the root ranks of the \p planeReduce
          */
@@ -274,13 +277,13 @@ namespace picongpu
         PhaseSpace(std::shared_ptr<plugins::multi::IHelp>& help, size_t const id, MappingDesc* cellDescription);
         virtual ~PhaseSpace();
 
-        void notify(uint32_t currentStep);
+        void notify(uint32_t currentStep) override;
 
-        void restart(uint32_t restartStep, std::string const& restartDirectory)
+        void restart(uint32_t restartStep, std::string const& restartDirectory) override
         {
         }
 
-        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory)
+        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory) override
         {
         }
 

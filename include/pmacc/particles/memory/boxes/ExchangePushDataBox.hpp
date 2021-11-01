@@ -38,14 +38,14 @@ namespace pmacc
     class ExchangePushDataBox : public DataBox<PitchedBox<VALUE, DIM1>>
     {
     public:
-        typedef ExchangeMemoryIndex<TYPE, DIM> PushType;
+        using PushType = ExchangeMemoryIndex<TYPE, DIM>;
 
         HDINLINE ExchangePushDataBox(
             VALUE* data,
             TYPE* currentSizePointer,
             TYPE maxSize,
             PushDataBox<TYPE, PushType> virtualMemory)
-            : DataBox<PitchedBox<VALUE, DIM1>>(PitchedBox<VALUE, DIM1>(data, DataSpace<DIM1>()))
+            : DataBox<PitchedBox<VALUE, DIM1>>(PitchedBox<VALUE, DIM1>(data))
             , currentSizePointer(currentSizePointer)
             , maxSize(maxSize)
             , virtualMemory(virtualMemory)

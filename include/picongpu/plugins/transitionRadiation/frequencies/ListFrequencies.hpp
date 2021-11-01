@@ -25,6 +25,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <memory>
 
 
 namespace picongpu
@@ -38,11 +39,9 @@ namespace picongpu
                 class FreqFunctor
                 {
                 public:
-                    typedef GridBuffer<float_X, DIM1>::DataBoxType DBoxType;
+                    using DBoxType = GridBuffer<float_X, 1U>::DataBoxType;
 
-                    FreqFunctor(void)
-                    {
-                    }
+                    FreqFunctor(void) = default;
 
                     template<typename T>
                     FreqFunctor(T frequencies_handed)
@@ -70,20 +69,13 @@ namespace picongpu
                 class InitFreqFunctor
                 {
                 public:
-                    InitFreqFunctor(void)
-                    {
-                    }
+                    InitFreqFunctor(void) = default;
 
-                    ~InitFreqFunctor(void)
-                    {
-                        __delete(frequencyBuffer);
-                    }
-
-                    typedef GridBuffer<picongpu::float_X, DIM1>::DataBoxType DBoxType;
+                    using DBoxType = GridBuffer<picongpu::float_X, 1U>::DataBoxType;
 
                     HINLINE void Init(const std::string path)
                     {
-                        frequencyBuffer = new GridBuffer<float_X, DIM1>(DataSpace<DIM1>(nOmega));
+                        frequencyBuffer = std::make_unique<GridBuffer<float_X, DIM1>>(DataSpace<DIM1>(nOmega));
 
 
                         DBoxType frequencyDB = frequencyBuffer->getHostBuffer().getDataBox();
@@ -121,11 +113,11 @@ namespace picongpu
 
                     FreqFunctor getFunctor(void)
                     {
-                        return FreqFunctor(frequencyBuffer);
+                        return {frequencyBuffer.get()};
                     }
 
                 private:
-                    GridBuffer<float_X, DIM1>* frequencyBuffer = nullptr;
+                    std::unique_ptr<GridBuffer<float_X, DIM1>> frequencyBuffer;
                 }; // InitFreqFunctor
 
                 //! @return frequency params as string

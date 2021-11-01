@@ -53,7 +53,7 @@ namespace pmacc
                 {
                     static constexpr int dim = 1;
 
-                    typename math::Size_t<3>::BaseType cuplaGridDim(const math::Size_t<1>& size) const
+                    math::Size_t<3> cuplaGridDim(const math::Size_t<1>& size) const
                     {
                         return math::Size_t<3>(size.x() / BlockSize::x::value, 1u, 1u);
                     }
@@ -82,7 +82,7 @@ namespace pmacc
                 {
                     static constexpr int dim = 2;
 
-                    typename math::Size_t<3>::BaseType cuplaGridDim(const math::Size_t<2>& size) const
+                    math::Size_t<3> cuplaGridDim(const math::Size_t<2>& size) const
                     {
                         return math::Size_t<3>(size.x() / BlockSize::x::value, size.y() / BlockSize::y::value, 1u);
                     }
@@ -116,7 +116,7 @@ namespace pmacc
                 {
                     static constexpr int dim = 3;
 
-                    typename math::Size_t<3>::BaseType cuplaGridDim(const math::Size_t<3>& size) const
+                    math::Size_t<3> cuplaGridDim(const math::Size_t<3>& size) const
                     {
                         return math::Size_t<3>(
                             size.x() / BlockSize::x::value,
@@ -153,9 +153,7 @@ namespace pmacc
                 {
                     static constexpr int dim = 1;
 
-                    typename math::Size_t<3>::BaseType cuplaGridDim(
-                        const math::Size_t<1>& size,
-                        const math::Size_t<3>& blockSize) const
+                    math::Size_t<3> cuplaGridDim(const math::Size_t<1>& size, const math::Size_t<3>& blockSize) const
                     {
                         return math::Size_t<3>(size.x() / blockSize.x(), 1u, 1u);
                     }
@@ -190,9 +188,7 @@ namespace pmacc
                 {
                     static constexpr int dim = 2;
 
-                    typename math::Size_t<3>::BaseType cuplaGridDim(
-                        const math::Size_t<2>& size,
-                        const math::Size_t<3>& blockSize) const
+                    math::Size_t<3> cuplaGridDim(const math::Size_t<2>& size, const math::Size_t<3>& blockSize) const
                     {
                         return math::Size_t<3>(size.x() / blockSize.x(), size.y() / blockSize.y(), 1);
                     }
@@ -204,9 +200,9 @@ namespace pmacc
                         const math::Int<2>& _blockIdx,
                         const math::Int<2>& _threadIdx) const
                     {
-                        return math::Int<2>(
+                        return {
                             _blockIdx.x() * _blockDim.x() + _threadIdx.x(),
-                            _blockIdx.y() * _blockDim.y() + _threadIdx.y());
+                            _blockIdx.y() * _blockDim.y() + _threadIdx.y()};
                     }
 
                     template<typename T_Acc>
@@ -229,9 +225,7 @@ namespace pmacc
                 {
                     static constexpr int dim = 3;
 
-                    typename math::Size_t<3>::BaseType cuplaGridDim(
-                        const math::Size_t<3>& size,
-                        const math::Size_t<3>& blockSize) const
+                    math::Size_t<3> cuplaGridDim(const math::Size_t<3>& size, const math::Size_t<3>& blockSize) const
                     {
                         return math::Size_t<3>(
                             size.x() / blockSize.x(),
@@ -246,10 +240,10 @@ namespace pmacc
                         const math::Int<3>& _blockIdx,
                         const math::Int<3>& _threadIdx) const
                     {
-                        return math::Int<3>(
+                        return {
                             _blockIdx.x() * _blockDim.x() + _threadIdx.x(),
                             _blockIdx.y() * _blockDim.y() + _threadIdx.y(),
-                            _blockIdx.z() * _blockDim.z() + _threadIdx.z());
+                            _blockIdx.z() * _blockDim.z() + _threadIdx.z()};
                     }
 
                     template<typename T_Acc>

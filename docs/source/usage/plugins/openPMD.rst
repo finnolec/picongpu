@@ -26,6 +26,7 @@ One can e.g. disable the output of particles by setting:
    using FileOutputParticles = MakeSeq_t< >;
 
 Particle filters used for output plugins, including this one, are defined in :ref:`particleFilters.param <usage-params-core>`.
+Also see :ref:`common patterns of defining particle filters <usage-workflows-particleFilters>`.
 
 .cfg file
 ^^^^^^^^^
@@ -43,9 +44,8 @@ The openPMD API will parse the file name to decide the chosen backend and iterat
 In order to set defaults for these value, two further options control the filename:
 
 * ``--openPMD.ext`` sets the filename extension.
-  Possible extensions include ``bp`` for the ADIOS2 backends (default), ``h5`` for HDF5 and ``sst`` for Streaming via ADIOS2/SST.
-  If the openPMD API has been built with support for the ADIOS1 and ADIOS2 backends, ADIOS2 will take precedence over ADIOS1.
-  This behavior can be overridden by setting the environment variable ``OPENPMD_BP_BACKEND=ADIOS1``.
+  Possible extensions include ``bp`` for the ADIOS2 backend (default), ``h5`` for HDF5 and ``sst`` for Streaming via ADIOS2/SST.
+  In case your openPMD API supports both ADIOS1 and ADIOS2, make sure that environment variable ``OPENPMD_BP_BACKEND`` is not set to ADIOS1.
 * ``--openPMD.infix`` sets the filename pattern that controls the iteration layout, default is "_06T" for a six-digit number specifying the iteration.
   Leave empty to pick group-based iteration layout.
   Since passing an empty string may be tricky in some workflows, specifying ``--openPMD.infix=NULL`` is also possible.
@@ -113,7 +113,6 @@ PIConGPU command line option          description
 ===================================== ====================================================================================================================================================
 ``--openPMD.period``                  Period after which simulation data should be stored on disk.
 ``--openPMD.source``                  Select data sources and filters to dump. Default is ``species_all,fields_all``, which dumps all fields and particle species.
-``--openPMD.compression``             Legacy parameter to set data transform compression method to be used for ADIOS1 backend until it implements setting compression from JSON config.
 ``--openPMD.file``                    Relative or absolute openPMD file prefix for simulation data. If relative, files are stored under ``simOutput``. 
 ``--openPMD.ext``                     openPMD filename extension (this controls thebackend picked by the openPMD API).
 ``--openPMD.infix``                   openPMD filename infix (use to pick file- or group-based layout in openPMD). Set to NULL to keep empty (e.g. to pick group-based iteration layout).

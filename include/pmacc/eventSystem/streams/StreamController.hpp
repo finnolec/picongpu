@@ -54,7 +54,7 @@ namespace pmacc
             if(currentStreamIndex == streams.size())
                 currentStreamIndex = 0;
 
-            return streams[oldIndex];
+            return streams[oldIndex].get();
         }
 
         /**
@@ -63,10 +63,7 @@ namespace pmacc
          */
         virtual ~StreamController()
         {
-            for(size_t i = 0; i < streams.size(); i++)
-            {
-                __delete(streams[i]);
-            }
+            // First delete the streams
             streams.clear();
 
             /* This is the single point in PIC where ALL CUDA work must be finished. */
@@ -83,7 +80,7 @@ namespace pmacc
         {
             for(size_t i = 0; i < count; i++)
             {
-                streams.push_back(new EventStream());
+                streams.push_back(std::make_shared<EventStream>());
             }
         }
 
@@ -112,9 +109,7 @@ namespace pmacc
         /**
          * Constructor.
          */
-        StreamController() : isActivated(false), currentStreamIndex(0)
-        {
-        }
+        StreamController() = default;
 
         /**
          * Get instance of this class.
@@ -127,9 +122,9 @@ namespace pmacc
             return instance;
         }
 
-        std::vector<EventStream*> streams;
-        size_t currentStreamIndex;
-        bool isActivated;
+        std::vector<std::shared_ptr<EventStream>> streams;
+        size_t currentStreamIndex{0};
+        bool isActivated{false};
     };
 
 } // namespace pmacc

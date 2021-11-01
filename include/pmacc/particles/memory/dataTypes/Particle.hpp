@@ -44,8 +44,9 @@
 #include <boost/mpl/is_sequence.hpp>
 #include <boost/mpl/not.hpp>
 #include <boost/mpl/remove_if.hpp>
-#include <boost/type_traits.hpp>
 #include <boost/utility/result_of.hpp>
+
+#include <type_traits>
 
 namespace pmacc
 {
@@ -63,12 +64,12 @@ namespace pmacc
     template<typename T_FrameType, typename T_ValueTypeSeq = typename T_FrameType::ValueTypeSeq>
     struct Particle : public InheritLinearly<typename T_FrameType::MethodsList>
     {
-        typedef T_FrameType FrameType;
-        typedef T_ValueTypeSeq ValueTypeSeq;
-        typedef typename FrameType::Name Name;
-        typedef typename FrameType::SuperCellSize SuperCellSize;
-        typedef Particle<FrameType, ValueTypeSeq> ThisType;
-        typedef typename FrameType::MethodsList MethodsList;
+        using FrameType = T_FrameType;
+        using ValueTypeSeq = T_ValueTypeSeq;
+        using Name = typename FrameType::Name;
+        using SuperCellSize = typename FrameType::SuperCellSize;
+        using ThisType = Particle<FrameType, ValueTypeSeq>;
+        using MethodsList = typename FrameType::MethodsList;
 
         /** index of particle inside the Frame*/
         PMACC_ALIGN(idx, uint32_t);
@@ -127,9 +128,7 @@ namespace pmacc
          * @return result of operator[] of the Frame
          */
         template<typename T_Key>
-        HDINLINE typename boost::result_of<
-            typename boost::remove_reference<typename boost::result_of<FrameType(T_Key)>::type>::type(uint32_t)>::type
-        operator[](const T_Key key)
+        HDINLINE auto& operator[](const T_Key key)
         {
             PMACC_CASSERT_MSG_TYPE(key_not_available, T_Key, traits::HasIdentifier<Particle, T_Key>::type::value);
 
@@ -138,9 +137,7 @@ namespace pmacc
 
         /** const version of method operator(const T_Key) */
         template<typename T_Key>
-        HDINLINE typename boost::result_of<typename boost::remove_reference<
-            typename boost::result_of<const FrameType(T_Key)>::type>::type(uint32_t)>::type
-        operator[](const T_Key key) const
+        HDINLINE const auto& operator[](const T_Key key) const
         {
             PMACC_CASSERT_MSG_TYPE(key_not_available, T_Key, traits::HasIdentifier<Particle, T_Key>::type::value);
 
@@ -162,17 +159,17 @@ namespace pmacc
         struct HasIdentifier<pmacc::Particle<T_FrameType, T_ValueTypeSeq>, T_Key>
         {
         private:
-            typedef pmacc::Particle<T_FrameType, T_ValueTypeSeq> ParticleType;
-            typedef typename ParticleType::ValueTypeSeq ValueTypeSeq;
+            using ParticleType = pmacc::Particle<T_FrameType, T_ValueTypeSeq>;
+            using ValueTypeSeq = typename ParticleType::ValueTypeSeq;
 
         public:
             /* If T_Key can not be found in the T_ValueTypeSeq of this Particle class,
              * SolvedAliasName will be void_.
              * Look-up is also valid if T_Key is an alias.
              */
-            typedef typename GetKeyFromAlias<ValueTypeSeq, T_Key>::type SolvedAliasName;
+            using SolvedAliasName = typename GetKeyFromAlias<ValueTypeSeq, T_Key>::type;
 
-            typedef bmpl::contains<ValueTypeSeq, SolvedAliasName> type;
+            using type = bmpl::contains<ValueTypeSeq, SolvedAliasName>;
         };
 
         template<typename T_Key, typename T_FrameType, typename T_ValueTypeSeq>
@@ -208,26 +205,26 @@ namespace pmacc
                     pmacc::Particle<T_FrameType1, T_ValueTypeSeq1>,
                     pmacc::Particle<T_FrameType2, T_ValueTypeSeq2>>
                 {
-                    typedef pmacc::Particle<T_FrameType1, T_ValueTypeSeq1> Dest;
-                    typedef pmacc::Particle<T_FrameType2, T_ValueTypeSeq2> Src;
+                    using Dest = pmacc::Particle<T_FrameType1, T_ValueTypeSeq1>;
+                    using Src = pmacc::Particle<T_FrameType2, T_ValueTypeSeq2>;
 
-                    typedef typename Dest::ValueTypeSeq DestTypeSeq;
-                    typedef typename Src::ValueTypeSeq SrcTypeSeq;
+                    using DestTypeSeq = typename Dest::ValueTypeSeq;
+                    using SrcTypeSeq = typename Src::ValueTypeSeq;
 
                     /* create attribute list with a subset of common attributes in two sequences
                      * bmpl::contains has lower complexity than traits::HasIdentifier
                      * and was used for this reason
                      */
-                    typedef typename bmpl::copy_if<
+                    using CommonTypeSeq = typename bmpl::copy_if<
                         DestTypeSeq,
                         bmpl::contains<SrcTypeSeq, bmpl::_1>,
-                        bmpl::back_inserter<bmpl::vector0<>>>::type CommonTypeSeq;
+                        bmpl::back_inserter<bmpl::vector0<>>>::type;
 
                     /* create sequences with disjunct attributes from `DestTypeSeq` */
-                    typedef typename bmpl::copy_if<
+                    using UniqueInDestTypeSeq = typename bmpl::copy_if<
                         DestTypeSeq,
                         bmpl::not_<bmpl::contains<SrcTypeSeq, bmpl::_1>>,
-                        bmpl::back_inserter<bmpl::vector0<>>>::type UniqueInDestTypeSeq;
+                        bmpl::back_inserter<bmpl::vector0<>>>::type;
 
                     /** Assign particle attributes
                      *
@@ -256,29 +253,20 @@ namespace pmacc
                 template<typename T_MPLSeqWithObjectsToRemove, typename T_FrameType, typename T_ValueTypeSeq>
                 struct Deselect<T_MPLSeqWithObjectsToRemove, pmacc::Particle<T_FrameType, T_ValueTypeSeq>>
                 {
-                    typedef T_FrameType FrameType;
-                    typedef T_ValueTypeSeq ValueTypeSeq;
-                    typedef pmacc::Particle<FrameType, ValueTypeSeq> ParticleType;
-                    typedef T_MPLSeqWithObjectsToRemove MPLSeqWithObjectsToRemove;
+                    using FrameType = T_FrameType;
+                    using ValueTypeSeq = T_ValueTypeSeq;
+                    using ParticleType = pmacc::Particle<FrameType, ValueTypeSeq>;
+                    using MPLSeqWithObjectsToRemove = T_MPLSeqWithObjectsToRemove;
 
                     /* translate aliases to full specialized identifier*/
-                    typedef typename ResolveAliases<
+                    using ResolvedSeqWithObjectsToRemove = typename ResolveAliases<
                         MPLSeqWithObjectsToRemove,
                         ValueTypeSeq,
-                        errorHandlerPolicies::ReturnValue>::type ResolvedSeqWithObjectsToRemove;
+                        errorHandlerPolicies::ReturnValue>::type;
                     /* remove types from original particle attribute list*/
-                    typedef typename RemoveFromSeq<ValueTypeSeq, ResolvedSeqWithObjectsToRemove>::type NewValueTypeSeq;
+                    using NewValueTypeSeq = typename RemoveFromSeq<ValueTypeSeq, ResolvedSeqWithObjectsToRemove>::type;
                     /* new particle type*/
-                    typedef pmacc::Particle<FrameType, NewValueTypeSeq> ResultType;
-
-                    template<class>
-                    struct result;
-
-                    template<class F, class T_Obj>
-                    struct result<F(T_Obj)>
-                    {
-                        typedef ResultType type;
-                    };
+                    using ResultType = pmacc::Particle<FrameType, NewValueTypeSeq>;
 
                     HDINLINE
                     ResultType operator()(const ParticleType& particle)

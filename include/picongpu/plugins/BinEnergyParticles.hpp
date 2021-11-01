@@ -49,7 +49,9 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 
 
 namespace picongpu
@@ -117,16 +119,20 @@ namespace picongpu
 
             DataSpace<simDim> const superCellIdx(mapper.getSuperCellIndex(DataSpace<simDim>(cupla::blockIdx(acc))));
 
-            lockstep::makeMaster(workerIdx)([&]() {
-                frame = pb.getLastFrame(superCellIdx);
-                particlesInSuperCell = pb.getSuperCell(superCellIdx).getSizeLastFrame();
-            });
+            lockstep::makeMaster(workerIdx)(
+                [&]()
+                {
+                    frame = pb.getLastFrame(superCellIdx);
+                    particlesInSuperCell = pb.getSuperCell(superCellIdx).getSizeLastFrame();
+                });
 
-            lockstep::makeForEach<numWorkers, numWorkers>(workerIdx)([&](uint32_t const linearIdx) {
-                /* set all bins to 0 */
-                for(int i = linearIdx; i < realNumBins; i += numWorkers)
-                    shBin[i] = float_X(0.);
-            });
+            lockstep::makeForEach<numWorkers, numWorkers>(workerIdx)(
+                [&](uint32_t const linearIdx)
+                {
+                    /* set all bins to 0 */
+                    for(int i = linearIdx; i < realNumBins; i += numWorkers)
+                        shBin[i] = float_X(0.);
+                });
 
             cupla::__syncthreads(acc);
 
@@ -139,89 +145,97 @@ namespace picongpu
             while(frame.isValid())
             {
                 // move over all particles in a frame
-                lockstep::makeForEach<maxParticlesPerFrame, numWorkers>(workerIdx)([&](uint32_t const linearIdx) {
-                    if(linearIdx < particlesInSuperCell)
+                lockstep::makeForEach<maxParticlesPerFrame, numWorkers>(workerIdx)(
+                    [&](uint32_t const linearIdx)
                     {
-                        auto const particle = frame[linearIdx];
-                        if(accFilter(acc, particle))
+                        if(linearIdx < particlesInSuperCell)
                         {
-                            /* kinetic Energy for Particles: E^2 = p^2*c^2 + m^2*c^4
-                             *                                   = c^2 * [p^2 + m^2*c^2]
-                             */
-                            float3_X const mom = particle[momentum_];
-                            float_X const weighting = particle[weighting_];
-                            float_X const mass = attribute::getMass(weighting, particle);
+                            auto const particle = frame[linearIdx];
+                            if(accFilter(acc, particle))
+                            {
+                                /* kinetic Energy for Particles: E^2 = p^2*c^2 + m^2*c^4
+                                 *                                   = c^2 * [p^2 + m^2*c^2]
+                                 */
+                                float3_X const mom = particle[momentum_];
+                                float_X const weighting = particle[weighting_];
+                                float_X const mass = attribute::getMass(weighting, particle);
 
-                            // calculate kinetic energy of the macro particle
-                            float_X localEnergy = KinEnergy<>()(mom, mass);
+                                // calculate kinetic energy of the macro particle
+                                float_X localEnergy = KinEnergy<>()(mom, mass);
 
-                            localEnergy /= weighting;
+                                localEnergy /= weighting;
 
-                            /* +1 move value from 1 to numBins+1 */
-                            int binNumber = math::floor(
-                                                (localEnergy - minEnergy) / (maxEnergy - minEnergy)
-                                                * static_cast<float_X>(numBins))
-                                + 1;
+                                /* +1 move value from 1 to numBins+1 */
+                                int binNumber = math::floor(
+                                                    (localEnergy - minEnergy) / (maxEnergy - minEnergy)
+                                                    * static_cast<float_X>(numBins))
+                                    + 1;
 
-                            int const maxBin = numBins + 1;
+                                int const maxBin = numBins + 1;
 
-                            /* all entries larger than maxEnergy go into bin maxBin */
-                            binNumber = binNumber < maxBin ? binNumber : maxBin;
+                                /* all entries larger than maxEnergy go into bin maxBin */
+                                binNumber = binNumber < maxBin ? binNumber : maxBin;
 
-                            /* all entries smaller than minEnergy go into bin zero */
-                            binNumber = binNumber > 0 ? binNumber : 0;
+                                /* all entries smaller than minEnergy go into bin zero */
+                                binNumber = binNumber > 0 ? binNumber : 0;
 
-                            /*!\todo: we can't use 64bit type on this place (NVIDIA BUG?)
-                             * COMPILER ERROR: ptxas /tmp/tmpxft_00005da6_00000000-2_main.ptx, line 4246; error   :
-                             * Global state space expected for instruction 'atom' I think this is a problem with
-                             * extern shared mem and atmic (only on TESLA) NEXT BUG: don't do uint32_t
-                             * w=__float2uint_rn(weighting); and use w for atomic, this create wrong results
-                             *
-                             * uses a normed float weighting to avoid an overflow of the floating point result
-                             * for the reduced weighting if the particle weighting is very large
-                             */
-                            float_X const normedWeighting
-                                = weighting / float_X(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE);
-                            cupla::atomicAdd(
-                                acc,
-                                &(shBin[binNumber]),
-                                normedWeighting,
-                                ::alpaka::hierarchy::Threads{});
+                                /*!\todo: we can't use 64bit type on this place (NVIDIA BUG?)
+                                 * COMPILER ERROR: ptxas /tmp/tmpxft_00005da6_00000000-2_main.ptx, line 4246; error   :
+                                 * Global state space expected for instruction 'atom' I think this is a problem with
+                                 * extern shared mem and atmic (only on TESLA) NEXT BUG: don't do uint32_t
+                                 * w=__float2uint_rn(weighting); and use w for atomic, this create wrong results
+                                 *
+                                 * uses a normed float weighting to avoid an overflow of the floating point result
+                                 * for the reduced weighting if the particle weighting is very large
+                                 */
+                                float_X const normedWeighting
+                                    = weighting / float_X(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE);
+                                cupla::atomicAdd(
+                                    acc,
+                                    &(shBin[binNumber]),
+                                    normedWeighting,
+                                    ::alpaka::hierarchy::Threads{});
+                            }
                         }
-                    }
-                });
+                    });
 
                 cupla::__syncthreads(acc);
 
-                lockstep::makeMaster(workerIdx)([&]() {
-                    frame = pb.getPreviousFrame(frame);
-                    particlesInSuperCell = maxParticlesPerFrame;
-                });
+                lockstep::makeMaster(workerIdx)(
+                    [&]()
+                    {
+                        frame = pb.getPreviousFrame(frame);
+                        particlesInSuperCell = maxParticlesPerFrame;
+                    });
                 cupla::__syncthreads(acc);
             }
 
-            lockstep::makeForEach<numWorkers, numWorkers>(workerIdx)([&](uint32_t const linearIdx) {
-                for(int i = linearIdx; i < realNumBins; i += numWorkers)
-                    cupla::atomicAdd(acc, &(gBins[i]), float_64(shBin[i]), ::alpaka::hierarchy::Blocks{});
-            });
+            lockstep::makeForEach<numWorkers, numWorkers>(workerIdx)(
+                [&](uint32_t const linearIdx)
+                {
+                    for(int i = linearIdx; i < realNumBins; i += numWorkers)
+                        cupla::atomicAdd(acc, &(gBins[i]), float_64(shBin[i]), ::alpaka::hierarchy::Blocks{});
+                });
         }
     };
 
     template<class ParticlesType>
-    class BinEnergyParticles : public plugins::multi::ISlave
+    class BinEnergyParticles : public plugins::multi::IInstance
     {
     private:
         struct Help : public plugins::multi::IHelp
         {
-            /** creates a instance of ISlave
+            /** creates an instance
              *
-             * @tparam T_Slave type of the interface implementation (must inherit from ISlave)
              * @param help plugin defined help
              * @param id index of the plugin, range: [0;help->getNumPlugins())
              */
-            std::shared_ptr<ISlave> create(std::shared_ptr<IHelp>& help, size_t const id, MappingDesc* cellDescription)
+            std::shared_ptr<IInstance> create(
+                std::shared_ptr<IHelp>& help,
+                size_t const id,
+                MappingDesc* cellDescription) override
             {
-                return std::shared_ptr<ISlave>(new BinEnergyParticles<ParticlesType>(help, id, cellDescription));
+                return std::shared_ptr<IInstance>(new BinEnergyParticles<ParticlesType>(help, id, cellDescription));
             }
 
             // find all valid filter for the current used species
@@ -243,7 +257,7 @@ namespace picongpu
             ///! method used by plugin controller to get --help description
             void registerHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
                 meta::ForEach<EligibleFilters, plugins::misc::AppendName<bmpl::_1>> getEligibleFilterNames;
                 getEligibleFilterNames(allowedFilters);
@@ -259,12 +273,12 @@ namespace picongpu
 
             void expandHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
             }
 
 
-            void validateOptions()
+            void validateOptions() override
             {
                 if(notifyPeriod.size() != filter.size())
                     throw std::runtime_error(
@@ -283,12 +297,12 @@ namespace picongpu
                 }
             }
 
-            size_t getNumPlugins() const
+            size_t getNumPlugins() const override
             {
                 return notifyPeriod.size();
             }
 
-            std::string getDescription() const
+            std::string getDescription() const override
             {
                 return description;
             }
@@ -298,7 +312,7 @@ namespace picongpu
                 return prefix;
             }
 
-            std::string getName() const
+            std::string getName() const override
             {
                 return name;
             }
@@ -310,12 +324,12 @@ namespace picongpu
             std::string const prefix = ParticlesType::FrameType::getName() + std::string("_energyHistogram");
         };
 
-        GridBuffer<float_64, DIM1>* gBins = nullptr;
+        std::unique_ptr<GridBuffer<float_64, DIM1>> gBins;
         MappingDesc* m_cellDescription = nullptr;
 
         std::string filename;
 
-        float_64* binReduced = nullptr;
+        std::vector<float_64> binReduced;
 
         int numBins;
         int realNumBins;
@@ -363,12 +377,8 @@ namespace picongpu
             realNumBins = numBins + 2;
 
             /* create an array of float_64 on gpu und host */
-            gBins = new GridBuffer<float_64, DIM1>(DataSpace<DIM1>(realNumBins));
-            binReduced = new float_64[realNumBins];
-            for(int i = 0; i < realNumBins; ++i)
-            {
-                binReduced[i] = 0.0;
-            }
+            gBins = std::make_unique<GridBuffer<float_64, DIM1>>(DataSpace<DIM1>(realNumBins));
+            binReduced.resize(realNumBins, 0.0);
 
             writeToFile = reduce.hasResult(mpi::reduceMethods::Reduce());
             if(writeToFile)
@@ -378,7 +388,7 @@ namespace picongpu
             Environment<>::get().PluginConnector().setNotificationPeriod(this, m_help->notifyPeriod.get(id));
         }
 
-        virtual ~BinEnergyParticles()
+        ~BinEnergyParticles() override
         {
             if(writeToFile)
             {
@@ -388,17 +398,14 @@ namespace picongpu
                     std::cerr << "Error on flushing file [" << filename << "]. " << std::endl;
                 outFile.close();
             }
-
-            __delete(gBins);
-            __deleteArray(binReduced);
         }
 
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             calBinEnergyParticles<CORE + BORDER>(currentStep);
         }
 
-        void restart(uint32_t restartStep, std::string const& restartDirectory)
+        void restart(uint32_t restartStep, std::string const& restartDirectory) override
         {
             if(!writeToFile)
                 return;
@@ -406,7 +413,7 @@ namespace picongpu
             writeToFile = restoreTxtFile(outFile, filename, restartStep, restartDirectory);
         }
 
-        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory)
+        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory) override
         {
             if(!writeToFile)
                 return;
@@ -455,7 +462,7 @@ namespace picongpu
             constexpr uint32_t numWorkers
                 = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
 
-            AreaMapping<AREA, MappingDesc> mapper(*m_cellDescription);
+            auto const mapper = makeAreaMapper<AREA>(*m_cellDescription);
 
             auto kernel = PMACC_KERNEL(KernelBinEnergyParticles<numWorkers>{})(
                 mapper.getGridDim(),
@@ -481,7 +488,7 @@ namespace picongpu
 
             reduce(
                 pmacc::math::operation::Add(),
-                binReduced,
+                binReduced.data(),
                 gBins->getHostBuffer().getBasePointer(),
                 realNumBins,
                 mpi::reduceMethods::Reduce());

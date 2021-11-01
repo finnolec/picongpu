@@ -27,9 +27,11 @@
 
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
+#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/memory/shared/Allocate.hpp>
 
 #include <iostream>
+#include <memory>
 
 
 namespace picongpu
@@ -83,22 +85,20 @@ namespace picongpu
     class SumCurrents : public ILightweightPlugin
     {
     private:
-        MappingDesc* cellDescription;
+        MappingDesc* cellDescription{nullptr};
         std::string notifyPeriod;
 
-        GridBuffer<float3_X, DIM1>* sumcurrents;
+        std::unique_ptr<GridBuffer<float3_X, DIM1>> sumcurrents;
 
     public:
-        SumCurrents() : cellDescription(nullptr)
+        SumCurrents()
         {
             Environment<>::get().PluginConnector().registerPlugin(this);
         }
 
-        virtual ~SumCurrents()
-        {
-        }
+        ~SumCurrents() override = default;
 
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             const int rank = Environment<simDim>::get().GridController().getGlobalRank();
             const float3_X gCurrent = getSumCurrents();
@@ -130,7 +130,7 @@ namespace picongpu
                           << "] " << realCurrent_SI << " Abs:" << math::abs(realCurrent_SI) << std::endl;
         }
 
-        void pluginRegisterHelp(po::options_description& desc)
+        void pluginRegisterHelp(po::options_description& desc) override
         {
             desc.add_options()(
                 "sumcurr.period",
@@ -138,32 +138,25 @@ namespace picongpu
                 "enable plugin [for each n-th step]");
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return "SumCurrents";
         }
 
-        void setMappingDescription(MappingDesc* cellDescription)
+        void setMappingDescription(MappingDesc* cellDescription) override
         {
             this->cellDescription = cellDescription;
         }
 
     private:
-        void pluginLoad()
+        void pluginLoad() override
         {
             if(!notifyPeriod.empty())
             {
-                sumcurrents = new GridBuffer<float3_X, DIM1>(DataSpace<DIM1>(1)); // create one int on gpu und host
+                sumcurrents = std::make_unique<GridBuffer<float3_X, DIM1>>(
+                    DataSpace<DIM1>(1)); // create one int on gpu und host
 
                 Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
-            }
-        }
-
-        void pluginUnload()
-        {
-            if(!notifyPeriod.empty())
-            {
-                __delete(sumcurrents);
             }
         }
 
@@ -175,7 +168,7 @@ namespace picongpu
             sumcurrents->getDeviceBuffer().setValue(float3_X::create(0.0));
             auto block = MappingDesc::SuperCellSize::toRT();
 
-            AreaMapping<CORE + BORDER, MappingDesc> mapper(*cellDescription);
+            auto const mapper = makeAreaMapper<CORE + BORDER>(*cellDescription);
             PMACC_KERNEL(KernelSumCurrents{})
             (mapper.getGridDim(),
              block)(fieldJ->getDeviceDataBox(), sumcurrents->getDeviceBuffer().getBasePointer(), mapper);

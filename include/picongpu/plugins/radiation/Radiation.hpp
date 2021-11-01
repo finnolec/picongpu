@@ -35,7 +35,6 @@
 
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
-#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/math/operation.hpp>
 #include <pmacc/mpi/MPIReduce.hpp>
 #include <pmacc/mpi/reduceMethods/Reduce.hpp>
@@ -47,6 +46,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -96,7 +96,7 @@ namespace picongpu
                  * The second dimension is used to store intermediate results if command
                  * line option numJobs is > 1.
                  */
-                GridBuffer<Amplitude, 2>* radiation;
+                std::unique_ptr<GridBuffer<Amplitude, 2>> radiation;
                 radiation_frequencies::InitFreqFunctor freqInit;
                 radiation_frequencies::FreqFunctor freqFkt;
 
@@ -146,7 +146,6 @@ namespace picongpu
                     , speciesName(ParticlesType::FrameType::getName())
                     , pluginPrefix(speciesName + std::string("_radiation"))
                     , filename_prefix(pluginPrefix)
-                    , radiation(nullptr)
                     , cellDescription(nullptr)
                     , dumpPeriod(0)
                     , totalRad(false)
@@ -160,10 +159,6 @@ namespace picongpu
                     Environment<>::get().PluginConnector().registerPlugin(this);
                 }
 
-                virtual ~Radiation()
-                {
-                }
-
                 /**
                  * This function represents what is actually calculated if the plugin
                  * is called. Here, one only sets the particles pointer to the data of
@@ -171,7 +166,7 @@ namespace picongpu
                  * function if for the actual time step radiation is to be calculated.
                  * @param currentStep
                  */
-                void notify(uint32_t currentStep)
+                void notify(uint32_t currentStep) override
                 {
                     if(currentStep >= radStart)
                     {
@@ -193,7 +188,7 @@ namespace picongpu
                     }
                 }
 
-                void pluginRegisterHelp(po::options_description& desc)
+                void pluginRegisterHelp(po::options_description& desc) override
                 {
                     desc.add_options()(
                         (pluginPrefix + ".period").c_str(),
@@ -233,19 +228,19 @@ namespace picongpu
                 }
 
 
-                std::string pluginGetName() const
+                std::string pluginGetName() const override
                 {
                     return pluginName;
                 }
 
 
-                void setMappingDescription(MappingDesc* cellDescription)
+                void setMappingDescription(MappingDesc* cellDescription) override
                 {
                     this->cellDescription = cellDescription;
                 }
 
 
-                void restart(uint32_t timeStep, const std::string restartDirectory)
+                void restart(uint32_t timeStep, const std::string restartDirectory) override
                 {
                     // only load backup if radiation is calculated:
                     if(notifyPeriod.empty())
@@ -297,7 +292,7 @@ namespace picongpu
                  * intermediate values.
                  * On every host data structure for storage of the calculated radiation
                  * is created.       */
-                void pluginLoad()
+                void pluginLoad() override
                 {
                     if(!notifyPeriod.empty())
                     {
@@ -319,7 +314,8 @@ namespace picongpu
                          * The second dimension is used to store intermediate results if command
                          * line option numJobs is > 1.
                          */
-                        radiation = new GridBuffer<Amplitude, 2>(DataSpace<2>(elements_amplitude(), numJobs));
+                        radiation
+                            = std::make_unique<GridBuffer<Amplitude, 2>>(DataSpace<2>(elements_amplitude(), numJobs));
 
                         freqInit.Init(frequencies_from_list::listLocation);
                         freqFkt = freqInit.getFunctor();
@@ -377,7 +373,7 @@ namespace picongpu
                 }
 
 
-                void pluginUnload()
+                void pluginUnload() override
                 {
                     if(!notifyPeriod.empty())
                     {
@@ -396,8 +392,6 @@ namespace picongpu
                             writeAllFiles(globalOffset);
                         }
 
-
-                        __delete(radiation);
                         CUDA_CHECK(cuplaGetLastError());
                     }
                 }
@@ -667,7 +661,7 @@ namespace picongpu
                 void writeOpenPMDfile(std::vector<Amplitude>& values, std::string name)
                 {
                     std::ostringstream filename;
-                    // TODO: needs to be changed to ".h5" and also support adios
+                    // TODO: needs to be changed to ".h5" and also support adios2
                     filename << name << "%T_0_0_0.h5";
 
                     ::openPMD::Series openPMDdataFile = ::openPMD::Series(filename.str(), ::openPMD::Access::CREATE);
@@ -718,7 +712,8 @@ namespace picongpu
                                       mesh_amp[dir],
                                       offset_amp,
                                       extent_amp,
-                                      [&fallbackBuffer](size_t numElements) {
+                                      [&fallbackBuffer](size_t numElements)
+                                      {
                                           // if there is no special backend support for creating buffers,
                                           // use the fallback buffer
                                           fallbackBuffer.resize(numElements);
@@ -773,13 +768,18 @@ namespace picongpu
                             // ask openPMD to create a buffer for us
                             // in some backends (ADIOS2), this allows avoiding memcopies
                             auto span
-                                = ::picongpu::openPMD::storeChunkSpan<
-                                      double>(mesh_n[dir], offset_n, extent_n, [&fallbackBuffer](size_t numElements) {
-                                      // if there is no special backend support for creating buffers,
-                                      // use the fallback buffer
-                                      fallbackBuffer.resize(numElements);
-                                      return std::shared_ptr<float_64>{fallbackBuffer.data(), [](auto const*) {}};
-                                  }).currentBuffer();
+                                = ::picongpu::openPMD::storeChunkSpan<double>(
+                                      mesh_n[dir],
+                                      offset_n,
+                                      extent_n,
+                                      [&fallbackBuffer](size_t numElements)
+                                      {
+                                          // if there is no special backend support for creating buffers,
+                                          // use the fallback buffer
+                                          fallbackBuffer.resize(numElements);
+                                          return std::shared_ptr<float_64>{fallbackBuffer.data(), [](auto const*) {}};
+                                      })
+                                      .currentBuffer();
 
                             // select data
                             for(int copyIndex = 0; copyIndex < parameters::N_observer; ++copyIndex)
@@ -874,7 +874,7 @@ namespace picongpu
                 void readOpenPMDfile(std::vector<Amplitude>& values, std::string name, const int timeStep)
                 {
                     std::ostringstream filename;
-                    /* add to standard ending added by libSplash for SerialDataCollector */
+                    /* add to standard file ending */
                     filename << name << timeStep << ".h5";
 
                     /* check if restart file exists */

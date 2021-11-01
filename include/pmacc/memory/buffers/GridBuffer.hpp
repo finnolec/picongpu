@@ -55,9 +55,7 @@ namespace pmacc
             }
 
         private:
-            UniquTag()
-            {
-            }
+            UniquTag() = default;
 
             /**
              * Constructor
@@ -85,10 +83,10 @@ namespace pmacc
     template<class TYPE, unsigned DIM, class BORDERTYPE = TYPE>
     class GridBuffer : public HostDeviceBuffer<TYPE, DIM>
     {
-        typedef HostDeviceBuffer<TYPE, DIM> Parent;
+        using Parent = HostDeviceBuffer<TYPE, DIM>;
 
     public:
-        typedef typename Parent::DataBoxType DataBoxType;
+        using DataBoxType = typename Parent::DataBoxType;
 
         /**
          * Constructor.
@@ -169,18 +167,6 @@ namespace pmacc
         }
 
         /**
-         * Destructor.
-         */
-        virtual ~GridBuffer()
-        {
-            for(uint32_t i = 0; i < 27; ++i)
-            {
-                __delete(sendExchanges[i]);
-                __delete(receiveExchanges[i]);
-            };
-        }
-
-        /**
          * Add Exchange in GridBuffer memory space.
          *
          * An Exchange is added to this GridBuffer. The exchange buffers use
@@ -245,7 +231,7 @@ namespace pmacc
                     }
 
                     maxExchange = std::max(maxExchange, ex + 1u);
-                    sendExchanges[ex] = new ExchangeIntern<BORDERTYPE, DIM>(
+                    sendExchanges[ex] = std::make_unique<ExchangeIntern<BORDERTYPE, DIM>>(
                         this->getDeviceBuffer(),
                         gridLayout,
                         guardingCells,
@@ -255,7 +241,7 @@ namespace pmacc
                         sizeOnDeviceSend);
                     ExchangeType recvex = Mask::getMirroredExchangeType(ex);
                     maxExchange = std::max(maxExchange, recvex + 1u);
-                    receiveExchanges[recvex] = new ExchangeIntern<BORDERTYPE, DIM>(
+                    receiveExchanges[recvex] = std::make_unique<ExchangeIntern<BORDERTYPE, DIM>>(
                         this->getDeviceBuffer(),
                         gridLayout,
                         guardingCells,
@@ -356,7 +342,7 @@ namespace pmacc
 
                         // GridLayout<DIM> memoryLayout(size);
                         maxExchange = std::max(maxExchange, ex + 1u);
-                        sendExchanges[ex] = new ExchangeIntern<BORDERTYPE, DIM>(
+                        sendExchanges[ex] = std::make_unique<ExchangeIntern<BORDERTYPE, DIM>>(
                             /*memoryLayout*/ dataSpace,
                             ex,
                             uniqCommunicationTag,
@@ -364,7 +350,7 @@ namespace pmacc
 
                         ExchangeType recvex = Mask::getMirroredExchangeType(ex);
                         maxExchange = std::max(maxExchange, recvex + 1u);
-                        receiveExchanges[recvex] = new ExchangeIntern<BORDERTYPE, DIM>(
+                        receiveExchanges[recvex] = std::make_unique<ExchangeIntern<BORDERTYPE, DIM>>(
                             /*memoryLayout*/ dataSpace,
                             recvex,
                             uniqCommunicationTag,
@@ -546,8 +532,6 @@ namespace pmacc
         {
             for(uint32_t i = 0; i < 27; ++i)
             {
-                sendExchanges[i] = nullptr;
-                receiveExchanges[i] = nullptr;
                 /* fill array with valid empty events to avoid side effects if
                  * array is accessed without calling hasExchange() before usage */
                 receiveEvents[i] = EventTask();
@@ -564,8 +548,8 @@ namespace pmacc
         Mask sendMask;
         Mask receiveMask;
 
-        ExchangeIntern<BORDERTYPE, DIM>* sendExchanges[27];
-        ExchangeIntern<BORDERTYPE, DIM>* receiveExchanges[27];
+        std::unique_ptr<ExchangeIntern<BORDERTYPE, DIM>> sendExchanges[27];
+        std::unique_ptr<ExchangeIntern<BORDERTYPE, DIM>> receiveExchanges[27];
         EventTask receiveEvents[27];
         EventTask sendEvents[27];
 

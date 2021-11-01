@@ -31,8 +31,7 @@
 #include "pmacc/memory/buffers/DeviceBuffer.hpp"
 #include "pmacc/traits/GetNumWorkers.hpp"
 
-#include <boost/type_traits.hpp>
-#include <boost/type_traits/remove_pointer.hpp>
+#include <type_traits>
 
 
 namespace pmacc
@@ -44,7 +43,7 @@ namespace pmacc
         template<typename T_Type, bool isPointer>
         struct Value
         {
-            typedef const T_Type type;
+            using type = const T_Type;
 
             HDINLINE type& operator()(type& v) const
             {
@@ -60,7 +59,7 @@ namespace pmacc
         struct Value<T_Type, true>
         {
             typedef const T_Type PtrType;
-            typedef const typename boost::remove_pointer<PtrType>::type type;
+            using type = const typename std::remove_pointer_t<PtrType>;
 
             HDINLINE type& operator()(PtrType v) const
             {
@@ -71,9 +70,9 @@ namespace pmacc
         /** Get access to a value from a pointer or reference with the same method
          */
         template<typename T_Type>
-        HDINLINE typename Value<T_Type, boost::is_pointer<T_Type>::value>::type& getValue(T_Type& value)
+        HDINLINE typename Value<T_Type, std::is_pointer<T_Type>::value>::type& getValue(T_Type& value)
         {
-            typedef Value<T_Type, boost::is_pointer<T_Type>::value> Functor;
+            typedef Value<T_Type, std::is_pointer<T_Type>::value> Functor;
             return Functor()(value);
         }
 
@@ -114,14 +113,16 @@ namespace pmacc
             constexpr uint32_t numWorkers = T_numWorkers;
             uint32_t const workerIdx = cupla::threadIdx(acc).x;
 
-            lockstep::makeForEach<T_xChunkSize, numWorkers>(workerIdx)([&](uint32_t const linearIdx) {
-                auto virtualWorkerIdx(SizeVecType::create(0));
-                virtualWorkerIdx.x() = linearIdx;
+            lockstep::makeForEach<T_xChunkSize, numWorkers>(workerIdx)(
+                [&](uint32_t const linearIdx)
+                {
+                    auto virtualWorkerIdx(SizeVecType::create(0));
+                    virtualWorkerIdx.x() = linearIdx;
 
-                SizeVecType const idx(blockSize * blockIndex + virtualWorkerIdx);
-                if(idx.x() < size.x())
-                    memBox(idx) = taskSetValueHelper::getValue(value);
-            });
+                    SizeVecType const idx(blockSize * blockIndex + virtualWorkerIdx);
+                    if(idx.x() < size.x())
+                        memBox(idx) = taskSetValueHelper::getValue(value);
+                });
         }
     };
 
@@ -142,7 +143,7 @@ namespace pmacc
     class TaskSetValueBase : public StreamTask
     {
     public:
-        typedef T_ValueType ValueType;
+        using ValueType = T_ValueType;
         static constexpr uint32_t dim = T_dim;
 
         TaskSetValueBase(DeviceBuffer<ValueType, dim>& dst, const ValueType& value) : StreamTask(), value(value)
@@ -150,24 +151,24 @@ namespace pmacc
             this->destination = &dst;
         }
 
-        virtual ~TaskSetValueBase()
+        ~TaskSetValueBase() override
         {
             notify(this->myId, SETVALUE, nullptr);
         }
 
-        virtual void init() = 0;
+        void init() override = 0;
 
-        bool executeIntern()
+        bool executeIntern() override
         {
             return isFinished();
         }
 
-        void event(id_t, EventType, IEventData*)
+        void event(id_t, EventType, IEventData*) override
         {
         }
 
     protected:
-        std::string toString()
+        std::string toString() override
         {
             return "TaskSetValue";
         }
@@ -182,7 +183,7 @@ namespace pmacc
     class TaskSetValue<T_ValueType, T_dim, true> : public TaskSetValueBase<T_ValueType, T_dim>
     {
     public:
-        typedef T_ValueType ValueType;
+        using ValueType = T_ValueType;
         static constexpr uint32_t dim = T_dim;
 
         TaskSetValue(DeviceBuffer<ValueType, dim>& dst, const ValueType& value)
@@ -190,11 +191,9 @@ namespace pmacc
         {
         }
 
-        virtual ~TaskSetValue()
-        {
-        }
+        ~TaskSetValue() override = default;
 
-        virtual void init()
+        void init() override
         {
             // number of elements in destination
             size_t const current_size = this->destination->getCurrentSize();
@@ -231,7 +230,7 @@ namespace pmacc
     class TaskSetValue<T_ValueType, T_dim, false> : public TaskSetValueBase<T_ValueType, T_dim>
     {
     public:
-        typedef T_ValueType ValueType;
+        using ValueType = T_ValueType;
         static constexpr uint32_t dim = T_dim;
 
         TaskSetValue(DeviceBuffer<ValueType, dim>& dst, const ValueType& value)
@@ -240,7 +239,7 @@ namespace pmacc
         {
         }
 
-        virtual ~TaskSetValue()
+        ~TaskSetValue() override
         {
             if(valuePointer_host != nullptr)
             {
@@ -249,7 +248,7 @@ namespace pmacc
             }
         }
 
-        void init()
+        void init() override
         {
             size_t current_size = this->destination->getCurrentSize();
             const DataSpace<dim> area_size(this->destination->getCurrentDataSpace(current_size));

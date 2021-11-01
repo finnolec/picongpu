@@ -93,13 +93,7 @@ namespace picongpu
                         = components > 1 ? record[name_lookup[d]] : record[::openPMD::MeshRecordComponent::SCALAR];
 
                     std::string datasetName = components > 1 ? baseName + "/" + name_lookup[d] : baseName;
-                    params->initDataset<DIM1>(
-                        recordComponent,
-                        openPMDType,
-                        {globalElements},
-                        true,
-                        params->compressionMethod,
-                        datasetName);
+                    params->initDataset<DIM1>(recordComponent, openPMDType, {globalElements}, datasetName);
 
                     if(unit.size() >= (d + 1))
                     {
@@ -121,7 +115,8 @@ namespace picongpu
                                     recordComponent,
                                     ::openPMD::Offset{globalOffset},
                                     ::openPMD::Extent{elements},
-                                    [&storeBfr](size_t size) {
+                                    [&storeBfr](size_t size)
+                                    {
                                         // if there is no special backend support for creating buffers,
                                         // reuse the storeBfr
                                         if(!storeBfr && size > 0)

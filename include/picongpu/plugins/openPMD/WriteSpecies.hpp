@@ -50,8 +50,6 @@
 #include <boost/mpl/pair.hpp>
 #include <boost/mpl/size.hpp>
 #include <boost/mpl/vector.hpp>
-#include <boost/type_traits.hpp>
-#include <boost/type_traits/is_same.hpp>
 
 
 namespace picongpu
@@ -132,7 +130,7 @@ namespace picongpu
                     % name;
 
                 int particlesProcessed = 0;
-                AreaMapping<CORE + BORDER, MappingDesc> mapper(*(rp.params.cellDescription));
+                auto const mapper = makeAreaMapper<CORE + BORDER>(*(rp.params.cellDescription));
 
                 pmacc::particles::operations::ConcatListOfFrames<simDim> concatListOfFrames(mapper.getGridDim());
 
@@ -207,7 +205,7 @@ namespace picongpu
                 log<picLog::INPUT_OUTPUT>("openPMD:  ( end ) get mapped memory device pointer: %1%") % name;
 
                 GridBuffer<int, DIM1> counterBuffer(DataSpace<DIM1>(1));
-                AreaMapping<CORE + BORDER, MappingDesc> mapper(*(rp.params.cellDescription));
+                auto const mapper = makeAreaMapper<CORE + BORDER>(*(rp.params.cellDescription));
 
                 constexpr uint32_t numWorkers
                     = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
@@ -370,17 +368,17 @@ namespace picongpu
                 switch(params->strategy)
                 {
                 case WriteSpeciesStrategy::ADIOS:
-                {
-                    using type = StrategyADIOS<openPMDFrameType, RunParameters_T>;
-                    strategy = std::unique_ptr<AStrategy>(dynamic_cast<AStrategy*>(new type));
-                    break;
-                }
+                    {
+                        using type = StrategyADIOS<openPMDFrameType, RunParameters_T>;
+                        strategy = std::unique_ptr<AStrategy>(dynamic_cast<AStrategy*>(new type));
+                        break;
+                    }
                 case WriteSpeciesStrategy::HDF5:
-                {
-                    using type = StrategyHDF5<openPMDFrameType, RunParameters_T>;
-                    strategy = std::unique_ptr<AStrategy>(dynamic_cast<AStrategy*>(new type));
-                    break;
-                }
+                    {
+                        using type = StrategyHDF5<openPMDFrameType, RunParameters_T>;
+                        strategy = std::unique_ptr<AStrategy>(dynamic_cast<AStrategy*>(new type));
+                        break;
+                    }
                 }
 
 

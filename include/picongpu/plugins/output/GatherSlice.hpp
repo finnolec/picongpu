@@ -39,14 +39,8 @@ namespace picongpu
 
     struct GatherSlice
     {
-        GatherSlice()
-            : mpiRank(-1)
-            , numRanks(0)
-            , filteredData(nullptr)
-            , comm(MPI_COMM_NULL)
-            , fullData(nullptr)
-            , masterRank(0)
-            , isMPICommInitialized(false)
+        GatherSlice() : comm(MPI_COMM_NULL)
+
         {
         }
 
@@ -120,18 +114,17 @@ namespace picongpu
             using ValueType = typename Box::ValueType;
 
             Box dstBox = Box(PitchedBox<ValueType, DIM2>(
-                (ValueType*) filteredData,
-                DataSpace<DIM2>(),
+                (ValueType*) filteredData.data(),
                 header.sim.size,
                 header.sim.size.x() * sizeof(ValueType)));
 
             MessageHeader* fakeHeader = MessageHeader::create();
             *fakeHeader = header;
 
-            char* recvHeader = new char[MessageHeader::bytes * numRanks];
+            auto* recvHeader = new char[MessageHeader::bytes * numRanks];
 
-            if(fullData == nullptr && mpiRank == masterRank)
-                fullData = (char*) new ValueType[header.sim.size.productOfComponents()];
+            if(fullData.empty() && mpiRank == masterRank)
+                fullData.resize(sizeof(ValueType) * header.sim.size.productOfComponents());
 
 
             // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
@@ -151,7 +144,7 @@ namespace picongpu
             int offset = 0;
             for(int i = 0; i < numRanks; ++i)
             {
-                MessageHeader* head = (MessageHeader*) (recvHeader + MessageHeader::bytes * i);
+                auto* head = (MessageHeader*) (recvHeader + MessageHeader::bytes * i);
                 counts[i] = head->node.maxSize.productOfComponents() * sizeof(ValueType);
                 displs[i] = offset;
                 offset += counts[i];
@@ -165,7 +158,7 @@ namespace picongpu
                 (char*) (data.getPointer()),
                 elementsCount,
                 MPI_CHAR,
-                fullData,
+                fullData.data(),
                 &counts[0],
                 &displs[0],
                 MPI_CHAR,
@@ -176,33 +169,31 @@ namespace picongpu
             if(mpiRank == masterRank)
             {
                 log<picLog::DOMAINS>("Master create image");
-                if(filteredData == nullptr)
-                    filteredData = (char*) new ValueType[header.sim.size.productOfComponents()];
+                if(filteredData.empty())
+                    filteredData.resize(sizeof(ValueType) * header.sim.size.productOfComponents());
 
                 /*create box with valid memory*/
                 dstBox = Box(PitchedBox<ValueType, DIM2>(
-                    (ValueType*) filteredData,
-                    DataSpace<DIM2>(),
+                    (ValueType*) filteredData.data(),
                     header.sim.size,
                     header.sim.size.x() * sizeof(ValueType)));
 
                 for(int i = 0; i < numRanks; ++i)
                 {
-                    MessageHeader* head = (MessageHeader*) (recvHeader + MessageHeader::bytes * i);
+                    auto* head = (MessageHeader*) (recvHeader + MessageHeader::bytes * i);
 
                     log<picLog::DOMAINS>("part image with offset %1%byte=%2%elements | size %3%  | offset %4%")
                         % displs[i] % (displs[i] / sizeof(ValueType)) % head->node.maxSize.toString()
                         % head->node.offset.toString();
                     Box srcBox = Box(PitchedBox<ValueType, DIM2>(
-                        (ValueType*) (fullData + displs[i]),
-                        DataSpace<DIM2>(),
+                        (ValueType*) (fullData.data() + displs[i]),
                         head->node.maxSize,
                         head->node.maxSize.x() * sizeof(ValueType)));
 
                     insertData(dstBox, srcBox, head->node.offset, head->node.maxSize);
                 }
 
-                __deleteArray(fullData);
+                fullData.clear();
             }
 
             delete[] recvHeader;
@@ -222,7 +213,7 @@ namespace picongpu
             {
                 for(int x = 0; x < srcSize.x(); ++x)
                 {
-                    dst[y + offsetToSimNull.y()][x + offsetToSimNull.x()] = src[y][x];
+                    dst({x + offsetToSimNull.x(), y + offsetToSimNull.y()}) = src({x, y});
                 }
             }
         }
@@ -233,12 +224,8 @@ namespace picongpu
         {
             mpiRank = -1;
             numRanks = 0;
-            if(filteredData != nullptr)
-                delete[] filteredData;
-            filteredData = nullptr;
-            if(fullData != nullptr)
-                delete[] fullData;
-            fullData = nullptr;
+            filteredData.clear();
+            fullData.clear();
             if(isMPICommInitialized)
             {
                 // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
@@ -248,13 +235,13 @@ namespace picongpu
             isMPICommInitialized = false;
         }
 
-        char* filteredData;
-        char* fullData;
+        std::vector<char> filteredData;
+        std::vector<char> fullData;
         MPI_Comm comm;
-        int mpiRank;
-        int numRanks;
-        int masterRank;
-        bool isMPICommInitialized;
+        int mpiRank{-1};
+        int numRanks{0};
+        int masterRank{0};
+        bool isMPICommInitialized{false};
     };
 
 } // namespace picongpu

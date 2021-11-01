@@ -146,7 +146,7 @@ namespace picongpu
 
         static void destroy(MessageHeader* obj)
         {
-            __deleteArray(obj);
+            delete[] obj;
         }
 
         MessageHeader& operator=(MessageHeader const&) = default;
@@ -170,7 +170,7 @@ namespace picongpu
          *
          * it is only allowed to create Message header with @see create()
          */
-        MessageHeader();
+        MessageHeader() = delete;
     };
 
 } // namespace picongpu

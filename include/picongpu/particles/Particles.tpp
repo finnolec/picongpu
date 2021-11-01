@@ -27,6 +27,7 @@
 #include "picongpu/particles/Particles.hpp"
 #include "picongpu/particles/Particles.kernel"
 #include "picongpu/particles/ParticlesInit.kernel"
+#include "picongpu/particles/boundary/Apply.hpp"
 #include "picongpu/particles/pusher/Traits.hpp"
 #include "picongpu/particles/traits/GetExchangeMemCfg.hpp"
 #include "picongpu/particles/traits/GetMarginPusher.hpp"
@@ -35,9 +36,11 @@
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
+#include <pmacc/meta/InvokeIf.hpp>
 #include <pmacc/particles/memory/buffers/ParticlesBuffer.hpp>
 #include <pmacc/traits/GetNumWorkers.hpp>
 #include <pmacc/traits/GetUniqueTypeId.hpp>
+#include <pmacc/traits/HasFlag.hpp>
 #include <pmacc/traits/Resolve.hpp>
 
 #include <iostream>
@@ -201,6 +204,17 @@ namespace picongpu
         : ParticlesBase<SpeciesParticleDescription, picongpu::MappingDesc, DeviceHeap>(heap, cellDescription)
         , m_datasetID(datasetID)
     {
+        constexpr bool particleHasShape = pmacc::traits::HasIdentifier<FrameType, shape<>>::type::value;
+        pmacc::meta::invokeIf<particleHasShape>(
+            []()
+            {
+                constexpr auto particleAssignmentShapeSupport = GetShape<Particles>::type::ChargeAssignment::support;
+                static_assert(
+                    particleAssignmentShapeSupport > 0,
+                    "A particle shape must have a support larger than zero. Please use a higher order shape. If you "
+                    "need a pointwise particle use NGP shape.");
+            });
+
         size_t sizeOfExchanges = 0u;
 
         const uint32_t commTag = pmacc::traits::GetUniqueTypeId<FrameType, uint32_t>::uid();
@@ -312,6 +326,18 @@ namespace picongpu
         PushLauncher<ParticlePush>{}(*this, currentStep);
     }
 
+    template<typename T_Name, typename T_Flags, typename T_Attributes>
+    void Particles<T_Name, T_Flags, T_Attributes>::applyBoundary(uint32_t const currentStep)
+    {
+        using HasMomentum = typename pmacc::traits::HasIdentifier<FrameType, momentum>::type;
+        /* We have to templatize lambda parameter to defer its instantiation.
+         * Otherwise it would have been instantiated for all species, not just supported ones.
+         */
+        pmacc::meta::invokeIf<HasMomentum::value>(
+            [currentStep](auto thisInstance) { particles::boundary::apply(*thisInstance, currentStep); },
+            this);
+    }
+
     /** Do the particle push stage using the given pusher
      *
      * @tparam T_Pusher non-composite pusher type
@@ -342,7 +368,7 @@ namespace picongpu
 
         using BlockArea = SuperCellDescription<typename MappingDesc::SuperCellSize, LowerMargin, UpperMargin>;
 
-        AreaMapping<CORE + BORDER, picongpu::MappingDesc> mapper(this->cellDescription);
+        auto const mapper = makeAreaMapper<CORE + BORDER>(this->cellDescription);
 
         constexpr uint32_t numWorkers
             = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
@@ -356,7 +382,18 @@ namespace picongpu
             FrameSolver(),
             mapper);
 
-        ParticlesBaseType::template shiftParticles<CORE + BORDER>();
+        // The move-and-mark kernel sets mustShift for supercells, so we can call the optimized version of shift
+        auto const onlyProcessMustShiftSupercells = true;
+        shiftBetweenSupercells(pmacc::AreaMapperFactory<CORE + BORDER>{}, onlyProcessMustShiftSupercells);
+    }
+
+    template<typename T_Name, typename T_Flags, typename T_Attributes>
+    template<typename T_MapperFactory>
+    void Particles<T_Name, T_Flags, T_Attributes>::shiftBetweenSupercells(
+        T_MapperFactory const& mapperFactory,
+        bool const onlyProcessMustShiftSupercells)
+    {
+        ParticlesBaseType::template shiftParticles(mapperFactory, onlyProcessMustShiftSupercells);
     }
 
     template<typename T_Name, typename T_Flags, typename T_Attributes>
@@ -377,7 +414,7 @@ namespace picongpu
         constexpr uint32_t numWorkers
             = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
 
-        AreaMapping<CORE + BORDER, picongpu::MappingDesc> mapper(this->cellDescription);
+        auto const mapper = makeAreaMapper<CORE + BORDER>(this->cellDescription);
         PMACC_KERNEL(KernelFillGridWithParticles<numWorkers, Particles>{})
         (mapper.getGridDim(), numWorkers)(
             densityFunctor,
@@ -403,7 +440,7 @@ namespace picongpu
     {
         log<picLog::SIMULATION_STATE>("clone species %1%") % FrameType::getName();
 
-        AreaMapping<CORE + BORDER, picongpu::MappingDesc> mapper(this->cellDescription);
+        auto const mapper = makeAreaMapper<CORE + BORDER>(this->cellDescription);
 
         constexpr uint32_t numWorkers
             = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;

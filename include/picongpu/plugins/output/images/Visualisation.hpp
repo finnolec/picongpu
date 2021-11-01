@@ -37,6 +37,7 @@
 #include <pmacc/dimensions/DataSpaceOperations.hpp>
 #include <pmacc/kernel/atomic.hpp>
 #include <pmacc/lockstep.hpp>
+#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/mappings/kernel/MappingDescription.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/math/Vector.hpp>
@@ -50,6 +51,7 @@
 #include <pmacc/traits/GetNumWorkers.hpp>
 
 #include <cfloat>
+#include <memory>
 #include <string>
 
 
@@ -260,56 +262,59 @@ namespace picongpu
             // each cell in a supercell is handled as a virtual worker
             auto forEachCell = lockstep::makeForEach<cellsPerSupercell, numWorkers>(workerIdx);
 
-            forEachCell([&](uint32_t const linearIdx) {
-                // cell index within the superCell
-                DataSpace<simDim> const cellIdx = DataSpaceOperations<simDim>::template map<SuperCellSize>(linearIdx);
-                // offset to the origin of the local domain + guarding cells
-                DataSpace<simDim> const cellOffset(suplercellIdx * SuperCellSize::toRT() + cellIdx);
-                // cell offset without guarding cells
-                DataSpace<simDim> const realCell(supercellCellOffset + cellIdx);
-                // offset within the two dimensional result buffer
-                DataSpace<DIM2> const imageCell(realCell[transpose.x()], realCell[transpose.y()]);
+            forEachCell(
+                [&](uint32_t const linearIdx)
+                {
+                    // cell index within the superCell
+                    DataSpace<simDim> const cellIdx
+                        = DataSpaceOperations<simDim>::template map<SuperCellSize>(linearIdx);
+                    // offset to the origin of the local domain + guarding cells
+                    DataSpace<simDim> const cellOffset(suplercellIdx * SuperCellSize::toRT() + cellIdx);
+                    // cell offset without guarding cells
+                    DataSpace<simDim> const realCell(supercellCellOffset + cellIdx);
+                    // offset within the two dimensional result buffer
+                    DataSpace<DIM2> const imageCell(realCell[transpose.x()], realCell[transpose.y()]);
 
-                bool const isCellOnSlice = IsPartOfSlice<>{}(realCell, sliceDim, localDomainOffset, slice);
+                    bool const isCellOnSlice = IsPartOfSlice<>{}(realCell, sliceDim, localDomainOffset, slice);
 
-                /* if the virtual worker is not calculating a cell out of the
-                 * selected slice then exit
-                 */
-                if(!isCellOnSlice)
-                    return;
-
-                // set fields of this cell to vars
-                typename T_BBox::ValueType field_b = fieldB(cellOffset);
-                typename T_EBox::ValueType field_e = fieldE(cellOffset);
-                typename T_JBox::ValueType field_j = fieldJ(cellOffset);
-
-                // multiply with the area size of each plane
-                field_j *= float3_X::create(CELL_VOLUME) / cellSize;
-
-                /* reset picture to black
-                 *   color range for each RGB channel: [0.0, 1.0]
-                 */
-                float3_X pic(
-                    /* typical values of the fields to normalize them to [0,1]
-                     * typicalFields<>::get()[...] means: [0] = BField normalization,
-                     * [1] = EField normalization, [2] = Current normalization
+                    /* if the virtual worker is not calculating a cell out of the
+                     * selected slice then exit
                      */
-                    visPreview::preChannel1(
-                        field_b / typicalFields<EM_FIELD_SCALE_CHANNEL1>::get()[0],
-                        field_e / typicalFields<EM_FIELD_SCALE_CHANNEL1>::get()[1],
-                        field_j / typicalFields<EM_FIELD_SCALE_CHANNEL1>::get()[2]),
-                    visPreview::preChannel2(
-                        field_b / typicalFields<EM_FIELD_SCALE_CHANNEL2>::get()[0],
-                        field_e / typicalFields<EM_FIELD_SCALE_CHANNEL2>::get()[1],
-                        field_j / typicalFields<EM_FIELD_SCALE_CHANNEL2>::get()[2]),
-                    visPreview::preChannel3(
-                        field_b / typicalFields<EM_FIELD_SCALE_CHANNEL3>::get()[0],
-                        field_e / typicalFields<EM_FIELD_SCALE_CHANNEL3>::get()[1],
-                        field_j / typicalFields<EM_FIELD_SCALE_CHANNEL3>::get()[2]));
+                    if(!isCellOnSlice)
+                        return;
 
-                // draw to (perhaps smaller) image cell
-                image(imageCell) = pic;
-            });
+                    // set fields of this cell to vars
+                    typename T_BBox::ValueType field_b = fieldB(cellOffset);
+                    typename T_EBox::ValueType field_e = fieldE(cellOffset);
+                    typename T_JBox::ValueType field_j = fieldJ(cellOffset);
+
+                    // multiply with the area size of each plane
+                    field_j *= float3_X::create(CELL_VOLUME) / cellSize;
+
+                    /* reset picture to black
+                     *   color range for each RGB channel: [0.0, 1.0]
+                     */
+                    float3_X pic(
+                        /* typical values of the fields to normalize them to [0,1]
+                         * typicalFields<>::get()[...] means: [0] = BField normalization,
+                         * [1] = EField normalization, [2] = Current normalization
+                         */
+                        visPreview::preChannel1(
+                            field_b / typicalFields<EM_FIELD_SCALE_CHANNEL1>::get()[0],
+                            field_e / typicalFields<EM_FIELD_SCALE_CHANNEL1>::get()[1],
+                            field_j / typicalFields<EM_FIELD_SCALE_CHANNEL1>::get()[2]),
+                        visPreview::preChannel2(
+                            field_b / typicalFields<EM_FIELD_SCALE_CHANNEL2>::get()[0],
+                            field_e / typicalFields<EM_FIELD_SCALE_CHANNEL2>::get()[1],
+                            field_j / typicalFields<EM_FIELD_SCALE_CHANNEL2>::get()[2]),
+                        visPreview::preChannel3(
+                            field_b / typicalFields<EM_FIELD_SCALE_CHANNEL3>::get()[0],
+                            field_e / typicalFields<EM_FIELD_SCALE_CHANNEL3>::get()[1],
+                            field_j / typicalFields<EM_FIELD_SCALE_CHANNEL3>::get()[2]));
+
+                    // draw to (perhaps smaller) image cell
+                    image(imageCell) = pic;
+                });
         }
     };
 
@@ -382,22 +387,24 @@ namespace picongpu
 
             cupla::__syncthreads(acc);
 
-            forEachCell([&](lockstep::Idx const idx) {
-                // cell index within the superCell
-                DataSpace<simDim> const cellIdx = DataSpaceOperations<simDim>::template map<SuperCellSize>(idx);
-
-                // cell offset to origin of the local domain
-                DataSpace<simDim> const realCell(supercellCellOffset + cellIdx);
-
-                bool const isCellOnSlice = IsPartOfSlice<>{}(realCell, sliceDim, localDomainOffset, slice);
-
-                if(isCellOnSlice)
+            forEachCell(
+                [&](lockstep::Idx const idx)
                 {
-                    // atomic avoids: WAW Error in cuda-memcheck racecheck
-                    kernel::atomicAllExch(acc, &superCellParticipate, 1, ::alpaka::hierarchy::Threads{});
-                    isImageThreadCtx[idx] = true;
-                }
-            });
+                    // cell index within the superCell
+                    DataSpace<simDim> const cellIdx = DataSpaceOperations<simDim>::template map<SuperCellSize>(idx);
+
+                    // cell offset to origin of the local domain
+                    DataSpace<simDim> const realCell(supercellCellOffset + cellIdx);
+
+                    bool const isCellOnSlice = IsPartOfSlice<>{}(realCell, sliceDim, localDomainOffset, slice);
+
+                    if(isCellOnSlice)
+                    {
+                        // atomic avoids: WAW Error in cuda-memcheck racecheck
+                        kernel::atomicAllExch(acc, &superCellParticipate, 1, ::alpaka::hierarchy::Threads{});
+                        isImageThreadCtx[idx] = true;
+                    }
+                });
 
             cupla::__syncthreads(acc);
 
@@ -416,17 +423,19 @@ namespace picongpu
                 // pitch in byte
                 SuperCellSize::toRT()[transpose.x()] * sizeof(float_X)));
 
-            forEachCell([&](lockstep::Idx const idx) {
-                /* cell index within the superCell */
-                DataSpace<simDim> const cellIdx = DataSpaceOperations<simDim>::template map<SuperCellSize>(idx);
-
-                DataSpace<DIM2> const localCell(cellIdx[transpose.x()], cellIdx[transpose.y()]);
-
-                if(isImageThreadCtx[idx])
+            forEachCell(
+                [&](lockstep::Idx const idx)
                 {
-                    counter(localCell) = float_X(0.0);
-                }
-            });
+                    /* cell index within the superCell */
+                    DataSpace<simDim> const cellIdx = DataSpaceOperations<simDim>::template map<SuperCellSize>(idx);
+
+                    DataSpace<DIM2> const localCell(cellIdx[transpose.x()], cellIdx[transpose.y()]);
+
+                    if(isImageThreadCtx[idx])
+                    {
+                        counter(localCell) = float_X(0.0);
+                    }
+                });
 
             // wait that shared memory  is set to zero
             cupla::__syncthreads(acc);
@@ -439,33 +448,35 @@ namespace picongpu
 
             while(frame.isValid())
             {
-                forEachParticle([&](uint32_t const linearIdx) {
-                    auto particle = frame[linearIdx];
-                    if(particle[multiMask_] == 1)
+                forEachParticle(
+                    [&](uint32_t const linearIdx)
                     {
-                        int const linearCellIdx = particle[localCellIdx_];
-                        // we only draw the first slice of cells in the super cell (z == 0)
-                        DataSpace<simDim> const particleCellOffset(
-                            DataSpaceOperations<simDim>::template map<SuperCellSize>(linearCellIdx));
-                        bool const isParticleOnSlice = IsPartOfSlice<>{}(
-                            particleCellOffset + supercellCellOffset,
-                            sliceDim,
-                            localDomainOffset,
-                            slice);
-                        if(isParticleOnSlice)
+                        auto particle = frame[linearIdx];
+                        if(particle[multiMask_] == 1)
                         {
-                            DataSpace<DIM2> const reducedCell(
-                                particleCellOffset[transpose.x()],
-                                particleCellOffset[transpose.y()]);
-                            cupla::atomicAdd(
-                                acc,
-                                &(counter(reducedCell)),
-                                // normalize the value to avoid bad precision for large macro particle weightings
-                                particle[weighting_] / particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE,
-                                ::alpaka::hierarchy::Threads{});
+                            int const linearCellIdx = particle[localCellIdx_];
+                            // we only draw the first slice of cells in the super cell (z == 0)
+                            DataSpace<simDim> const particleCellOffset(
+                                DataSpaceOperations<simDim>::template map<SuperCellSize>(linearCellIdx));
+                            bool const isParticleOnSlice = IsPartOfSlice<>{}(
+                                particleCellOffset + supercellCellOffset,
+                                sliceDim,
+                                localDomainOffset,
+                                slice);
+                            if(isParticleOnSlice)
+                            {
+                                DataSpace<DIM2> const reducedCell(
+                                    particleCellOffset[transpose.x()],
+                                    particleCellOffset[transpose.y()]);
+                                cupla::atomicAdd(
+                                    acc,
+                                    &(counter(reducedCell)),
+                                    // normalize the value to avoid bad precision for large macro particle weightings
+                                    particle[weighting_] / particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE,
+                                    ::alpaka::hierarchy::Threads{});
+                            }
                         }
-                    }
-                });
+                    });
 
                 frame = pb.getNextFrame(frame);
             }
@@ -473,44 +484,46 @@ namespace picongpu
             // wait that all worker finsihed the reduce operation
             cupla::__syncthreads(acc);
 
-            forEachCell([&](lockstep::Idx const idx) {
-                if(isImageThreadCtx[idx])
+            forEachCell(
+                [&](lockstep::Idx const idx)
                 {
-                    // cell index within the superCell
-                    DataSpace<simDim> const cellIdx = DataSpaceOperations<simDim>::template map<SuperCellSize>(idx);
-                    // cell offset to origin of the local domain
-                    DataSpace<simDim> const realCell(supercellCellOffset + cellIdx);
-                    // index in image
-                    DataSpace<DIM2> const imageCell(realCell[transpose.x()], realCell[transpose.y()]);
-
-                    DataSpace<DIM2> const localCell(cellIdx[transpose.x()], cellIdx[transpose.y()]);
-
-                    /** Note: normally, we would multiply by particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE again.
-                     *  BUT: since we are interested in a simple value between 0 and 1,
-                     *       we stay with this number (normalized to the order of macro
-                     *       particles) and devide by the number of typical macro particles
-                     *       per cell
-                     */
-                    float_X value = counter(localCell) / float_X(particles::TYPICAL_PARTICLES_PER_CELL);
-                    if(value > 1.0)
-                        value = 1.0;
-
-
-                    visPreview::preParticleDensCol::addRGB(
-                        image(imageCell),
-                        value,
-                        visPreview::preParticleDens_opacity);
-
-                    // cut to [0, 1]
-                    for(uint32_t d = 0; d < DIM3; ++d)
+                    if(isImageThreadCtx[idx])
                     {
-                        if(image(imageCell)[d] < float_X(0.0))
-                            image(imageCell)[d] = float_X(0.0);
-                        if(image(imageCell)[d] > float_X(1.0))
-                            image(imageCell)[d] = float_X(1.0);
+                        // cell index within the superCell
+                        DataSpace<simDim> const cellIdx
+                            = DataSpaceOperations<simDim>::template map<SuperCellSize>(idx);
+                        // cell offset to origin of the local domain
+                        DataSpace<simDim> const realCell(supercellCellOffset + cellIdx);
+                        // index in image
+                        DataSpace<DIM2> const imageCell(realCell[transpose.x()], realCell[transpose.y()]);
+
+                        DataSpace<DIM2> const localCell(cellIdx[transpose.x()], cellIdx[transpose.y()]);
+
+                        /** Note: normally, we would multiply by particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE
+                         * again. BUT: since we are interested in a simple value between 0 and 1, we stay with this
+                         * number (normalized to the order of macro particles) and devide by the number of typical
+                         * macro particles per cell
+                         */
+                        float_X value = counter(localCell) / float_X(particles::TYPICAL_PARTICLES_PER_CELL);
+                        if(value > 1.0)
+                            value = 1.0;
+
+
+                        visPreview::preParticleDensCol::addRGB(
+                            image(imageCell),
+                            value,
+                            visPreview::preParticleDens_opacity);
+
+                        // cut to [0, 1]
+                        for(uint32_t d = 0; d < DIM3; ++d)
+                        {
+                            if(image(imageCell)[d] < float_X(0.0))
+                                image(imageCell)[d] = float_X(0.0);
+                            if(image(imageCell)[d] > float_X(1.0))
+                                image(imageCell)[d] = float_X(1.0);
+                        }
                     }
-                }
-            });
+                });
         }
     };
 
@@ -546,14 +559,16 @@ namespace picongpu
                 // each virtual worker works on a cell
                 auto forEachCell = lockstep::makeForEach<T_blockSize, numWorkers>(workerIdx);
 
-                forEachCell([&](uint32_t const linearIdx) {
-                    uint32_t tid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
-                    if(tid >= n)
-                        return;
+                forEachCell(
+                    [&](uint32_t const linearIdx)
+                    {
+                        uint32_t tid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
+                        if(tid >= n)
+                            return;
 
-                    float3_X const FLT3_MIN = float3_X::create(FLT_MIN);
-                    mem[tid] /= (divisor + FLT3_MIN);
-                });
+                        float3_X const FLT3_MIN = float3_X::create(FLT_MIN);
+                        mem[tid] /= (divisor + FLT3_MIN);
+                    });
             }
         };
 
@@ -586,18 +601,20 @@ namespace picongpu
                 // each virtual worker works on a cell
                 auto forEachCell = lockstep::makeForEach<T_blockSize, numWorkers>(workerIdx);
 
-                forEachCell([&](uint32_t const linearIdx) {
-                    uint32_t const tid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
-                    if(tid >= n)
-                        return;
+                forEachCell(
+                    [&](uint32_t const linearIdx)
+                    {
+                        uint32_t const tid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
+                        if(tid >= n)
+                            return;
 
-                    float3_X rgb(float3_X::create(0.0));
+                        float3_X rgb(float3_X::create(0.0));
 
-                    visPreview::preChannel1Col::addRGB(rgb, mem[tid].x(), visPreview::preChannel1_opacity);
-                    visPreview::preChannel2Col::addRGB(rgb, mem[tid].y(), visPreview::preChannel2_opacity);
-                    visPreview::preChannel3Col::addRGB(rgb, mem[tid].z(), visPreview::preChannel3_opacity);
-                    mem[tid] = rgb;
-                });
+                        visPreview::preChannel1Col::addRGB(rgb, mem[tid].x(), visPreview::preChannel1_opacity);
+                        visPreview::preChannel2Col::addRGB(rgb, mem[tid].y(), visPreview::preChannel2_opacity);
+                        visPreview::preChannel3Col::addRGB(rgb, mem[tid].z(), visPreview::preChannel3_opacity);
+                        mem[tid] = rgb;
+                    });
             }
         };
 
@@ -611,7 +628,7 @@ namespace picongpu
     class Visualisation : public ILightweightPlugin
     {
     private:
-        typedef MappingDesc::SuperCellSize SuperCellSize;
+        using SuperCellSize = MappingDesc::SuperCellSize;
 
 
     public:
@@ -634,7 +651,6 @@ namespace picongpu
             , isMaster(false)
             , header(nullptr)
             , reduce(1024)
-            , img(nullptr)
         {
             sliceDim = 0;
             if(m_transpose.x() == 0 || m_transpose.y() == 0)
@@ -646,30 +662,29 @@ namespace picongpu
             Environment<>::get().PluginConnector().setNotificationPeriod(this, m_notifyPeriod);
         }
 
-        virtual ~Visualisation()
+        ~Visualisation() override
         {
             /* wait that shared buffers can destroyed */
             m_output.join();
             if(!m_notifyPeriod.empty())
             {
-                __delete(img);
                 MessageHeader::destroy(header);
             }
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return "Visualisation";
         }
 
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             PMACC_ASSERT(cellDescription != nullptr);
             const DataSpace<simDim> localSize(cellDescription->getGridLayout().getDataSpaceWithoutGuarding());
             Window window(MovingWindow::getInstance().getWindow(currentStep));
 
             /*sliceOffset is only used in 3D*/
-            sliceOffset = (int) ((float_32)(window.globalDimensions.size[sliceDim]) * m_slicePoint)
+            sliceOffset = (int) ((float_32) (window.globalDimensions.size[sliceDim]) * m_slicePoint)
                 + window.globalDimensions.offset[sliceDim];
 
             if(!doDrawing())
@@ -679,7 +694,7 @@ namespace picongpu
             createImage(currentStep, window);
         }
 
-        void setMappingDescription(MappingDesc* cellDescription)
+        void setMappingDescription(MappingDesc* cellDescription) override
         {
             PMACC_ASSERT(cellDescription != nullptr);
             this->cellDescription = cellDescription;
@@ -707,7 +722,7 @@ namespace picongpu
 
             PMACC_ASSERT(cellDescription != nullptr);
 
-            AreaMapping<CORE + BORDER, MappingDesc> mapper(*cellDescription);
+            auto const mapper = makeAreaMapper<CORE + BORDER>(*cellDescription);
 
             // create image fields
             PMACC_KERNEL(KernelPaintFields<numWorkers>{})
@@ -726,7 +741,7 @@ namespace picongpu
             int elements = img->getGridLayout().getDataSpace().productOfComponents();
 
             // Add one dimension access to 2d DataBox
-            typedef DataBoxDim1Access<typename GridBuffer<float3_X, DIM2>::DataBoxType> D1Box;
+            using D1Box = DataBoxDim1Access<typename GridBuffer<float3_X, 2U>::DataBoxType>;
             D1Box d1access(img->getDeviceBuffer().getDataBox(), img->getGridLayout().getDataSpace());
 
 #if(EM_FIELD_SCALE_CHANNEL1 == -1 || EM_FIELD_SCALE_CHANNEL2 == -1 || EM_FIELD_SCALE_CHANNEL3 == -1)
@@ -788,10 +803,10 @@ namespace picongpu
 
             if(picongpu::white_box_per_GPU)
             {
-                hostBox[0][0] = float3_X(1.0, 1.0, 1.0);
-                hostBox[size.y() - 1][0] = float3_X(1.0, 1.0, 1.0);
-                hostBox[0][size.x() - 1] = float3_X(1.0, 1.0, 1.0);
-                hostBox[size.y() - 1][size.x() - 1] = float3_X(1.0, 1.0, 1.0);
+                hostBox({0, 0}) = float3_X(1.0, 1.0, 1.0);
+                hostBox({0, size.y() - 1}) = float3_X(1.0, 1.0, 1.0);
+                hostBox({size.x() - 1, 0}) = float3_X(1.0, 1.0, 1.0);
+                hostBox({size.x() - 1, size.y() - 1}) = float3_X(1.0, 1.0, 1.0);
             }
             auto resultBox = gather(hostBox, *header);
             if(isMaster)
@@ -808,7 +823,7 @@ namespace picongpu
                 const DataSpace<simDim> localSize(cellDescription->getGridLayout().getDataSpaceWithoutGuarding());
 
                 Window window(MovingWindow::getInstance().getWindow(0));
-                sliceOffset = (int) ((float_32)(window.globalDimensions.size[sliceDim]) * m_slicePoint)
+                sliceOffset = (int) ((float_32) (window.globalDimensions.size[sliceDim]) * m_slicePoint)
                     + window.globalDimensions.offset[sliceDim];
 
 
@@ -827,11 +842,11 @@ namespace picongpu
 
                 /* create memory for the local picture if the gpu participate on the visualization */
                 if(isDrawing)
-                    img = new GridBuffer<float3_X, DIM2>(header->node.maxSize);
+                    img = std::make_unique<GridBuffer<float3_X, DIM2>>(header->node.maxSize);
             }
         }
 
-        void pluginRegisterHelp(po::options_description& desc)
+        void pluginRegisterHelp(po::options_description& desc) override
         {
             // nothing to do here
         }
@@ -856,7 +871,7 @@ namespace picongpu
         MappingDesc* cellDescription;
         SimulationDataId particleTag;
 
-        GridBuffer<float3_X, DIM2>* img;
+        std::unique_ptr<GridBuffer<float3_X, DIM2>> img;
 
         int sliceOffset;
         std::string m_notifyPeriod;

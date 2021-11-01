@@ -30,9 +30,9 @@ namespace pmacc
         template<typename TCursor>
         struct CursorAccessor
         {
-            typedef typename TCursor::type type;
+            using Reference = typename TCursor::Reference;
 
-            HDINLINE type operator()(TCursor& cursor)
+            HDINLINE Reference operator()(TCursor& cursor)
             {
                 return *cursor;
             }

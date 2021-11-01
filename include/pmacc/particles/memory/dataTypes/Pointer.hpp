@@ -25,7 +25,8 @@
 
 namespace pmacc
 {
-    /** Wrapper for a raw pointer
+    /** Wrapper for a raw pointer that propagates its constness onto the pointee. Similar to
+     * std::experimental::propagate_const<T>.
      *
      * @tparam T_Type type of the pointed object
      */
@@ -37,9 +38,7 @@ namespace pmacc
         using PtrType = type*;
         using ConstPtrType = const type*;
 
-        HDINLINE Pointer() : ptr{nullptr}
-        {
-        }
+        HDINLINE Pointer() = default;
 
         HDINLINE Pointer(PtrType const ptrIn) : ptr(ptrIn)
         {
@@ -99,7 +98,7 @@ namespace pmacc
             return ptr != nullptr;
         }
 
-        PMACC_ALIGN(ptr, PtrType);
+        PMACC_ALIGN(ptr, PtrType){nullptr};
     };
 
 } // namespace pmacc

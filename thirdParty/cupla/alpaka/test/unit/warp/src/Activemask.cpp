@@ -14,13 +14,12 @@
 
 #include <catch2/catch.hpp>
 
+#include <climits>
 #include <cstdint>
 
-//#############################################################################
 class ActivemaskSingleThreadWarpTestKernel
 {
 public:
-    //-----------------------------------------------------------------------------
     ALPAKA_NO_HOST_ACC_WARNING
     template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, bool* success) const -> void
@@ -32,11 +31,9 @@ public:
     }
 };
 
-//#############################################################################
 class ActivemaskMultipleThreadWarpTestKernel
 {
 public:
-    //-----------------------------------------------------------------------------
     ALPAKA_NO_HOST_ACC_WARNING
     template<typename TAcc>
     ALPAKA_FN_ACC auto operator()(TAcc const& acc, bool* success, std::uint64_t inactiveThreadIdx) const -> void
@@ -55,13 +52,14 @@ public:
 
         auto const actual = alpaka::warp::activemask(acc);
         using Result = decltype(actual);
-        Result const allActive = (Result{1} << static_cast<Result>(warpExtent)) - 1;
+        Result const allActive = static_cast<size_t>(warpExtent) == sizeof(Result) * CHAR_BIT
+            ? ~Result{0u}
+            : (Result{1} << warpExtent) - 1u;
         Result const expected = allActive & ~(Result{1} << inactiveThreadIdx);
         ALPAKA_CHECK(*success, actual == expected);
     }
 };
 
-//-----------------------------------------------------------------------------
 TEMPLATE_LIST_TEST_CASE("activemask", "[warp]", alpaka::test::TestAccs)
 {
     using Acc = TestType;

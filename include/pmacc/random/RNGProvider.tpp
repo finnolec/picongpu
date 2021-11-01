@@ -1,4 +1,4 @@
-/* Copyright 2015-2021 Alexander Grund
+/* Copyright 2015-2021 Alexander Grund, Sergei Bastrakov
  *
  * This file is part of PMacc.
  *
@@ -48,14 +48,16 @@ namespace pmacc
                     // each virtual worker initialize one rng state
                     auto forEachCell = lockstep::makeForEach<T_blockSize, numWorkers>(workerIdx);
 
-                    forEachCell([&](uint32_t const linearIdx) {
-                        uint32_t const linearTid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
-                        if(linearTid >= size.productOfComponents())
-                            return;
+                    forEachCell(
+                        [&](uint32_t const linearIdx)
+                        {
+                            uint32_t const linearTid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
+                            if(linearTid >= size.productOfComponents())
+                                return;
 
-                        T_Space const cellIdx = DataSpaceOperations<T_Space::dim>::map(size, linearTid);
-                        T_RNGMethod().init(acc, rngBox(cellIdx), seed, linearTid);
-                    });
+                            T_Space const cellIdx = DataSpaceOperations<T_Space::dim>::map(size, linearTid);
+                            T_RNGMethod().init(acc, rngBox(cellIdx), seed, linearTid);
+                        });
                 }
             };
 
@@ -65,7 +67,7 @@ namespace pmacc
         RNGProvider<T_dim, T_RNGMethod>::RNGProvider(const Space& size, const std::string& uniqueId)
             : m_size(size)
             , m_uniqueId(uniqueId.empty() ? getName() : uniqueId)
-            , buffer(new Buffer(size))
+            , buffer(std::make_unique<Buffer>(size))
         {
             if(m_size.productOfComponents() == 0)
                 throw std::invalid_argument("Cannot create RNGProvider with zero size");
@@ -101,7 +103,7 @@ namespace pmacc
             T_dim,
             T_RNGMethod>::createRandom(const std::string& id)
         {
-            typedef typename GetRandomType<T_Distribution>::type ResultType;
+            using ResultType = typename GetRandomType<T_Distribution>::type;
             return ResultType(createHandle());
         }
 
@@ -109,6 +111,12 @@ namespace pmacc
         typename RNGProvider<T_dim, T_RNGMethod>::Buffer& RNGProvider<T_dim, T_RNGMethod>::getStateBuffer()
         {
             return *buffer;
+        }
+
+        template<uint32_t T_dim, class T_RNGMethod>
+        typename RNGProvider<T_dim, T_RNGMethod>::Space RNGProvider<T_dim, T_RNGMethod>::getSize() const
+        {
+            return m_size;
         }
 
         template<uint32_t T_dim, class T_RNGMethod>
@@ -135,6 +143,12 @@ namespace pmacc
         void RNGProvider<T_dim, T_RNGMethod>::synchronize()
         {
             buffer->deviceToHost();
+        }
+
+        template<uint32_t T_dim, class T_RNGMethod>
+        void RNGProvider<T_dim, T_RNGMethod>::syncToDevice()
+        {
+            buffer->hostToDevice();
         }
 
     } // namespace random

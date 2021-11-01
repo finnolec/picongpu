@@ -226,17 +226,16 @@ namespace picongpu
     void FieldJ::computeCurrent(T_Species& species, uint32_t)
     {
         using FrameType = typename T_Species::FrameType;
-        typedef typename pmacc::traits::Resolve<typename GetFlagType<FrameType, current<>>::type>::type
-            ParticleCurrentSolver;
+        using ParticleCurrentSolver =
+            typename pmacc::traits::Resolve<typename GetFlagType<FrameType, current<>>::type>::type;
 
         using FrameSolver
             = currentSolver::ComputePerFrame<ParticleCurrentSolver, Velocity, MappingDesc::SuperCellSize>;
 
-        typedef SuperCellDescription<
+        using BlockArea = SuperCellDescription<
             typename MappingDesc::SuperCellSize,
             typename GetMargin<ParticleCurrentSolver>::LowerMargin,
-            typename GetMargin<ParticleCurrentSolver>::UpperMargin>
-            BlockArea;
+            typename GetMargin<ParticleCurrentSolver>::UpperMargin>;
 
         using Strategy = currentSolver::traits::GetStrategy_t<FrameSolver>;
 
@@ -260,7 +259,7 @@ namespace picongpu
         auto fieldE = dc.get<FieldE>(FieldE::getName(), true);
         auto fieldB = dc.get<FieldB>(FieldB::getName(), true);
 
-        AreaMapping<T_area, MappingDesc> mapper(cellDescription);
+        auto const mapper = makeAreaMapper<T_area>(cellDescription);
 
         constexpr uint32_t numWorkers
             = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;

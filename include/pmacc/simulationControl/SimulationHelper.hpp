@@ -1,5 +1,5 @@
 /* Copyright 2013-2021 Axel Huebl, Felix Schmitt, Rene Widera, Alexander Debus,
- *                     Benjamin Worpitz, Alexander Grund
+ *                     Benjamin Worpitz, Alexander Grund, Sergei Bastrakov
  *
  * This file is part of PMacc.
  *
@@ -65,21 +65,17 @@ namespace pmacc
          *
          */
         SimulationHelper()
-            : runSteps(0)
-            , checkpointDirectory("checkpoints")
-            , numCheckpoints(0)
-            , restartStep(-1)
+            : checkpointDirectory("checkpoints")
             , restartDirectory("checkpoints")
-            , restartRequested(false)
             , CHECKPOINT_MASTER_FILE("checkpoints.txt")
             , author("")
-            , useMpiDirect(false)
+
         {
             tSimulation.toggleStart();
             tInit.toggleStart();
         }
 
-        virtual ~SimulationHelper()
+        ~SimulationHelper() override
         {
             tSimulation.toggleEnd();
             if(output)
@@ -129,23 +125,29 @@ namespace pmacc
          */
         virtual void movingWindowCheck(uint32_t currentStep) = 0;
 
-        /**
-         * Notifies registered output classes.
+        /** Call all plugins
          *
-         * This function is called automatically.
+         * This function is called inside the simulation loop.
+         *
+         * @param currentStep simulation step
+         */
+        void notifyPlugins(uint32_t currentStep)
+        {
+            Environment<DIM>::get().PluginConnector().notifyPlugins(currentStep);
+            /* Handle signals after we executed the plugins but before checkpointing, this will result into lower
+             * response latency if we have long running plugins
+             */
+            checkSignals(currentStep);
+        }
+
+        /** Write a checkpoint if needed for the given step
+         *
+         * This function is called inside the simulation loop.
          *
          *  @param currentStep simulation step
          */
         virtual void dumpOneStep(uint32_t currentStep)
         {
-            /* trigger notification */
-            Environment<DIM>::get().PluginConnector().notifyPlugins(currentStep);
-
-            /* Handle signals after we executed the plugins but before checkpointing, this will result into lower
-             * response latency if we have long running plugins
-             */
-            checkSignals(currentStep);
-
             /* trigger checkpoint notification */
             if(!checkpointPeriod.empty() && pluginSystem::containsStep(seqCheckpointPeriod, currentStep))
             {
@@ -256,9 +258,10 @@ namespace pmacc
                  */
                 movingWindowCheck(currentStep);
 
-                /* dump initial step if simulation starts without restart */
+                /* call plugins and dump initial step if simulation starts without restart */
                 if(!restartRequested)
                 {
+                    notifyPlugins(currentStep);
                     dumpOneStep(currentStep);
                 }
 
@@ -278,13 +281,18 @@ namespace pmacc
                     tRound.toggleEnd();
                     roundAvg += tRound.getInterval();
 
-                    /* NEXT TIMESTEP STARTS HERE */
+                    /* Next timestep starts here.
+                     * Thus, for each timestep the plugins and checkpoint are called first.
+                     * And the computational stages later on (on the next iteration of this loop).
+                     */
                     currentStep++;
                     Environment<>::get().SimulationDescription().setCurrentStep(currentStep);
                     /* output times after a round */
                     dumpTimes(tSimCalculation, tRound, roundAvg, currentStep);
 
                     movingWindowCheck(currentStep);
+                    /* call all plugins */
+                    notifyPlugins(currentStep);
                     /* dump at the beginning of the simulated step */
                     dumpOneStep(currentStep);
                 }
@@ -304,7 +312,7 @@ namespace pmacc
             } // softRestarts loop
         }
 
-        virtual void pluginRegisterHelp(po::options_description& desc)
+        void pluginRegisterHelp(po::options_description& desc) override
         {
             // clang-format off
             desc.add_options()
@@ -333,12 +341,12 @@ namespace pmacc
             // clang-format on
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return "SimulationHelper";
         }
 
-        void pluginLoad()
+        void pluginLoad() override
         {
             Environment<>::get().SimulationDescription().setRunSteps(runSteps);
             Environment<>::get().SimulationDescription().setAuthor(author);
@@ -351,21 +359,21 @@ namespace pmacc
                 restartRequested = true;
         }
 
-        void pluginUnload()
+        void pluginUnload() override
         {
         }
 
-        void restart(uint32_t, const std::string)
+        void restart(uint32_t, const std::string) override
         {
         }
 
-        void checkpoint(uint32_t, const std::string)
+        void checkpoint(uint32_t, const std::string) override
         {
         }
 
     protected:
         /* number of simulation steps to compute */
-        uint32_t runSteps;
+        uint32_t runSteps{0};
 
         /** Presentations: loop the whole simulation `softRestarts` times from
          *                 initial step to runSteps */
@@ -381,16 +389,16 @@ namespace pmacc
         std::string checkpointDirectory;
 
         /* number of checkpoints written */
-        uint32_t numCheckpoints;
+        uint32_t numCheckpoints{0};
 
         /* checkpoint step to restart from */
-        int32_t restartStep;
+        int32_t restartStep{-1};
 
         /* common directory for restarts */
         std::string restartDirectory;
 
         /* restart requested */
-        bool restartRequested;
+        bool restartRequested{false};
 
         /* filename for checkpoint master file with all checkpoint timesteps */
         const std::string CHECKPOINT_MASTER_FILE;
@@ -399,7 +407,7 @@ namespace pmacc
         std::string author;
 
         //! enable MPI gpu direct
-        bool useMpiDirect;
+        bool useMpiDirect{false};
 
         bool tryRestart = false;
 
@@ -470,14 +478,16 @@ namespace pmacc
             if(currentStep != 0u && handleSignalAtStep == currentStep)
             {
                 // Wait for MPI without blocking the event system.
-                Environment<>::get().Manager().waitFor([&signalMPI = signalMPI]() -> bool {
-                    // wait until we know the largest time step in the simulation
-                    MPI_Status mpiReduceStatus;
+                Environment<>::get().Manager().waitFor(
+                    [&signalMPI = signalMPI]() -> bool
+                    {
+                        // wait until we know the largest time step in the simulation
+                        MPI_Status mpiReduceStatus;
 
-                    int flag = 0;
-                    MPI_CHECK(MPI_Test(&signalMPI, &flag, &mpiReduceStatus));
-                    return flag != 0;
-                });
+                        int flag = 0;
+                        MPI_CHECK(MPI_Test(&signalMPI, &flag, &mpiReduceStatus));
+                        return flag != 0;
+                    });
 
                 // Translate signals into actions
                 if(signalCreateCheckpoint)

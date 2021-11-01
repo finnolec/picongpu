@@ -49,7 +49,6 @@
 #include "pmacc/dimensions/Definition.hpp"
 #include "pmacc/eventSystem/EventType.hpp"
 #include "pmacc/memory/Align.hpp"
-#include "pmacc/memory/Delete.hpp"
 #include "pmacc/ppFunctions.hpp"
 #include "pmacc/type/Area.hpp"
 #include "pmacc/type/Exchange.hpp"
@@ -57,7 +56,6 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/mpl/placeholders.hpp>
-#include <boost/typeof/std/utility.hpp>
 
 #include <cupla.hpp>
 

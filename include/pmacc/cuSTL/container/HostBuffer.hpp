@@ -27,13 +27,11 @@
 #include "pmacc/cuSTL/container/assigner/HostMemAssigner.hpp"
 #include "pmacc/cuSTL/container/copier/H2HCopier.hpp"
 #include "pmacc/cuSTL/container/copier/Memcopy.hpp"
-
-#include <boost/assert.hpp>
-#include <boost/type_traits/is_same.hpp>
-#include <boost/utility/enable_if.hpp>
+#include "pmacc/static_assert.hpp"
 
 #include <exception>
 #include <sstream>
+#include <type_traits>
 #include <utility>
 
 
@@ -64,9 +62,7 @@ namespace pmacc
                 assigner::HostMemAssigner<>>;
 
         protected:
-            HostBuffer()
-            {
-            }
+            HostBuffer() = default;
 
         public:
             using PitchType = typename Base::PitchType;
@@ -99,38 +95,35 @@ namespace pmacc
              * @param pitch Pitch in bytes (number of bytes in the lower dimensions)
              */
             HINLINE HostBuffer(
-                Type* ptr,
+                std::shared_ptr<Type> ptr,
                 const math::Size_t<3>& size,
                 bool ownMemory,
                 math::Size_t<2> pitch = math::Size_t<2>::create(0))
             {
-                this->dataPointer = ptr;
+                this->sharedPtr = ptr;
+                this->shiftedPtr = ptr.get();
                 this->_size = size;
                 this->pitch[0] = (pitch[0]) ? pitch[0] : size.x() * sizeof(Type);
                 this->pitch[1] = (pitch[1]) ? pitch[1] : this->pitch[0] * size.y();
-                this->refCount = new int;
-                *this->refCount = (ownMemory) ? 1 : 2;
             }
             HINLINE HostBuffer(
-                Type* ptr,
+                std::shared_ptr<Type> ptr,
                 const math::Size_t<2>& size,
                 bool ownMemory,
                 math::Size_t<1> pitch = math::Size_t<1>::create(0))
             {
-                this->dataPointer = ptr;
+                this->sharedPtr = ptr;
+                this->shiftedPtr = ptr.get();
                 this->_size = size;
                 this->pitch[0] = (pitch[0]) ? pitch[0] : size.x() * sizeof(Type);
-                this->refCount = new int;
-                *this->refCount = (ownMemory) ? 1 : 2;
             }
-            HINLINE HostBuffer(Type* ptr, const math::Size_t<1>& size, bool ownMemory)
+            HINLINE HostBuffer(std::shared_ptr<Type> ptr, const math::Size_t<1>& size, bool ownMemory)
             {
-                this->dataPointer = ptr;
+                this->sharedPtr = ptr;
+                this->shiftedPtr = ptr.get();
                 this->_size = size;
                 // intentionally uninitialized and not RT accessible via []
                 // this->pitch = pitch;
-                this->refCount = new int;
-                *this->refCount = (ownMemory) ? 1 : 2;
             }
             HINLINE HostBuffer(const Base& base) : Base(base)
             {
@@ -146,12 +139,12 @@ namespace pmacc
             }
 
             template<typename DBuffer>
-            HINLINE typename boost::
-                enable_if<boost::is_same<typename DBuffer::memoryTag, allocator::tag::device>, HostBuffer&>::type
+            HINLINE typename std::
+                enable_if_t<std::is_same<typename DBuffer::memoryTag, allocator::tag::device>::value, HostBuffer&>
                 operator=(const DBuffer& rhs)
             {
-                BOOST_STATIC_ASSERT((boost::is_same<typename DBuffer::type, Type>::value));
-                BOOST_STATIC_ASSERT(DBuffer::dim == T_dim);
+                PMACC_CASSERT(std::is_same<typename DBuffer::type, Type>::value);
+                PMACC_CASSERT(DBuffer::dim == T_dim);
                 if(rhs.size() != this->size())
                     throw std::invalid_argument(static_cast<std::stringstream&>(
                                                     std::stringstream()
@@ -160,7 +153,7 @@ namespace pmacc
                                                     .str());
 
                 cuplaWrapper::Memcopy<T_dim>()(
-                    this->dataPointer,
+                    this->getDataPointer(),
                     this->pitch,
                     rhs.getDataPointer(),
                     rhs.getPitch(),

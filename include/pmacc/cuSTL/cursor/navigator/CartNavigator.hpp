@@ -34,7 +34,7 @@ namespace pmacc
         class CartNavigator
         {
         public:
-            typedef tag::CartNavigator tag;
+            using tag = tag::CartNavigator;
             static constexpr int dim = T_dim;
 
         private:
@@ -49,10 +49,8 @@ namespace pmacc
             template<typename Data>
             HDINLINE Data operator()(const Data& data, const math::Int<dim>& jump) const
             {
-                char* result = (char*) data;
-                result += pmacc::math::dot(
-                    static_cast<typename math::Int<dim>::BaseType>(jump),
-                    static_cast<typename math::Int<dim>::BaseType>(this->factor));
+                auto* result = (char*) data;
+                result += pmacc::math::dot(jump, this->factor);
                 return (Data) result;
             }
 

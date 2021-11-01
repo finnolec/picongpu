@@ -45,7 +45,7 @@ namespace picongpu
     class Checkpoint : public ISimulationPlugin
     {
     public:
-        Checkpoint() : checkpointFilename("checkpoint"), restartChunkSize(0u)
+        Checkpoint() : checkpointFilename("checkpoint")
         {
 #if(ENABLE_OPENPMD == 1)
             ioBackendsHelp["openPMD"] = std::shared_ptr<plugins::multi::IHelp>(openPMD::openPMDWriter::getHelp());
@@ -69,15 +69,13 @@ namespace picongpu
             Environment<>::get().PluginConnector().registerPlugin(this);
         }
 
-        virtual ~Checkpoint()
-        {
-        }
+        ~Checkpoint() override = default;
 
-        void pluginRegisterHelp(boost::program_options::options_description& desc)
+        void pluginRegisterHelp(boost::program_options::options_description& desc) override
         {
             namespace po = boost::program_options;
             if(ioBackendsHelp.empty())
-                desc.add_options()("checkpoint", "plugin disabled [compiled without dependency HDF5 or Adios]");
+                desc.add_options()("checkpoint", "plugin disabled [compiled without dependency openPMD-api]");
             else
                 desc.add_options()(
                     "checkpoint.backend",
@@ -109,21 +107,21 @@ namespace picongpu
                 backend.second->expandHelp(desc, "checkpoint.");
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return "Checkpoint";
         }
 
-        void notify(uint32_t)
+        void notify(uint32_t) override
         {
         }
 
-        void setMappingDescription(MappingDesc* cellDescription)
+        void setMappingDescription(MappingDesc* cellDescription) override
         {
             m_cellDescription = cellDescription;
         }
 
-        void checkpoint(uint32_t currentStep, const std::string checkpointDirectory)
+        void checkpoint(uint32_t currentStep, const std::string checkpointDirectory) override
         {
             auto cBackend = ioBackends.find(checkpointBackendName);
             if(cBackend != ioBackends.end())
@@ -132,7 +130,7 @@ namespace picongpu
             }
         }
 
-        void restart(uint32_t restartStep, const std::string restartDirectory)
+        void restart(uint32_t restartStep, const std::string restartDirectory) override
         {
             auto rBackend = ioBackends.find(restartBackendName);
             if(rBackend != ioBackends.end())
@@ -142,15 +140,15 @@ namespace picongpu
         }
 
     private:
-        void pluginLoad()
+        void pluginLoad() override
         {
             for(auto& backendHelp : ioBackendsHelp)
             {
                 if(backendHelp.second->getNumPlugins() > 0u)
                     backendHelp.second->validateOptions();
 
-                size_t const numSlaves = backendHelp.second->getNumPlugins();
-                if(numSlaves > 1u)
+                size_t const numInstances = backendHelp.second->getNumPlugins();
+                if(numInstances > 1u)
                     throw std::runtime_error(
                         pluginGetName() + ": is no a multi plugin, each option can only be selected once.");
             }
@@ -186,7 +184,7 @@ namespace picongpu
             }
         }
 
-        virtual void pluginUnload()
+        void pluginUnload() override
         {
             ioBackends.clear();
         }
@@ -208,7 +206,7 @@ namespace picongpu
          * Load particles in chunks avoid that the accelerator backend is
          * running out of frame memory.
          */
-        uint32_t restartChunkSize;
+        uint32_t restartChunkSize{0u};
 
         // can be "openPMD"
         std::map<std::string, std::shared_ptr<IIOBackend>> ioBackends;

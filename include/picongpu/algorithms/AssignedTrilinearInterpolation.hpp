@@ -19,10 +19,11 @@
 
 #pragma once
 
+#include <pmacc/attribute/unroll.hpp>
 #include <pmacc/result_of_Functor.hpp>
 #include <pmacc/types.hpp>
 
-#include <boost/type_traits/remove_reference.hpp>
+#include <type_traits>
 
 
 // forward declaration
@@ -38,7 +39,7 @@ namespace pmacc
         template<typename T_Cursor>
         struct Functor<picongpu::AssignedTrilinearInterpolation, T_Cursor>
         {
-            using type = typename boost::remove_reference<typename T_Cursor::type>::type;
+            using type = typename T_Cursor::ValueType;
         };
 
     } // namespace result_of
@@ -67,13 +68,17 @@ namespace picongpu
         {
             using type = typename ::pmacc::result_of::Functor<AssignedTrilinearInterpolation, T_Cursor>::type;
 
-            type result_z = type(0.0);
+            constexpr auto iterations = T_end - T_begin + 1;
+            auto result_z = type(0.0);
+            PMACC_UNROLL(iterations)
             for(int z = T_begin; z <= T_end; ++z)
             {
-                type result_y = type(0.0);
+                auto result_y = type(0.0);
+                PMACC_UNROLL(iterations)
                 for(int y = T_begin; y <= T_end; ++y)
                 {
-                    type result_x = type(0.0);
+                    auto result_x = type(0.0);
+                    PMACC_UNROLL(iterations)
                     for(int x = T_begin; x <= T_end; ++x)
                         /* a form factor is the "amount of particle" that is affected by this cell
                          * so we have to sum over: cell_value * form_factor

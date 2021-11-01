@@ -50,6 +50,7 @@
 #include "picongpu/simulation/stage/FieldBackground.hpp"
 #include "picongpu/simulation/stage/IterationStart.hpp"
 #include "picongpu/simulation/stage/MomentumBackup.hpp"
+#include "picongpu/simulation/stage/ParticleBoundaries.hpp"
 #include "picongpu/simulation/stage/ParticleIonization.hpp"
 #include "picongpu/simulation/stage/ParticlePush.hpp"
 #include "picongpu/simulation/stage/PopulationKinetics.hpp"
@@ -120,22 +121,16 @@ namespace picongpu
          * Constructor
          */
         Simulation()
-            : myFieldSolver(nullptr)
-            , cellDescription(nullptr)
-            , initialiserController(nullptr)
-            , slidingWindow(false)
-            , windowMovePoint(0.0)
-            , endSlidingOnStep(-1)
-            , showVersionOnce(false)
-        {
-        }
 
-        virtual void pluginRegisterHelp(po::options_description& desc)
+            = default;
+
+        void pluginRegisterHelp(po::options_description& desc) override
         {
             SimulationHelper<simDim>::pluginRegisterHelp(desc);
             currentInterpolationAndAdditionToEMF.registerHelp(desc);
             fieldAbsorber.registerHelp(desc);
             fieldBackground.registerHelp(desc);
+            particleBoundaries.registerHelp(desc);
             // clang-format off
             desc.add_options()(
                 "versionOnce", po::value<bool>(&showVersionOnce)->zero_tokens(),
@@ -156,10 +151,7 @@ namespace picongpu
                  "periodic dimensions")
                 ("moving,m", po::value<bool>(&slidingWindow)->zero_tokens(),
                  "enable sliding/moving window")
-                /* For now we still use the compile-time movePoint variable to set
-                 * the default value and provide backward compatibility
-                 */
-                ("windowMovePoint", po::value<float_64>(&windowMovePoint)->default_value(movePoint),
+                ("windowMovePoint", po::value<float_64>(&windowMovePoint)->default_value(0.9),
                  "ratio of the global window size in y which defines when to start sliding the window. "
                  "The window starts sliding at the time required to pass the distance of"
                  "windowMovePoint * (global window size in y) when moving with the speed of light")
@@ -173,12 +165,12 @@ namespace picongpu
             // clang-format on
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return "PIConGPU";
         }
 
-        virtual void pluginLoad()
+        void pluginLoad() override
         {
             // fill periodic with 0
             while(periodic.size() < 3)
@@ -279,7 +271,8 @@ namespace picongpu
             SimulationHelper<simDim>::pluginLoad();
 
             GridLayout<simDim> layout(gridSizeLocal, GuardSize::toRT() * SuperCellSize::toRT());
-            cellDescription = new MappingDesc(layout.getDataSpace(), DataSpace<simDim>(GuardSize::toRT()));
+            cellDescription
+                = std::make_unique<MappingDesc>(layout.getDataSpace(), DataSpace<simDim>(GuardSize::toRT()));
 
             if(gc.getGlobalRank() == 0)
             {
@@ -290,13 +283,13 @@ namespace picongpu
             }
         }
 
-        virtual void pluginUnload()
+        void pluginUnload() override
         {
             DataConnector& dc = Environment<>::get().DataConnector();
 
             SimulationHelper<simDim>::pluginUnload();
 
-            __delete(myFieldSolver);
+            myFieldSolver.reset();
 
             /** unshare all registered ISimulationData sets
              *
@@ -304,15 +297,13 @@ namespace picongpu
              *       a distinct order, e.g. DataConnector before CUDA context
              */
             dc.clean();
-
-            __delete(cellDescription);
         }
 
-        void notify(uint32_t)
+        void notify(uint32_t) override
         {
         }
 
-        virtual void init()
+        void init() override
         {
             // This has to be called before initFields()
             currentInterpolationAndAdditionToEMF.init();
@@ -321,11 +312,14 @@ namespace picongpu
             initFields(dc);
 
             // create field solver
-            this->myFieldSolver = new fields::Solver(*cellDescription);
+            myFieldSolver = std::make_unique<fields::Solver>(*cellDescription);
 
             // initialize field background stage,
             // this may include allocation of additional fields so has to be done before particles
             fieldBackground.init(*cellDescription);
+
+            // initialize particle boundaries
+            particleBoundaries.init();
 
             // Initialize random number generator and synchrotron functions, if there are synchrotron or bremsstrahlung
             // Photons
@@ -391,7 +385,7 @@ namespace picongpu
 
             // Allocate and initialize particle species with all left-over memory below
             meta::ForEach<VectorAllSpecies, particles::CreateSpecies<bmpl::_1>> createSpeciesMemory;
-            createSpeciesMemory(deviceHeap, cellDescription);
+            createSpeciesMemory(deviceHeap, cellDescription.get());
 
             size_t freeGpuMem = freeDeviceMemory();
             if(freeGpuMem < reservedGpuMemorySize)
@@ -447,7 +441,7 @@ namespace picongpu
 #endif
         }
 
-        virtual uint32_t fillSimulation()
+        uint32_t fillSimulation() override
         {
             /* assume start (restart in initialiserController might change that) */
             uint32_t step = 0;
@@ -501,6 +495,15 @@ namespace picongpu
                     initialiserController->init();
                     meta::ForEach<particles::InitPipeline, pmacc::functor::Call<bmpl::_1>> initSpecies;
                     initSpecies(0);
+                    /* Remove all particles that are outside the respective boundaries
+                     * (this can happen if density functor didn't account for it).
+                     * For the rest of the simulation we can be sure the only external particles just crossed the
+                     * border.
+                     */
+                    particles::RemoveOuterParticlesAllSpecies removeOuterParticlesAllSpecies;
+                    removeOuterParticlesAllSpecies(step);
+
+                    // Check Debye resolution
                     particles::debyeLength::check(*cellDescription);
                 }
             }
@@ -526,7 +529,7 @@ namespace picongpu
          *
          * @param currentStep iteration number of the current step
          */
-        virtual void runOneStep(uint32_t currentStep)
+        void runOneStep(uint32_t currentStep) override
         {
             using namespace simulation::stage;
 
@@ -551,7 +554,7 @@ namespace picongpu
             myFieldSolver->update_afterCurrent(currentStep);
         }
 
-        virtual void movingWindowCheck(uint32_t currentStep)
+        void movingWindowCheck(uint32_t currentStep) override
         {
             if(MovingWindow::getInstance().slideInCurrentStep(currentStep))
             {
@@ -580,7 +583,7 @@ namespace picongpu
             }
         }
 
-        virtual void resetAll(uint32_t currentStep)
+        void resetAll(uint32_t currentStep) override
         {
             resetFields(currentStep);
             meta::ForEach<VectorAllSpecies, particles::CallReset<bmpl::_1>> resetParticles;
@@ -609,13 +612,13 @@ namespace picongpu
 
         MappingDesc* getMappingDescription()
         {
-            return cellDescription;
+            return cellDescription.get();
         }
 
     protected:
         std::shared_ptr<DeviceHeap> deviceHeap;
 
-        fields::Solver* myFieldSolver;
+        std::unique_ptr<fields::Solver> myFieldSolver;
         simulation::stage::CurrentInterpolationAndAdditionToEMF currentInterpolationAndAdditionToEMF;
 
         // Field absorber stage, has to live always as it is used for registering options like a plugin.
@@ -625,6 +628,10 @@ namespace picongpu
         // Field background stage, has to live always as it is used for registering options like a plugin.
         // Because of it, has a special init() method that has to be called during initialization of the simulation
         simulation::stage::FieldBackground fieldBackground;
+
+        // Particle boundaries stage, has to live always as it is used for registering options like a plugin.
+        // Because of it, has a special init() method that has to be called during initialization of the simulation
+        simulation::stage::ParticleBoundaries particleBoundaries;
 
 #if(PMACC_CUDA_ENABLED == 1)
         // creates lookup tables for the bremsstrahlung effect
@@ -638,9 +645,9 @@ namespace picongpu
 
         // output classes
 
-        IInitPlugin* initialiserController;
+        IInitPlugin* initialiserController{nullptr};
 
-        MappingDesc* cellDescription;
+        std::unique_ptr<MappingDesc> cellDescription;
 
         // layout parameter
         std::vector<uint32_t> devices;
@@ -651,10 +658,10 @@ namespace picongpu
 
         std::vector<std::string> gridDistribution;
 
-        bool slidingWindow;
-        int32_t endSlidingOnStep;
-        float_64 windowMovePoint;
-        bool showVersionOnce;
+        bool slidingWindow{false};
+        int32_t endSlidingOnStep{-1};
+        float_64 windowMovePoint{0.0};
+        bool showVersionOnce{false};
         bool autoAdjustGrid = true;
         uint32_t numRanksPerDevice = 1u;
 
@@ -706,7 +713,8 @@ namespace picongpu
          */
         void resetFields(uint32_t const currentStep)
         {
-            auto resetField = [currentStep](std::string const name) {
+            auto resetField = [currentStep](std::string const name)
+            {
                 DataConnector& dc = Environment<>::get().DataConnector();
                 auto const fieldExists = dc.hasId(name);
                 if(fieldExists)

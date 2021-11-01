@@ -33,7 +33,7 @@
 #include <boost/integer/common_factor_rt.hpp>
 #include <boost/mpl/placeholders.hpp>
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "pmacc/cuSTL/algorithm/kernel/run-time/Foreach.hpp"
 
@@ -47,16 +47,16 @@ namespace pmacc
         struct DeviceMemAssigner
         {
             static constexpr int dim = T_Dim::value;
-            typedef T_CartBuffer CartBuffer;
+            using CartBuffer = T_CartBuffer;
 
             template<typename Type>
             HINLINE void assign(const Type& value)
             {
                 // "Curiously recurring template pattern"
-                CartBuffer* buffer = static_cast<CartBuffer*>(this);
+                auto* buffer = static_cast<CartBuffer*>(this);
 
                 zone::SphericZone<dim> myZone(buffer->size());
-                cursor::BufferCursor<Type, dim> cursor(buffer->dataPointer, buffer->pitch);
+                cursor::BufferCursor<Type, dim> cursor(buffer->getDataPointer(), buffer->pitch);
 
                 /* The greatest common divisor of each component of the volume size
                  * and a certain power of two value gives the best suitable block size */

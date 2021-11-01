@@ -1,4 +1,4 @@
-/* Copyright 2015-2021 Alexander Grund
+/* Copyright 2015-2021 Alexander Grund, Sergei Bastrakov
  *
  * This file is part of PMacc.
  *
@@ -27,6 +27,8 @@
 #include "pmacc/random/Random.hpp"
 #include "pmacc/types.hpp"
 
+#include <memory>
+
 namespace pmacc
 {
     namespace random
@@ -42,22 +44,22 @@ namespace pmacc
         {
         public:
             static constexpr uint32_t dim = T_dim;
-            typedef T_RNGMethod RNGMethod;
-            typedef DataSpace<dim> Space;
+            using RNGMethod = T_RNGMethod;
+            using Space = DataSpace<dim>;
 
         private:
-            typedef typename RNGMethod::StateType RNGState;
+            using RNGState = typename RNGMethod::StateType;
 
         public:
-            typedef HostDeviceBuffer<RNGState, dim> Buffer;
-            typedef typename Buffer::DataBoxType DataBoxType;
-            typedef RNGHandle<RNGProvider> Handle;
+            using Buffer = HostDeviceBuffer<RNGState, dim>;
+            using DataBoxType = typename Buffer::DataBoxType;
+            using Handle = RNGHandle<RNGProvider>;
 
             template<class T_Distribution>
             struct GetRandomType
             {
-                typedef typename T_Distribution::template applyMethod<RNGMethod>::type Distribution;
-                typedef Random<Distribution, RNGMethod, Handle> type;
+                using Distribution = typename T_Distribution::template applyMethod<RNGMethod>::type;
+                using type = Random<Distribution, RNGMethod, Handle>;
             };
 
             /**
@@ -68,10 +70,7 @@ namespace pmacc
              *          (as returned by \ref getName()) is used
              */
             RNGProvider(const Space& size, const std::string& uniqueId = "");
-            virtual ~RNGProvider()
-            {
-                __delete(buffer)
-            }
+
             /**
              * Initializes the random number generators
              * Must be called before usage
@@ -104,11 +103,17 @@ namespace pmacc
             SimulationDataId getUniqueId() override;
             void synchronize() override;
 
+            //! Synchronize device data with host data
+            void syncToDevice();
+
             /**
              * Return a reference to the buffer containing the states
              * Note: This buffer might be empty
              */
             Buffer& getStateBuffer();
+
+            //! Get size of the internal buffer
+            HINLINE Space getSize() const;
 
         private:
             /**
@@ -117,7 +122,7 @@ namespace pmacc
             DataBoxType getDeviceDataBox();
 
             const Space m_size;
-            Buffer* buffer;
+            std::unique_ptr<Buffer> buffer;
             const std::string m_uniqueId;
         };
 

@@ -1,4 +1,4 @@
-/* Copyright 2016-2021 Heiko Burau, Rene Widera
+/* Copyright 2016-2021 Heiko Burau, Rene Widera, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
  *
@@ -21,12 +21,12 @@
 
 #include "ParticleCalorimeter.kernel"
 #include "ParticleCalorimeterFunctors.hpp"
+#include "picongpu/particles/boundary/Utility.hpp"
 #include "picongpu/particles/traits/SpeciesEligibleForSolver.hpp"
 #include "picongpu/plugins/common/openPMDAttributes.hpp"
 #include "picongpu/plugins/common/openPMDWriteMeta.hpp"
 #include "picongpu/plugins/misc/misc.hpp"
 #include "picongpu/plugins/multi/multi.hpp"
-#include "picongpu/traits/PICToSplash.hpp"
 
 #include <pmacc/algorithms/math.hpp>
 #include <pmacc/cuSTL/algorithm/functor/Add.hpp>
@@ -46,8 +46,8 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/mpl/and.hpp>
-#include <boost/shared_ptr.hpp>
 
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -55,7 +55,6 @@
 #include <vector>
 
 #include <openPMD/openPMD.hpp>
-#include <stdlib.h>
 
 
 namespace picongpu
@@ -71,7 +70,7 @@ namespace picongpu
      *
      */
     template<class ParticlesType>
-    class ParticleCalorimeter : public plugins::multi::ISlave
+    class ParticleCalorimeter : public plugins::multi::IInstance
     {
         typedef pmacc::container::DeviceBuffer<float_X, DIM3> DBufCalorimeter;
         typedef pmacc::container::HostBuffer<float_X, DIM3> HBufCalorimeter;
@@ -98,10 +97,10 @@ namespace picongpu
         typedef CalorimeterFunctor<typename DBufCalorimeter::Cursor> MyCalorimeterFunctor;
 
     private:
-        typedef boost::shared_ptr<MyCalorimeterFunctor> MyCalorimeterFunctorPtr;
+        using MyCalorimeterFunctorPtr = std::shared_ptr<MyCalorimeterFunctor>;
         MyCalorimeterFunctorPtr calorimeterFunctor;
 
-        typedef boost::shared_ptr<pmacc::algorithm::mpi::Reduce<simDim>> AllGPU_reduce;
+        using AllGPU_reduce = std::shared_ptr<pmacc::algorithm::mpi::Reduce<simDim>>;
         AllGPU_reduce allGPU_reduce;
 
         template<typename T>
@@ -178,7 +177,7 @@ namespace picongpu
         }
 
     public:
-        void restart(uint32_t restartStep, const std::string& restartDirectory)
+        void restart(uint32_t restartStep, const std::string& restartDirectory) override
         {
             HBufCalorimeter hBufLeftParsCalorimeter(this->dBufLeftParsCalorimeter->size());
 
@@ -230,7 +229,7 @@ namespace picongpu
         }
 
 
-        void checkpoint(uint32_t currentStep, const std::string& checkpointDirectory)
+        void checkpoint(uint32_t currentStep, const std::string& checkpointDirectory) override
         {
             /*
              * Create folder for openPMD checkpoint files.
@@ -319,10 +318,11 @@ namespace picongpu
             this->maxEnergy = maxEnergy_SI / UNIT_ENERGY;
 
             /* allocate memory buffers */
-            this->dBufCalorimeter = new DBufCalorimeter(this->numBinsYaw, this->numBinsPitch, this->numBinsEnergy);
-            this->dBufLeftParsCalorimeter = new DBufCalorimeter(this->dBufCalorimeter->size());
-            this->hBufCalorimeter = new HBufCalorimeter(this->dBufCalorimeter->size());
-            this->hBufTotalCalorimeter = new HBufCalorimeter(this->dBufCalorimeter->size());
+            this->dBufCalorimeter
+                = std::make_unique<DBufCalorimeter>(this->numBinsYaw, this->numBinsPitch, this->numBinsEnergy);
+            this->dBufLeftParsCalorimeter = std::make_unique<DBufCalorimeter>(this->dBufCalorimeter->size());
+            this->hBufCalorimeter = std::make_unique<HBufCalorimeter>(this->dBufCalorimeter->size());
+            this->hBufTotalCalorimeter = std::make_unique<HBufCalorimeter>(this->dBufCalorimeter->size());
 
             /* fill calorimeter for left particles with zero */
             this->dBufLeftParsCalorimeter->assign(float_X(0.0));
@@ -407,15 +407,17 @@ namespace picongpu
     public:
         struct Help : public plugins::multi::IHelp
         {
-            /** creates an instance of ISlave
+            /** creates an instance
              *
-             * @tparam T_Slave type of the interface implementation (must inherit from ISlave)
              * @param help plugin defined help
              * @param id index of the plugin, range: [0;help->getNumPlugins())
              */
-            std::shared_ptr<ISlave> create(std::shared_ptr<IHelp>& help, size_t const id, MappingDesc* cellDescription)
+            std::shared_ptr<IInstance> create(
+                std::shared_ptr<IHelp>& help,
+                size_t const id,
+                MappingDesc* cellDescription) override
             {
-                return std::shared_ptr<ISlave>(new ParticleCalorimeter<ParticlesType>(help, id, cellDescription));
+                return std::shared_ptr<IInstance>(new ParticleCalorimeter<ParticlesType>(help, id, cellDescription));
             }
 
             // find all valid filter for the current used species
@@ -451,7 +453,7 @@ namespace picongpu
             ///! method used by plugin controller to get --help description
             void registerHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
                 meta::ForEach<EligibleFilters, plugins::misc::AppendName<bmpl::_1>> getEligibleFilterNames;
                 getEligibleFilterNames(allowedFilters);
@@ -476,12 +478,12 @@ namespace picongpu
 
             void expandHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
             }
 
 
-            void validateOptions()
+            void validateOptions() override
             {
                 if(notifyPeriod.size() != fileName.size())
                     throw std::runtime_error(
@@ -501,12 +503,12 @@ namespace picongpu
                 }
             }
 
-            size_t getNumPlugins() const
+            size_t getNumPlugins() const override
             {
                 return notifyPeriod.size();
             }
 
-            std::string getDescription() const
+            std::string getDescription() const override
             {
                 return description;
             }
@@ -516,7 +518,7 @@ namespace picongpu
                 return prefix;
             }
 
-            std::string getName() const
+            std::string getName() const override
             {
                 return name;
             }
@@ -541,10 +543,6 @@ namespace picongpu
             , m_id(id)
             , m_cellDescription(cellDescription)
             , leftParticlesDatasetName("calorimeterLeftParticles")
-            , dBufCalorimeter(nullptr)
-            , dBufLeftParsCalorimeter(nullptr)
-            , hBufCalorimeter(nullptr)
-            , hBufTotalCalorimeter(nullptr)
         {
             foldername = m_help->getOptionPrefix() + "/" + m_help->filter.get(m_id);
             filenamePrefix
@@ -565,16 +563,7 @@ namespace picongpu
             initPlugin();
         }
 
-        virtual ~ParticleCalorimeter()
-        {
-            __delete(this->dBufCalorimeter);
-            __delete(this->dBufLeftParsCalorimeter);
-            __delete(this->hBufCalorimeter);
-            __delete(this->hBufTotalCalorimeter);
-        }
-
-
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             /* initialize calorimeter with already detected particles */
             *this->dBufCalorimeter = *this->dBufLeftParsCalorimeter;
@@ -586,8 +575,13 @@ namespace picongpu
             DataConnector& dc = Environment<>::get().DataConnector();
             auto particles = dc.get<ParticlesType>(ParticlesType::FrameType::getName(), true);
 
-            AreaMapping<CORE + BORDER, MappingDesc> const mapper(*this->m_cellDescription);
+            auto const mapper = makeAreaMapper<CORE + BORDER>(*this->m_cellDescription);
             auto const grid = mapper.getGridDim();
+
+            // In this version we process all particles, so internal area = total domain
+            SubGrid<simDim> const& subGrid = Environment<simDim>::get().SubGrid();
+            auto beginInternalCellsLocal = pmacc::DataSpace<simDim>::create(0);
+            auto endInternalCellsLocal = beginInternalCellsLocal + subGrid.getLocalDomain().size;
 
             constexpr uint32_t numWorkers
                 = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
@@ -598,6 +592,8 @@ namespace picongpu
                 particles->getDeviceParticlesBox(),
                 *this->calorimeterFunctor,
                 mapper,
+                beginInternalCellsLocal,
+                endInternalCellsLocal,
                 std::placeholders::_1);
 
             meta::ForEach<typename Help::EligibleFilters, plugins::misc::ExecuteIfNameIsEqual<bmpl::_1>>{}(
@@ -619,7 +615,7 @@ namespace picongpu
             this->writeToOpenPMDFile(currentStep);
         }
 
-        void onParticleLeave(const std::string& speciesName, int32_t direction)
+        void onParticleLeave(const std::string& speciesName, int32_t direction) override
         {
             if(this->notifyPeriod.empty())
                 return;
@@ -629,11 +625,27 @@ namespace picongpu
             /* data is written to dBufLeftParsCalorimeter */
             this->calorimeterFunctor->setCalorimeterCursor(this->dBufLeftParsCalorimeter->origin());
 
-            ExchangeMapping<GUARD, MappingDesc> mapper(*this->m_cellDescription, direction);
-            auto grid = mapper.getGridDim();
-
             DataConnector& dc = Environment<>::get().DataConnector();
             auto particles = dc.get<ParticlesType>(speciesName, true);
+
+            auto mapperFactory = particles::boundary::getMapperFactory(*particles, direction);
+            auto const mapper = mapperFactory(*this->m_cellDescription);
+            auto grid = mapper.getGridDim();
+
+            /* Here we only process the particles that just crossed the boundary,
+             * so the active area for the kernel is the outside area wrt the boundary
+             */
+            pmacc::DataSpace<simDim> beginExternalCellsTotal, endExternalCellsTotal;
+            particles::boundary::getExternalCellsTotal(
+                *particles,
+                direction,
+                &beginExternalCellsTotal,
+                &endExternalCellsTotal);
+            SubGrid<simDim> const& subGrid = Environment<simDim>::get().SubGrid();
+            pmacc::DataSpace<simDim> shiftTotaltoLocal
+                = subGrid.getGlobalDomain().offset + subGrid.getLocalDomain().offset;
+            auto const beginExternalCellsLocal = beginExternalCellsTotal - shiftTotaltoLocal;
+            auto const endExternalCellsLocal = endExternalCellsTotal - shiftTotaltoLocal;
 
             constexpr uint32_t numWorkers
                 = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
@@ -644,6 +656,8 @@ namespace picongpu
                 particles->getDeviceParticlesBox(),
                 (MyCalorimeterFunctor) * this->calorimeterFunctor,
                 mapper,
+                beginExternalCellsLocal,
+                endExternalCellsLocal,
                 std::placeholders::_1);
 
             meta::ForEach<typename Help::EligibleFilters, plugins::misc::ExecuteIfNameIsEqual<bmpl::_1>>{}(
@@ -683,13 +697,13 @@ namespace picongpu
         float3_X calorimeterFrameVecZ;
 
         //! device calorimeter buffer for a single gpu
-        DBufCalorimeter* dBufCalorimeter;
+        std::unique_ptr<DBufCalorimeter> dBufCalorimeter;
         //! device calorimeter buffer for all particles which have left the simulation volume
-        DBufCalorimeter* dBufLeftParsCalorimeter;
+        std::unique_ptr<DBufCalorimeter> dBufLeftParsCalorimeter;
         //! host calorimeter buffer for a single mpi rank
-        HBufCalorimeter* hBufCalorimeter;
+        std::unique_ptr<HBufCalorimeter> hBufCalorimeter;
         //! host calorimeter buffer for summation of all mpi ranks
-        HBufCalorimeter* hBufTotalCalorimeter;
+        std::unique_ptr<HBufCalorimeter> hBufTotalCalorimeter;
     };
 
     namespace particles

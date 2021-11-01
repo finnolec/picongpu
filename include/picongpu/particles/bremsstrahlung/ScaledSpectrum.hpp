@@ -29,20 +29,8 @@
 #include <pmacc/particles/meta/FindByNameOrType.hpp>
 #include <pmacc/particles/traits/ResolveAliasFromSpecies.hpp>
 
-#include <boost/array.hpp>
-#if(BOOST_VERSION == 106400)
-/* `array_wrapper.hpp` must be included before `integrate.hpp` to avoid
- * the error
- * `boost/numeric/ublas/matrix.hpp(5977): error: namespace "boost::serialization" has no member "make_array"`
- * in boost 1.64.0
- * see boost issue https://svn.boost.org/trac/boost/ticket/12516
- */
-#    include <boost/serialization/array_wrapper.hpp>
-#endif
-#include <boost/numeric/odeint/integrate/integrate.hpp>
-#include <boost/shared_ptr.hpp>
-
 #include <limits>
+#include <memory>
 
 namespace picongpu
 {
@@ -100,7 +88,7 @@ namespace picongpu
                 using LookupTableFunctor = detail::LookupTableFunctor;
 
             private:
-                using MyBuf = boost::shared_ptr<pmacc::container::DeviceBuffer<float_X, DIM2>>;
+                using MyBuf = std::shared_ptr<pmacc::container::DeviceBuffer<float_X, DIM2>>;
                 MyBuf dBufScaledSpectrum;
                 MyBuf dBufStoppingPower;
 

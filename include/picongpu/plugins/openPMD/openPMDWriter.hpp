@@ -1,6 +1,6 @@
 /* Copyright 2014-2021 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
  *                     Benjamin Worpitz, Alexander Grund, Franz Poeschel,
- *                     Pawel Ordyna
+ *                     Pawel Ordyna, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
  *
@@ -71,8 +71,6 @@
 #include <boost/mpl/pair.hpp>
 #include <boost/mpl/size.hpp>
 #include <boost/mpl/vector.hpp>
-#include <boost/type_traits.hpp>
-#include <boost/type_traits/is_same.hpp>
 
 #include <openPMD/openPMD.hpp>
 
@@ -105,17 +103,11 @@ namespace picongpu
             ::openPMD::RecordComponent& recordComponent,
             ::openPMD::Datatype datatype,
             pmacc::math::UInt64<DIM> const& globalDimensions,
-            bool compression,
-            std::string const& compressionMethod,
             std::string const& datasetName)
         {
             std::vector<uint64_t> v = asStandardVector(globalDimensions);
             ::openPMD::Dataset dataset{datatype, std::move(v)};
             setDatasetOptions(dataset, jsonMatcher->get(datasetName));
-            if(compression && compressionMethod != "none")
-            {
-                dataset.compression = compressionMethod;
-            }
             recordComponent.resetDataset(std::move(dataset));
             return recordComponent;
         }
@@ -157,9 +149,8 @@ namespace picongpu
                     throw std::runtime_error(R"END(
 Using ADIOS1 through PIConGPU's openPMD plugin is not supported.
 Please use the openPMD plugin with another backend, such as ADIOS2.
-If the openPMD API has been compiled with support for ADIOS2, the openPMD API
-will automatically prefer using ADIOS2 over ADIOS1.
-Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
+In case your openPMD API supports both ADIOS1 and ADIOS2,
+make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 )END");
                 }
                 if(at == ::openPMD::Access::CREATE)
@@ -195,15 +186,15 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
         struct Help : public plugins::multi::IHelp
         {
-            /** creates a instance of ISlave
+            /** creates an instance
              *
              * @param help plugin defined help
              * @param id index of the plugin, range: [0;help->getNumPlugins())
              */
-            std::shared_ptr<plugins::multi::ISlave> create(
+            std::shared_ptr<plugins::multi::IInstance> create(
                 std::shared_ptr<IHelp>& help,
                 size_t const id,
-                MappingDesc* cellDescription);
+                MappingDesc* cellDescription) override;
             // defined later since we need openPMDWriter constructor
 
             plugins::multi::Option<std::string> notifyPeriod = {"period", "enable openPMD IO [for each n-th step]"};
@@ -239,13 +230,6 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                    "respectively.",
                    "doubleBuffer"};
 
-            plugins::multi::Option<std::string> compression
-                = {"compression",
-                   "Backend-specific openPMD compression method, e.g., zlib (see "
-                   "`adios_config -m` for help). Legacy parameter until compression"
-                   " can be fully configured via JSON in the openPMD API.",
-                   "none"};
-
             /** defines if the plugin must register itself to the PMacc plugin
              * system
              *
@@ -277,7 +261,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             ///! method used by plugin controller to get --help description
             void registerHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
                 meta::ForEach<AllEligibleSpeciesSources, plugins::misc::AppendName<bmpl::_1>>
                     getEligibleDataSourceNames;
@@ -298,9 +282,8 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
             void expandHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
-                compression.registerHelp(desc, masterPrefix + prefix);
                 fileName.registerHelp(desc, masterPrefix + prefix);
                 fileNameExtension.registerHelp(desc, masterPrefix + prefix);
                 fileNameInfix.registerHelp(desc, masterPrefix + prefix);
@@ -308,7 +291,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 dataPreparationStrategy.registerHelp(desc, masterPrefix + prefix);
             }
 
-            void validateOptions()
+            void validateOptions() override
             {
                 if(selfRegister)
                 {
@@ -332,7 +315,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 }
             }
 
-            size_t getNumPlugins() const
+            size_t getNumPlugins() const override
             {
                 if(selfRegister)
                     return notifyPeriod.size();
@@ -340,7 +323,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                     return 1;
             }
 
-            std::string getDescription() const
+            std::string getDescription() const override
             {
                 return description;
             }
@@ -350,7 +333,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 return prefix;
             }
 
-            std::string getName() const
+            std::string getName() const override
             {
                 return name;
             }
@@ -479,8 +462,6 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                     openPMDWriter::writeField<ComponentType>(
                         params,
-                        sizeof(ComponentType),
-                        ::openPMD::determineDatatype<ComponentType>(),
                         GetNComponents<ValueType>::value,
                         T_Field::getName(),
                         field->getHostDataBox().getPointer(),
@@ -578,8 +559,6 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                     /*write data to openPMD Series*/
                     openPMDWriter::template writeField<ComponentType>(
                         params,
-                        sizeof(ComponentType),
-                        ::openPMD::determineDatatype<ComponentType>(),
                         components,
                         getName(),
                         fieldTmp->getHostDataBox().getPointer(),
@@ -590,6 +569,142 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                         isDomainBound);
                 }
             };
+
+            /** Write random number generator states as a unitless scalar field
+             *
+             * Note: writeField() cannot be easily used inside this function, since states are custom types.
+             * Instead, we reinterpret states as a byte (char) array and store using openPMD API directly.
+             *
+             * Only suitable for the currently implemented RNG storage: one state per cell, no guards.
+             * If this doesn't hold, the implementation can't work as is, and an exception will be thrown.
+             */
+            HINLINE void writeRngStates(ThreadParams* params)
+            {
+                DataConnector& dc = Environment<simDim>::get().DataConnector();
+                using RNGProvider = pmacc::random::RNGProvider<simDim, random::Generator>;
+                auto rngProvider = dc.get<RNGProvider>(RNGProvider::getName());
+                // Start copying data to host
+                rngProvider->synchronize();
+                auto const name = rngProvider->getName();
+
+                ::openPMD::Iteration iteration = params->openPMDSeries->WRITE_ITERATIONS[params->currentStep];
+                ::openPMD::Mesh mesh = iteration.meshes[name];
+
+                auto const unitDimension = std::vector<float_64>(7, 0.0);
+                auto const timeOffset = 0.0_X;
+                writeFieldAttributes(params, unitDimension, timeOffset, mesh);
+
+                ::openPMD::MeshRecordComponent mrc = mesh[::openPMD::RecordComponent::SCALAR];
+                std::string datasetName = params->openPMDSeries->meshesPath() + name;
+
+                auto fieldsSizeDims = params->fieldsSizeDims;
+                auto fieldsGlobalSizeDims = params->fieldsGlobalSizeDims;
+                auto fieldsOffsetDims = params->fieldsOffsetDims;
+
+                if(fieldsSizeDims != rngProvider->getSize())
+                    throw std::runtime_error("openPMD: RNG state can't be written due to not matching size");
+
+                // Reinterpret state as chars, it must be bitwise-copyable for it
+                using ReinterpretedType = char;
+                // The fast-moving axis size (x in PIConGPU) had to be adjusted accordingly
+                using ValueType = RNGProvider::Buffer::ValueType;
+                fieldsSizeDims[0] *= sizeof(ValueType);
+                fieldsGlobalSizeDims[0] *= sizeof(ValueType);
+                fieldsOffsetDims[0] *= sizeof(ValueType);
+
+                params->initDataset<simDim>(
+                    mrc,
+                    ::openPMD::determineDatatype<ReinterpretedType>(),
+                    fieldsGlobalSizeDims,
+                    datasetName);
+
+                // define record component level attributes
+                auto const inCellPosition = std::vector<float_X>(simDim, 0.0_X);
+                mrc.setPosition(inCellPosition);
+                auto const unit = 1.0_X;
+                mrc.setUnitSI(unit);
+
+                auto& buffer = rngProvider->getStateBuffer();
+                // getPointer() will wait for device->host transfer
+                ValueType* nativePtr = buffer.getHostBuffer().getPointer();
+                ReinterpretedType* rawPtr = reinterpret_cast<ReinterpretedType*>(nativePtr);
+                mrc.storeChunk(
+                    ::openPMD::shareRaw(rawPtr),
+                    asStandardVector(fieldsOffsetDims),
+                    asStandardVector(fieldsSizeDims));
+                params->openPMDSeries->flush();
+            }
+
+            /** Implementation of loading random number generator states
+             *
+             * Note: LoadFields cannot be easily used inside this function, since states are custom types.
+             * Instead, we load states as a byte (char) array and reinterpret.
+             * This matches how they are written in writeRngStates().
+             *
+             * Only suitable for the currently implemented RNG storage: one state per cell, no guards.
+             * If this doesn't hold, the implementation can't work as is, and an exception will be thrown.
+             */
+            HINLINE void loadRngStatesImpl(ThreadParams* params)
+            {
+                DataConnector& dc = Environment<simDim>::get().DataConnector();
+                using RNGProvider = pmacc::random::RNGProvider<simDim, random::Generator>;
+                auto rngProvider = dc.get<RNGProvider>(RNGProvider::getName());
+                auto const name = rngProvider->getName();
+
+                ::openPMD::Iteration iteration = params->openPMDSeries->WRITE_ITERATIONS[params->currentStep];
+                ::openPMD::Mesh mesh = iteration.meshes[name];
+                ::openPMD::MeshRecordComponent mrc = mesh[::openPMD::RecordComponent::SCALAR];
+
+                const pmacc::Selection<simDim> localDomain = Environment<simDim>::get().SubGrid().getLocalDomain();
+                auto fieldsSizeDims = params->window.localDimensions.size;
+                auto fieldsOffsetDims = localDomain.offset;
+
+                if(fieldsSizeDims != rngProvider->getSize())
+                    throw std::runtime_error("openPMD: RNG state can't be loaded due to not matching size");
+
+                // Reinterpret state as chars, it must be bitwise-copyable for it
+                using ReinterpretedType = char;
+                // The fast-moving axis size (x in PIConGPU) had to be adjusted accordingly
+                using ValueType = RNGProvider::Buffer::ValueType;
+                fieldsSizeDims[0] *= sizeof(ValueType);
+                fieldsOffsetDims[0] *= sizeof(ValueType);
+
+                auto& buffer = rngProvider->getStateBuffer();
+                ValueType* nativePtr = buffer.getHostBuffer().getPointer();
+                ReinterpretedType* rawPtr = reinterpret_cast<ReinterpretedType*>(nativePtr);
+                /* Explicit template parameters to asStandardVector required
+                 * as we need to change the element type as well
+                 */
+                mrc.loadChunk(
+                    ::openPMD::shareRaw(rawPtr),
+                    asStandardVector<DataSpace<simDim>&, ::openPMD::Offset>(fieldsOffsetDims),
+                    asStandardVector<DataSpace<simDim>&, ::openPMD::Extent>(fieldsSizeDims));
+                params->openPMDSeries->flush();
+                // Copy data to device
+                rngProvider->syncToDevice();
+            }
+
+            /** Load random number generator states
+             *
+             * In case it triggers an exception in the process, swallow it and do nothing.
+             * Then the states will be re-initialized.
+             */
+            HINLINE void loadRngStates(ThreadParams* params)
+            {
+                /* Do not enforce it to support older checkpoints.
+                 * In case RNG states can't be loaded, they will be default-initialized.
+                 * This guard may be removed in the future.
+                 */
+                try
+                {
+                    loadRngStatesImpl(&mThreadParams);
+                }
+                catch(...)
+                {
+                    log<picLog::INPUT_OUTPUT>(
+                        "openPMD: loading RNG states failed, they will be re-initialized instead");
+                }
+            }
 
         public:
             /** constructor
@@ -606,8 +721,6 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 , outputDirectory("openPMD")
                 , lastSpeciesSyncStep(pmacc::traits::limits::Max<uint32_t>::value)
             {
-                mThreadParams.compressionMethod = m_help->compression.get(id);
-
                 GridController<simDim>& gc = Environment<simDim>::get().GridController();
                 /* It is important that we never change the mpi_pos after this point
                  * because we get problems with the restart.
@@ -649,7 +762,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 }
             }
 
-            void notify(uint32_t currentStep)
+            void notify(uint32_t currentStep) override
             {
                 // notify is only allowed if the plugin is not controlled by the
                 // class Checkpoint
@@ -665,16 +778,16 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 dumpData(currentStep);
             }
 
-            virtual void restart(uint32_t restartStep, std::string const& restartDirectory)
+            void restart(uint32_t restartStep, std::string const& restartDirectory) override
             {
-                /* ISlave restart interface is not needed becase IIOBackend
+                /* IInstance restart interface is not needed becase IIOBackend
                  * restart interface is used
                  */
             }
 
-            virtual void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory)
+            void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory) override
             {
-                /* ISlave checkpoint interface is not needed becase IIOBackend
+                /* IInstance checkpoint interface is not needed becase IIOBackend
                  * checkpoint interface is used
                  */
             }
@@ -682,7 +795,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             void dumpCheckpoint(
                 const uint32_t currentStep,
                 const std::string& checkpointDirectory,
-                const std::string& checkpointFilename)
+                const std::string& checkpointFilename) override
             {
                 // checkpointing is only allowed if the plugin is controlled by the
                 // class Checkpoint
@@ -703,7 +816,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 const uint32_t restartStep,
                 const std::string& restartDirectory,
                 const std::string& constRestartFilename,
-                const uint32_t restartChunkSize)
+                const uint32_t restartChunkSize) override
             {
                 // restart is only allowed if the plugin is controlled by the class
                 // Checkpoint
@@ -755,6 +868,8 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 /* load all particles */
                 meta::ForEach<FileCheckpointParticles, LoadSpecies<bmpl::_1>> ForEachLoadSpecies;
                 ForEachLoadSpecies(&mThreadParams, restartChunkSize);
+
+                loadRngStates(&mThreadParams);
 
                 IdProvider<simDim>::State idProvState;
                 ReadNDScalars<uint64_t, uint64_t>()(
@@ -893,7 +1008,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                 /* globalSlideOffset due to gpu slides between origin at time step 0
                  * and origin at current time step
-                 * ATTENTION: splash offset are globalSlideOffset + picongpu offsets
+                 * ATTENTION: offset is globalSlideOffset + picongpu offsets
                  */
                 DataSpace<simDim> globalSlideOffset;
                 const pmacc::Selection<simDim> localDomain = Environment<simDim>::get().SubGrid().getLocalDomain();
@@ -914,8 +1029,6 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             template<typename ComponentType>
             static void writeField(
                 ThreadParams* params,
-                const uint32_t sizePtrType,
-                ::openPMD::Datatype openPMDType,
                 const uint32_t nComponents,
                 const std::string name,
                 void* ptr,
@@ -926,6 +1039,13 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 bool isDomainBound)
             {
                 auto const name_lookup_tpl = plugins::misc::getComponentNames(nComponents);
+                ::openPMD::Datatype const openPMDType = ::openPMD::determineDatatype<ComponentType>();
+
+                if(openPMDType == ::openPMD::Datatype::UNDEFINED)
+                {
+                    throw std::runtime_error(
+                        "[openPMD plugin] Trying to write a field of a datatype unknown to openPMD.");
+                }
 
                 /* parameter checking */
                 PMACC_ASSERT(unit.size() == nComponents);
@@ -935,9 +1055,6 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 PMACC_ASSERT(unitDimension.size() == 7); // seven openPMD base units
 
                 log<picLog::INPUT_OUTPUT>("openPMD: write field: %1% %2% %3%") % name % nComponents % ptr;
-
-                const bool fieldTypeCorrect(boost::is_same<ComponentType, float_X>::value);
-                PMACC_CASSERT_MSG(Precision_mismatch_in_Field_Components__ADIOS, fieldTypeCorrect);
 
                 ::openPMD::Iteration iteration = params->openPMDSeries->WRITE_ITERATIONS[params->currentStep];
                 ::openPMD::Mesh mesh = iteration.meshes[name];
@@ -951,7 +1068,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                 DataSpace<simDim> field_no_guard = params->window.localDimensions.size;
                 DataSpace<simDim> field_guard = field_layout.getGuard() + params->localWindowToDomainOffset;
-                std::vector<float_X>& fieldBuffer = params->fieldBuffer;
+                std::vector<char>& fieldBuffer = params->fieldBuffer;
 
                 auto fieldsSizeDims = params->fieldsSizeDims;
                 auto fieldsGlobalSizeDims = params->fieldsGlobalSizeDims;
@@ -1017,13 +1134,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                         ? params->openPMDSeries->meshesPath() + name + "/" + name_lookup_tpl[d]
                         : params->openPMDSeries->meshesPath() + name;
 
-                    params->initDataset<simDim>(
-                        mrc,
-                        openPMDType,
-                        fieldsGlobalSizeDims,
-                        true,
-                        params->compressionMethod,
-                        datasetName);
+                    params->initDataset<simDim>(mrc, openPMDType, fieldsGlobalSizeDims, datasetName);
 
                     // define record component level attributes
                     mrc.setPosition(inCellPosition.at(d));
@@ -1039,15 +1150,18 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                     // ask openPMD to create a buffer for us
                     // in some backends (ADIOS2), this allows avoiding memcopies
-                    auto span = storeChunkSpan<float_X>(
+                    auto span = storeChunkSpan<ComponentType>(
                         mrc,
                         asStandardVector(fieldsOffsetDims),
                         asStandardVector(fieldsSizeDims),
-                        [&fieldBuffer](size_t size) {
+                        [&fieldBuffer](size_t size)
+                        {
                             // if there is no special backend support for creating buffers,
                             // reuse the fieldBuffer
-                            fieldBuffer.resize(size);
-                            return std::shared_ptr<float_X>{fieldBuffer.data(), [](auto*) {}};
+                            fieldBuffer.resize(sizeof(ComponentType) * size);
+                            return std::shared_ptr<ComponentType>{
+                                reinterpret_cast<ComponentType*>(fieldBuffer.data()),
+                                [](auto*) {}};
                         });
                     auto dstBuffer = span.currentBuffer();
 
@@ -1075,7 +1189,7 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                                 size_t index_src = base_index_src + (x + field_guard[0]) * nComponents + d;
                                 size_t index_dst = base_index_dst + x;
 
-                                dstBuffer[index_dst] = reinterpret_cast<float_X*>(ptr)[index_src];
+                                dstBuffer[index_dst] = reinterpret_cast<ComponentType*>(ptr)[index_src];
                             }
                         }
                     }
@@ -1223,6 +1337,13 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 }
                 log<picLog::INPUT_OUTPUT>("openPMD: ( end ) writing particle species.");
 
+                // No need for random generator states in normal output, only in checkpoints
+                if(threadParams->isCheckpoint)
+                {
+                    log<picLog::INPUT_OUTPUT>("openPMD: ( begin ) writing RNG states.");
+                    writeRngStates(threadParams);
+                    log<picLog::INPUT_OUTPUT>("openPMD: ( end ) writing RNG states.");
+                }
 
                 auto idProviderState = IdProvider<simDim>::getState();
                 log<picLog::INPUT_OUTPUT>("openPMD: Writing IdProvider state (StartId: %1%, NextId: %2%, "
@@ -1271,12 +1392,12 @@ Make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             DataSpace<simDim> mpi_size;
         };
 
-        std::shared_ptr<plugins::multi::ISlave> Help::create(
+        std::shared_ptr<plugins::multi::IInstance> Help::create(
             std::shared_ptr<plugins::multi::IHelp>& help,
             size_t const id,
             MappingDesc* cellDescription)
         {
-            return std::shared_ptr<plugins::multi::ISlave>(new openPMDWriter(help, id, cellDescription));
+            return std::shared_ptr<plugins::multi::IInstance>(new openPMDWriter(help, id, cellDescription));
         }
 
     } // namespace openPMD

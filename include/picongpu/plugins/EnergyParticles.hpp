@@ -94,12 +94,14 @@ namespace picongpu
 
             auto masterOnly = lockstep::makeMaster(workerIdx);
 
-            masterOnly([&]() {
-                // set shared kinetic energy to zero
-                shEnergyKin = float_X(0.0);
-                // set shared total energy to zero
-                shEnergy = float_X(0.0);
-            });
+            masterOnly(
+                [&]()
+                {
+                    // set shared kinetic energy to zero
+                    shEnergyKin = float_X(0.0);
+                    // set shared total energy to zero
+                    shEnergy = float_X(0.0);
+                });
 
             cupla::__syncthreads(acc);
 
@@ -119,7 +121,8 @@ namespace picongpu
 
             auto currentParticleCtx = forEachParticleInFrame(
 
-                [&](uint32_t const linearIdx) -> typename FramePtr::type::ParticleType {
+                [&](uint32_t const linearIdx) -> typename FramePtr::type::ParticleType
+                {
                     auto particle = frame[linearIdx];
                     /* - only particles from the last frame must be checked
                      * - all other particles are always valid
@@ -132,39 +135,43 @@ namespace picongpu
             while(frame.isValid())
             {
                 // loop over all particles in the frame
-                forEachParticleInFrame([&](lockstep::Idx const idx) {
-                    /* get one particle */
-                    auto& particle = currentParticleCtx[idx];
-                    if(accFilter(acc, particle))
+                forEachParticleInFrame(
+                    [&](lockstep::Idx const idx)
                     {
-                        float3_X const mom = particle[momentum_];
-                        // compute square of absolute momentum of the particle
-                        float_X const mom2 = pmacc::math::abs2(mom);
-                        float_X const weighting = particle[weighting_];
-                        float_X const mass = attribute::getMass(weighting, particle);
-                        float_X const c2 = SPEED_OF_LIGHT * SPEED_OF_LIGHT;
+                        /* get one particle */
+                        auto& particle = currentParticleCtx[idx];
+                        if(accFilter(acc, particle))
+                        {
+                            float3_X const mom = particle[momentum_];
+                            // compute square of absolute momentum of the particle
+                            float_X const mom2 = pmacc::math::abs2(mom);
+                            float_X const weighting = particle[weighting_];
+                            float_X const mass = attribute::getMass(weighting, particle);
+                            float_X const c2 = SPEED_OF_LIGHT * SPEED_OF_LIGHT;
 
-                        // calculate kinetic energy of the macro particle
-                        localEnergyKin += KinEnergy<>()(mom, mass);
+                            // calculate kinetic energy of the macro particle
+                            localEnergyKin += KinEnergy<>()(mom, mass);
 
-                        /* total energy for particles:
-                         *    E^2 = p^2*c^2 + m^2*c^4
-                         *        = c^2 * [p^2 + m^2*c^2]
-                         */
-                        localEnergy += math::sqrt(mom2 + mass * mass * c2) * SPEED_OF_LIGHT;
-                    }
-                });
+                            /* total energy for particles:
+                             *    E^2 = p^2*c^2 + m^2*c^4
+                             *        = c^2 * [p^2 + m^2*c^2]
+                             */
+                            localEnergy += math::sqrt(mom2 + mass * mass * c2) * SPEED_OF_LIGHT;
+                        }
+                    });
 
                 // set frame to next particle frame
                 frame = pb.getPreviousFrame(frame);
-                forEachParticleInFrame([&](lockstep::Idx const idx) {
-                    /* Update particle for the next round.
-                     * The frame list is traverse from the last to the first frame.
-                     * Only the last frame can contain gaps therefore all following
-                     * frames are filled with fully particles.
-                     */
-                    currentParticleCtx[idx] = frame[idx];
-                });
+                forEachParticleInFrame(
+                    [&](lockstep::Idx const idx)
+                    {
+                        /* Update particle for the next round.
+                         * The frame list is traverse from the last to the first frame.
+                         * Only the last frame can contain gaps therefore all following
+                         * frames are filled with fully particles.
+                         */
+                        currentParticleCtx[idx] = frame[idx];
+                    });
             }
 
             // each virtual thread adds the energies to the shared memory
@@ -175,34 +182,42 @@ namespace picongpu
             cupla::__syncthreads(acc);
 
             // add energies on global level using global memory
-            masterOnly([&]() {
-                // add kinetic energy
-                cupla::atomicAdd(
-                    acc,
-                    &(gEnergy[0]),
-                    static_cast<float_64>(shEnergyKin),
-                    ::alpaka::hierarchy::Blocks{});
-                // add total energy
-                cupla::atomicAdd(acc, &(gEnergy[1]), static_cast<float_64>(shEnergy), ::alpaka::hierarchy::Blocks{});
-            });
+            masterOnly(
+                [&]()
+                {
+                    // add kinetic energy
+                    cupla::atomicAdd(
+                        acc,
+                        &(gEnergy[0]),
+                        static_cast<float_64>(shEnergyKin),
+                        ::alpaka::hierarchy::Blocks{});
+                    // add total energy
+                    cupla::atomicAdd(
+                        acc,
+                        &(gEnergy[1]),
+                        static_cast<float_64>(shEnergy),
+                        ::alpaka::hierarchy::Blocks{});
+                });
         }
     };
 
     template<typename ParticlesType>
-    class EnergyParticles : public plugins::multi::ISlave
+    class EnergyParticles : public plugins::multi::IInstance
     {
     public:
         struct Help : public plugins::multi::IHelp
         {
-            /** creates an instance of ISlave
+            /** creates an instance
              *
-             * @tparam T_Slave type of the interface implementation (must inherit from ISlave)
              * @param help plugin defined help
              * @param id index of the plugin, range: [0;help->getNumPlugins())
              */
-            std::shared_ptr<ISlave> create(std::shared_ptr<IHelp>& help, size_t const id, MappingDesc* cellDescription)
+            std::shared_ptr<IInstance> create(
+                std::shared_ptr<IHelp>& help,
+                size_t const id,
+                MappingDesc* cellDescription) override
             {
-                return std::shared_ptr<ISlave>(new EnergyParticles<ParticlesType>(help, id, cellDescription));
+                return std::shared_ptr<IInstance>(new EnergyParticles<ParticlesType>(help, id, cellDescription));
             }
 
             // find all valid filter for the current used species
@@ -223,7 +238,7 @@ namespace picongpu
             ///! method used by plugin controller to get --help description
             void registerHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
                 meta::ForEach<EligibleFilters, plugins::misc::AppendName<bmpl::_1>> getEligibleFilterNames;
                 getEligibleFilterNames(allowedFilters);
@@ -236,12 +251,12 @@ namespace picongpu
 
             void expandHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
             }
 
 
-            void validateOptions()
+            void validateOptions() override
             {
                 if(notifyPeriod.size() != filter.size())
                     throw std::runtime_error(
@@ -257,12 +272,12 @@ namespace picongpu
                 }
             }
 
-            size_t getNumPlugins() const
+            size_t getNumPlugins() const override
             {
                 return notifyPeriod.size();
             }
 
-            std::string getDescription() const
+            std::string getDescription() const override
             {
                 return description;
             }
@@ -272,7 +287,7 @@ namespace picongpu
                 return prefix;
             }
 
-            std::string getName() const
+            std::string getName() const override
             {
                 return name;
             }
@@ -301,7 +316,7 @@ namespace picongpu
             writeToFile = reduce.hasResult(mpi::reduceMethods::Reduce());
 
             // create two ints on gpu and host
-            gEnergy = new GridBuffer<float_64, DIM1>(DataSpace<DIM1>(2));
+            gEnergy = std::make_unique<GridBuffer<float_64, DIM1>>(DataSpace<DIM1>(2));
 
             // only MPI rank that writes to file
             if(writeToFile)
@@ -326,7 +341,7 @@ namespace picongpu
             Environment<>::get().PluginConnector().setNotificationPeriod(this, m_help->notifyPeriod.get(id));
         }
 
-        virtual ~EnergyParticles()
+        ~EnergyParticles() override
         {
             if(writeToFile)
             {
@@ -338,21 +353,19 @@ namespace picongpu
                     std::cerr << "Error on flushing file [" << filename << "]. " << std::endl;
                 outFile.close();
             }
-            // free global memory on GPU
-            __delete(gEnergy);
         }
 
         /** this code is executed if the current time step is supposed to compute
          * the energy
          */
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             // call the method that calls the plugin kernel
             calculateEnergyParticles<CORE + BORDER>(currentStep);
         }
 
 
-        void restart(uint32_t restartStep, std::string const& restartDirectory)
+        void restart(uint32_t restartStep, std::string const& restartDirectory) override
         {
             if(!writeToFile)
                 return;
@@ -360,7 +373,7 @@ namespace picongpu
             writeToFile = restoreTxtFile(outFile, filename, restartStep, restartDirectory);
         }
 
-        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory)
+        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory) override
         {
             if(!writeToFile)
                 return;
@@ -384,7 +397,7 @@ namespace picongpu
             constexpr uint32_t numWorkers
                 = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
 
-            AreaMapping<AREA, MappingDesc> mapper(*m_cellDescription);
+            auto const mapper = makeAreaMapper<AREA>(*m_cellDescription);
 
             auto kernel = PMACC_KERNEL(KernelEnergyParticles<numWorkers>{})(mapper.getGridDim(), numWorkers);
             auto binaryKernel = std::bind(
@@ -425,7 +438,7 @@ namespace picongpu
         }
 
         //! energy values (global on GPU)
-        GridBuffer<float_64, DIM1>* gEnergy = nullptr;
+        std::unique_ptr<GridBuffer<float_64, DIM1>> gEnergy;
 
         MappingDesc* m_cellDescription;
 

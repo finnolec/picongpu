@@ -35,6 +35,7 @@
 #include <boost/mpl/and.hpp>
 
 #include <iostream>
+#include <memory>
 #include <string>
 
 
@@ -172,10 +173,10 @@ namespace picongpu
     class PositionsParticles : public ILightweightPlugin
     {
     private:
-        typedef MappingDesc::SuperCellSize SuperCellSize;
-        typedef floatD_X FloatPos;
+        using SuperCellSize = MappingDesc::SuperCellSize;
+        using FloatPos = floatD_X;
 
-        GridBuffer<SglParticle<FloatPos>, DIM1>* gParticle;
+        std::unique_ptr<GridBuffer<SglParticle<FloatPos>, DIM1>> gParticle;
 
         MappingDesc* cellDescription;
         std::string notifyPeriod;
@@ -187,7 +188,6 @@ namespace picongpu
         PositionsParticles()
             : pluginName("PositionsParticles: write position of one particle of a species to std::cout")
             , pluginPrefix(ParticlesType::FrameType::getName() + std::string("_position"))
-            , gParticle(nullptr)
             , cellDescription(nullptr)
         {
             Environment<>::get().PluginConnector().registerPlugin(this);
@@ -197,7 +197,7 @@ namespace picongpu
         {
         }
 
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             const int rank = Environment<simDim>::get().GridController().getGlobalRank();
             const SglParticle<FloatPos> positionParticle = getPositionsParticles<CORE + BORDER>(currentStep);
@@ -209,7 +209,7 @@ namespace picongpu
                           << "\n"; // no flush
         }
 
-        void pluginRegisterHelp(po::options_description& desc)
+        void pluginRegisterHelp(po::options_description& desc) override
         {
             desc.add_options()(
                 (pluginPrefix + ".period").c_str(),
@@ -217,31 +217,26 @@ namespace picongpu
                 "enable plugin [for each n-th step]");
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return pluginName;
         }
 
-        void setMappingDescription(MappingDesc* cellDescription)
+        void setMappingDescription(MappingDesc* cellDescription) override
         {
             this->cellDescription = cellDescription;
         }
 
     private:
-        void pluginLoad()
+        void pluginLoad() override
         {
             if(!notifyPeriod.empty())
             {
                 // create one float3_X on gpu und host
-                gParticle = new GridBuffer<SglParticle<FloatPos>, DIM1>(DataSpace<DIM1>(1));
+                gParticle = std::make_unique<GridBuffer<SglParticle<FloatPos>, DIM1>>(DataSpace<DIM1>(1));
 
                 Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
             }
-        }
-
-        void pluginUnload()
-        {
-            __delete(gParticle);
         }
 
         template<uint32_t AREA>
@@ -256,7 +251,7 @@ namespace picongpu
             gParticle->getDeviceBuffer().setValue(positionParticleTmp);
             auto block = SuperCellSize::toRT();
 
-            AreaMapping<AREA, MappingDesc> mapper(*cellDescription);
+            auto const mapper = makeAreaMapper<AREA>(*cellDescription);
             PMACC_KERNEL(KernelPositionsParticles{})
             (mapper.getGridDim(),
              block)(particles->getDeviceParticlesBox(), gParticle->getDeviceBuffer().getBasePointer(), mapper);

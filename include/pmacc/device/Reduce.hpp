@@ -31,7 +31,8 @@
 #include "pmacc/traits/GetValueType.hpp"
 #include "pmacc/types.hpp"
 
-#include <boost/type_traits.hpp>
+#include <memory>
+#include <type_traits>
 
 namespace pmacc
 {
@@ -48,9 +49,8 @@ namespace pmacc
             HINLINE Reduce(const uint32_t byte, const uint32_t sharedMemByte = 4 * 1024)
                 : byte(byte)
                 , sharedMemByte(sharedMemByte)
-                , reduceBuffer(nullptr)
             {
-                reduceBuffer = new GridBuffer<char, DIM1>(DataSpace<DIM1>(byte));
+                reduceBuffer = std::make_unique<GridBuffer<char, DIM1>>(DataSpace<DIM1>(byte));
             }
 
             /* Reduce elements in global gpu memory
@@ -69,8 +69,8 @@ namespace pmacc
                 /* - the result of a functor can be a reference or a const value
                  * - it is not allowed to create const or reference memory
                  *   thus we remove `references` and `const` qualifiers */
-                typedef typename boost::remove_const<
-                    typename boost::remove_reference<typename traits::GetValueType<Src>::ValueType>::type>::type Type;
+                using Type = typename std::remove_const_t<
+                    typename std::remove_reference_t<typename traits::GetValueType<Src>::ValueType>>;
 
                 uint32_t blockcount = optimalThreadsPerBlock(n, sizeof(Type));
 
@@ -82,7 +82,7 @@ namespace pmacc
 
                 if(threads > n)
                     threads = n;
-                Type* dest = (Type*) reduceBuffer->getDeviceBuffer().getBasePointer();
+                auto* dest = (Type*) reduceBuffer->getDeviceBuffer().getBasePointer();
 
                 uint32_t blocks = threads / 2 / blockcount;
                 if(blocks == 0)
@@ -146,11 +146,6 @@ namespace pmacc
                 reduceBuffer->deviceToHost();
                 __getTransactionEvent().waitForFinished();
                 return *((Type*) (reduceBuffer->getHostBuffer().getBasePointer()));
-            }
-
-            virtual ~Reduce()
-            {
-                __delete(reduceBuffer);
             }
 
         private:
@@ -271,7 +266,7 @@ namespace pmacc
             }
 
             /*global gpu buffer for reduce steps*/
-            GridBuffer<char, DIM1>* reduceBuffer;
+            std::unique_ptr<GridBuffer<char, DIM1>> reduceBuffer;
             /*buffer size limit in bytes on gpu*/
             uint32_t byte;
             /*shared memory limit in byte for one block*/

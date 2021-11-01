@@ -25,10 +25,11 @@
 #include "pmacc/assert.hpp"
 #include "pmacc/fields/SimulationFieldHelper.hpp"
 #include "pmacc/mappings/kernel/AreaMapping.hpp"
-#include "pmacc/mappings/kernel/StrideMapping.hpp"
+#include "pmacc/mappings/kernel/StrideMapperFactory.hpp"
 #include "pmacc/particles/ParticlesBase.kernel"
 #include "pmacc/particles/memory/boxes/ParticlesBox.hpp"
 #include "pmacc/particles/memory/buffers/ParticlesBuffer.hpp"
+#include "pmacc/static_assert.hpp"
 #include "pmacc/traits/GetNumWorkers.hpp"
 #include "pmacc/traits/NumberOfExchanges.hpp"
 
@@ -43,32 +44,31 @@ namespace pmacc
     template<typename T_ParticleDescription, class T_MappingDesc, typename T_DeviceHeap>
     class ParticlesBase : public SimulationFieldHelper<T_MappingDesc>
     {
-        typedef T_ParticleDescription ParticleDescription;
-        typedef T_MappingDesc MappingDesc;
+        using ParticleDescription = T_ParticleDescription;
+        using MappingDesc = T_MappingDesc;
 
     public:
         /* Type of used particles buffer
          */
-        typedef ParticlesBuffer<
+        using BufferType = ParticlesBuffer<
             ParticleDescription,
             typename MappingDesc::SuperCellSize,
             T_DeviceHeap,
-            MappingDesc::Dim>
-            BufferType;
+            MappingDesc::Dim>;
 
         /* Type of frame in particles buffer
          */
-        typedef typename BufferType::FrameType FrameType;
+        using FrameType = typename BufferType::FrameType;
         /* Type of border frame in a particle buffer
          */
-        typedef typename BufferType::FrameTypeBorder FrameTypeBorder;
+        using FrameTypeBorder = typename BufferType::FrameTypeBorder;
 
         /* Type of the particle box which particle buffer create
          */
-        typedef typename BufferType::ParticlesBoxType ParticlesBoxType;
+        using ParticlesBoxType = typename BufferType::ParticlesBoxType;
 
         /* Policies for handling particles in guard cells */
-        typedef typename ParticleDescription::HandleGuardRegion HandleGuardRegion;
+        using HandleGuardRegion = typename ParticleDescription::HandleGuardRegion;
 
         enum
         {
@@ -78,14 +78,14 @@ namespace pmacc
         };
 
         /* Mark this simulation data as a particle type */
-        typedef ParticlesTag SimulationDataTag;
+        using SimulationDataTag = ParticlesTag;
 
     protected:
         BufferType* particlesBuffer;
 
         ParticlesBase(const std::shared_ptr<T_DeviceHeap>& deviceHeap, MappingDesc description)
             : SimulationFieldHelper<MappingDesc>(description)
-            , particlesBuffer(NULL)
+            , particlesBuffer(nullptr)
         {
             particlesBuffer = new BufferType(
                 deviceHeap,
@@ -93,39 +93,55 @@ namespace pmacc
                 MappingDesc::SuperCellSize::toRT());
         }
 
-        virtual ~ParticlesBase()
+        ~ParticlesBase() override
         {
             delete this->particlesBuffer;
         }
 
-        /* Shift all particle in a AREA
-         * @tparam AREA area which is used (CORE,BORDER,GUARD or a combination)
+        /** Shift all particles in an area defined by a mapper factory
+         *
+         * The factory type must be such that StrideMapperFactory<T_MapperFactory, stride> is specialized
+         *
+         * @param onlyProcessMustShiftSupercells whether to process only supercells with mustShift set to true
+         * (optimization to be used with particle pusher) or process all supercells
          */
-        template<uint32_t AREA>
-        void shiftParticles()
+        template<uint32_t T_area>
+        void shiftParticles(bool onlyProcessMustShiftSupercells)
         {
-            StrideMapping<AREA, 3, MappingDesc> mapper(this->cellDescription);
-            ParticlesBoxType pBox = particlesBuffer->getDeviceParticleBox();
-
-            constexpr uint32_t numWorkers
-                = traits::GetNumWorkers<math::CT::volume<typename FrameType::SuperCellSize>::type::value>::value;
-            __startTransaction(__getTransactionEvent());
-            do
-            {
-                PMACC_KERNEL(KernelShiftParticles<numWorkers>{})
-                (mapper.getGridDim(), numWorkers)(pBox, mapper);
-            } while(mapper.next());
-
-            __setTransactionEvent(__endTransaction());
+            this->shiftParticles(StrideAreaMapperFactory<T_area, 3>{}, onlyProcessMustShiftSupercells);
         }
 
-        /* fill gaps in a AREA
-         * @tparam AREA area which is used (CORE,BORDER,GUARD or a combination)
+        /** Shift all particles in the area defined by the given factory
+         *
+         * Note that the area itself is not strided, but the factory must produce stride mappers for the area.
+         *
+         * @tparam T_strideMapperFactory factory type to construct a stride mapper,
+         *                               resulting mapper must have stride of at least 3,
+         *                               adheres to the MapperFactory concept
+         *
+         * @param mapperFactory factory instance
+         * @param onlyProcessMustShiftSupercells whether to process only supercells with mustShift set to true
+         * (optimization to be used with particle pusher) or process all supercells
          */
-        template<uint32_t AREA>
-        void fillGaps()
+        template<typename T_MapperFactory>
+        void shiftParticles(T_MapperFactory const& mapperFactory, bool onlyProcessMustShiftSupercells)
         {
-            AreaMapping<AREA, MappingDesc> mapper(this->cellDescription);
+            this->template shiftParticlesImpl(
+                StrideMapperFactory<T_MapperFactory, 3>{mapperFactory},
+                onlyProcessMustShiftSupercells);
+        }
+
+    public:
+        /** Fill gaps in an area defined by a mapper factory
+         *
+         * @tparam T_MapperFactory factory type to construct a mapper that defines the area to process
+         *
+         * @param mapperFactory factory instance
+         */
+        template<typename T_MapperFactory>
+        void fillGaps(T_MapperFactory const& mapperFactory)
+        {
+            auto const mapper = mapperFactory(this->cellDescription);
 
             constexpr uint32_t numWorkers
                 = traits::GetNumWorkers<math::CT::volume<typename FrameType::SuperCellSize>::type::value>::value;
@@ -134,20 +150,18 @@ namespace pmacc
             (mapper.getGridDim(), numWorkers)(particlesBuffer->getDeviceParticleBox(), mapper);
         }
 
-
-    public:
         /* fill gaps in a the complete simulation area (include GUARD)
          */
         void fillAllGaps()
         {
-            this->fillGaps<CORE + BORDER + GUARD>();
+            this->fillGaps(AreaMapperFactory<CORE + BORDER + GUARD>{});
         }
 
         /* fill all gaps in the border of the simulation
          */
         void fillBorderGaps()
         {
-            this->fillGaps<BORDER>();
+            this->fillGaps(AreaMapperFactory<BORDER>{});
         }
 
         /* Delete all particles in GUARD for one direction.
@@ -192,7 +206,44 @@ namespace pmacc
         }
 
         /* set all internal objects to initial state*/
-        virtual void reset(uint32_t currentStep);
+        void reset(uint32_t currentStep) override;
+
+    private:
+        /** Shift all particles in the area defined by the given strided factory
+         *
+         * Note that the area itself is not strided, but the factory must produce stride mappers for the area.
+         *
+         * @tparam T_strideMapperFactory factory type to construct a stride mapper,
+         *                               resulting mapper must have stride of at least 3,
+         *                               adheres to the MapperFactory concept
+         *
+         * @param strideMapperFactory factory to construct a strided mapper,
+         *                            the area is defined by the constructed mapper object
+         * @param onlyProcessMustShiftSupercells whether to process only supercells with mustShift set to true
+         * (optimization to be used with particle pusher) or process all supercells
+         */
+        template<typename T_strideMapperFactory>
+        void shiftParticlesImpl(T_strideMapperFactory const& strideMapperFactory, bool onlyProcessMustShiftSupercells)
+        {
+            auto mapper = strideMapperFactory(this->cellDescription);
+            PMACC_CASSERT_MSG(
+                shiftParticles_stride_mapper_condition_failure____stride_must_be_at_least_3,
+                decltype(mapper)::stride >= 3);
+            ParticlesBoxType pBox = particlesBuffer->getDeviceParticleBox();
+            auto const numSupercellsWithGuards = particlesBuffer->getSuperCellsCount();
+
+            constexpr uint32_t numWorkers
+                = traits::GetNumWorkers<math::CT::volume<typename FrameType::SuperCellSize>::type::value>::value;
+            __startTransaction(__getTransactionEvent());
+            do
+            {
+                PMACC_KERNEL(KernelShiftParticles<numWorkers>{})
+                (mapper.getGridDim(),
+                 numWorkers)(pBox, mapper, numSupercellsWithGuards, onlyProcessMustShiftSupercells);
+            } while(mapper.next());
+
+            __setTransactionEvent(__endTransaction());
+        }
     };
 
 } // namespace pmacc

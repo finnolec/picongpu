@@ -25,6 +25,8 @@
 #include "picongpu/traits/attribute/GetCharge.hpp"
 #include "picongpu/traits/attribute/GetMass.hpp"
 
+#include <pmacc/meta/InvokeIf.hpp>
+#include <pmacc/traits/HasIdentifier.hpp>
 
 namespace picongpu
 {
@@ -70,6 +72,16 @@ namespace picongpu
 
                 // normalize input SI values to
                 const float3_X eField(UnitlessParam::AMPLITUDEx, UnitlessParam::AMPLITUDEy, UnitlessParam::AMPLITUDEz);
+                // the particle moves as if E = eField and B = 0, so record those values as probe fields
+                const auto bField = float3_X::create(0._X);
+
+                // update probe field if particle contains required attributes
+                pmacc::meta::invokeIf<pmacc::traits::HasIdentifier<T_Particle, probeB>::type::value>(
+                    [&bField](auto&& par) { par[probeB_] = bField; },
+                    particle);
+                pmacc::meta::invokeIf<pmacc::traits::HasIdentifier<T_Particle, probeE>::type::value>(
+                    [&eField](auto&& par) { par[probeE_] = eField; },
+                    particle);
 
                 /* ToDo: Refactor to ensure a smooth and slow increase of eField with time
                  * which may help to reduce radiation due to acceleration, if present.

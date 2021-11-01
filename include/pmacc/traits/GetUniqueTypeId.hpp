@@ -24,8 +24,7 @@
 
 #include "pmacc/types.hpp"
 
-#include <boost/numeric/conversion/bounds.hpp>
-
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -94,14 +93,14 @@ namespace pmacc
         template<typename T_Type, typename T_ResultType = uint64_t>
         struct GetUniqueTypeId
         {
-            typedef T_ResultType ResultType;
-            typedef T_Type Type;
+            using ResultType = T_ResultType;
+            using Type = T_Type;
 
             /** create unique id
              *
              * @param maxValue largest allowed id
              */
-            static const ResultType uid(uint64_t maxValue = boost::numeric::bounds<ResultType>::highest())
+            static const ResultType uid(uint64_t maxValue = std::numeric_limits<ResultType>::max())
             {
                 const uint64_t id = detail::TypeId<Type>::id;
 

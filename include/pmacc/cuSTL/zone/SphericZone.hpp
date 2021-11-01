@@ -24,7 +24,7 @@
 #include "pmacc/math/vector/Int.hpp"
 #include "pmacc/math/vector/Size_t.hpp"
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace pmacc
 {
@@ -47,14 +47,12 @@ namespace pmacc
         template<int T_dim>
         struct SphericZone
         {
-            typedef tag::SphericZone tag;
+            using tag = tag::SphericZone;
             static constexpr int dim = T_dim;
             math::Size_t<dim> size;
             math::Int<dim> offset;
 
-            HDINLINE SphericZone()
-            {
-            }
+            HDINLINE SphericZone() = default;
             HDINLINE SphericZone(const math::Size_t<dim>& size) : size(size), offset(math::Int<dim>::create(0))
             {
             }

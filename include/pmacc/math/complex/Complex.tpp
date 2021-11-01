@@ -58,7 +58,7 @@ namespace pmacc
         template<typename T_Type>
         struct Euler
         {
-            typedef typename ::pmacc::math::Complex<T_Type> result;
+            using result = typename ::pmacc::math::Complex<T_Type>;
 
             HDINLINE result operator()(const T_Type& magnitude, const T_Type& phase)
             {
@@ -86,8 +86,8 @@ namespace pmacc
         template<typename T_Type>
         struct Arg<::pmacc::math::Complex<T_Type>>
         {
-            typedef typename ::pmacc::math::Complex<T_Type>::type result;
-            typedef T_Type type;
+            using result = typename ::pmacc::math::Complex<T_Type>::type;
+            using type = T_Type;
 
             HDINLINE result operator()(const ::pmacc::math::Complex<T_Type>& other)
             {
@@ -111,7 +111,7 @@ namespace pmacc
         template<typename T_Type>
         struct Abs2<::pmacc::math::Complex<T_Type>>
         {
-            typedef typename ::pmacc::math::Complex<T_Type>::type result;
+            using result = typename ::pmacc::math::Complex<T_Type>::type;
 
             HDINLINE result operator()(const ::pmacc::math::Complex<T_Type>& other)
             {
@@ -131,7 +131,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Pow<T_Ctx, ::pmacc::math::Complex<T_Type>, T_Type, void>
             {
-                ALPAKA_FN_HOST_ACC static auto pow(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other,
                     T_Type const& exponent) -> ::pmacc::math::Complex<T_Type>
@@ -146,7 +146,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Sqrt<T_Ctx, ::pmacc::math::Complex<T_Type>, void>
             {
-                ALPAKA_FN_HOST_ACC static auto sqrt(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other) -> ::pmacc::math::Complex<T_Type>
                 {
@@ -168,7 +168,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Exp<T_Ctx, ::pmacc::math::Complex<T_Type>, void>
             {
-                ALPAKA_FN_HOST_ACC static auto exp(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other) -> ::pmacc::math::Complex<T_Type>
                 {
@@ -181,7 +181,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Abs<T_Ctx, ::pmacc::math::Complex<T_Type>, void>
             {
-                ALPAKA_FN_HOST_ACC static auto abs(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other) -> T_Type
                 {
@@ -195,7 +195,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Log<T_Ctx, ::pmacc::math::Complex<T_Type>, void>
             {
-                ALPAKA_FN_HOST_ACC static auto log(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other) -> ::pmacc::math::Complex<T_Type>
                 {
@@ -208,7 +208,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Cos<T_Ctx, ::pmacc::math::Complex<T_Type>, void>
             {
-                ALPAKA_FN_HOST_ACC static auto cos(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other) -> ::pmacc::math::Complex<T_Type>
                 {
@@ -224,7 +224,7 @@ namespace alpaka
             template<typename T_Ctx, typename T_Type>
             struct Sin<T_Ctx, ::pmacc::math::Complex<T_Type>, void>
             {
-                ALPAKA_FN_HOST_ACC static auto sin(
+                ALPAKA_FN_HOST_ACC auto operator()(
                     T_Ctx const& mathConcept,
                     ::pmacc::math::Complex<T_Type> const& other) -> ::pmacc::math::Complex<T_Type>
                 {
@@ -253,7 +253,7 @@ namespace pmacc
             template<typename T_CastToType>
             struct TypeCast<T_CastToType, ::pmacc::math::Complex<T_CastToType>>
             {
-                typedef const ::pmacc::math::Complex<T_CastToType>& result;
+                using result = const ::pmacc::math::Complex<T_CastToType>&;
 
                 HDINLINE result operator()(const ::pmacc::math::Complex<T_CastToType>& complexNumber) const
                 {
@@ -264,7 +264,7 @@ namespace pmacc
             template<typename T_CastToType, typename T_OldType>
             struct TypeCast<T_CastToType, ::pmacc::math::Complex<T_OldType>>
             {
-                typedef ::pmacc::math::Complex<T_CastToType> result;
+                using result = ::pmacc::math::Complex<T_CastToType>;
 
                 HDINLINE result operator()(const ::pmacc::math::Complex<T_OldType>& complexNumber) const
                 {

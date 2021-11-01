@@ -1,5 +1,5 @@
 /* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
- *                     Marco Garten, Alexander Grund
+ *                     Marco Garten, Alexander Grund, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
  *
@@ -22,10 +22,12 @@
 
 #include "picongpu/fields/Fields.def"
 #include "picongpu/fields/Fields.hpp"
-#include "picongpu/particles/boundary/CallPluginsAndDeleteParticles.hpp"
+#include "picongpu/particles/boundary/Description.hpp"
+#include "picongpu/particles/boundary/Utility.hpp"
 #include "picongpu/particles/manipulators/manipulators.def"
 
 #include <pmacc/HandleGuardRegion.hpp>
+#include <pmacc/boundary/Utility.hpp>
 #include <pmacc/dataManagement/ISimulationData.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/memory/dataTypes/Mask.hpp>
@@ -33,6 +35,8 @@
 #include <pmacc/particles/ParticleDescription.hpp>
 #include <pmacc/particles/ParticlesBase.hpp>
 #include <pmacc/particles/memory/buffers/ParticlesBuffer.hpp>
+#include <pmacc/particles/policies/DoNothing.hpp>
+#include <pmacc/particles/policies/ExchangeParticles.hpp>
 #include <pmacc/traits/GetCTName.hpp>
 #include <pmacc/traits/Resolve.hpp>
 #include <pmacc/types.hpp>
@@ -40,6 +44,7 @@
 #include <boost/mpl/contains.hpp>
 #include <boost/mpl/if.hpp>
 
+#include <array>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -86,7 +91,7 @@ namespace picongpu
                       // fallback if the species has not defined the alias boundaryCondition
                       pmacc::HandleGuardRegion<
                           pmacc::particles::policies::ExchangeParticles,
-                          particles::boundary::CallPluginsAndDeleteParticles>>::type>,
+                          pmacc::particles::policies::DoNothing>>::type>,
               MappingDesc,
               DeviceHeap>
         , public ISimulationData
@@ -105,7 +110,7 @@ namespace picongpu
                 // fallback if the species has not defined the alias boundaryCondition
                 pmacc::HandleGuardRegion<
                     pmacc::particles::policies::ExchangeParticles,
-                    particles::boundary::CallPluginsAndDeleteParticles>>::type>;
+                    pmacc::particles::policies::DoNothing>>::type>;
         using ParticlesBaseType = ParticlesBase<SpeciesParticleDescription, picongpu::MappingDesc, DeviceHeap>;
         using FrameType = typename ParticlesBaseType::FrameType;
         using FrameTypeBorder = typename ParticlesBaseType::FrameTypeBorder;
@@ -119,7 +124,22 @@ namespace picongpu
 
         void createParticleBuffer();
 
+        //! Push all particles
         void update(uint32_t const currentStep);
+
+        /** Update the supercell storage for particles in the area according to particle attributes
+         *
+         * @tparam T_MapperFactory factory type to construct a mapper that defines the area to process
+         *
+         * @param mapperFactory factory instance
+         * @param onlyProcessMustShiftSupercells whether to process only supercells with mustShift set to true
+         * (optimization to be used with particle pusher) or process all supercells
+         */
+        template<typename T_MapperFactory>
+        inline void shiftBetweenSupercells(T_MapperFactory const& mapperFactory, bool onlyProcessMustShiftSupercells);
+
+        //! Apply all boundary conditions
+        void applyBoundary(uint32_t const currentStep);
 
         template<typename T_DensityFunctor, typename T_PositionFunctor>
         void initDensityProfile(
@@ -150,36 +170,40 @@ namespace picongpu
 
         void syncToDevice() override;
 
+        /** Get boundary descriptions for the species.
+         *
+         * For both sides along the same axis, both boundaries have the same description.
+         * Must not be modified outside of the ParticleBoundaries simulation stage.
+         *
+         * This method is static as it is used by static getStringProperties().
+         */
+        static std::array<particles::boundary::Description, simDim>& boundaryDescription()
+        {
+            static std::array<particles::boundary::Description, simDim> kinds = getDefaultBoundaryDescription();
+            return kinds;
+        }
+
         static pmacc::traits::StringProperty getStringProperties()
         {
             pmacc::traits::StringProperty propList;
-            const DataSpace<DIM3> periodic
-                = Environment<simDim>::get().EnvironmentController().getCommunicator().getPeriodic();
 
-            for(uint32_t i = 1; i < NumberOfExchanges<simDim>::value; ++i)
+            for(auto exchange : particles::boundary::getAllAxisAlignedExchanges())
             {
-                // for each planar direction: left right top bottom back front
-                if(FRONT % i == 0)
+                auto const axis = pmacc::boundary::getAxis(exchange);
+
+                const std::string directionName = ExchangeTypeNames()[exchange];
+                propList[directionName]["param"] = std::string("none");
+                switch(boundaryDescription()[axis].kind)
                 {
-                    const std::string directionName = ExchangeTypeNames()[i];
-                    const DataSpace<DIM3> relDir = Mask::getRelativeDirections<DIM3>(i);
-
-                    const bool isPeriodic = (relDir * periodic) != DataSpace<DIM3>::create(0);
-
-                    std::string boundaryName = "absorbing";
-                    if(isPeriodic)
-                        boundaryName = "periodic";
-
-                    if(boundaryName == "absorbing")
-                    {
-                        propList[directionName]["param"] = std::string("without field correction");
-                    }
-                    else
-                    {
-                        propList[directionName]["param"] = std::string("none");
-                    }
-
-                    propList[directionName]["name"] = boundaryName;
+                case particles::boundary::Kind::Periodic:
+                    propList[directionName]["name"] = "periodic";
+                    break;
+                case particles::boundary::Kind::Absorbing:
+                    propList[directionName]["name"] = "absorbing";
+                    propList[directionName]["param"] = std::string("without field correction");
+                    break;
+                default:
+                    propList[directionName]["name"] = "unknown";
                 }
             }
             return propList;
@@ -200,6 +224,21 @@ namespace picongpu
 
         FieldE* fieldE;
         FieldB* fieldB;
+
+        //! Get default boundary description for the species matching the communicator topology.
+        static std::array<particles::boundary::Description, simDim> getDefaultBoundaryDescription()
+        {
+            using namespace particles::boundary;
+            std::array<Description, simDim> result;
+            const DataSpace<DIM3> periodic
+                = Environment<simDim>::get().EnvironmentController().getCommunicator().getPeriodic();
+            for(uint32_t d = 0; d < simDim; d++)
+            {
+                result[d].kind = (periodic[d] ? Kind::Periodic : Kind::Absorbing);
+                result[d].offset = 0u;
+            }
+            return result;
+        }
     };
 
     namespace traits

@@ -31,6 +31,9 @@
 
 #include <boost/mpl/placeholders.hpp>
 
+#include <cstdint>
+#include <type_traits>
+
 
 namespace picongpu
 {
@@ -53,10 +56,13 @@ namespace picongpu
             };
         } // namespace detail
 
-        /** Run a user defined manipulation for each particle of a species
+        /** Run a user defined manipulation for each particle of a species in an area
          *
          * Allows to manipulate attributes of existing particles in a species with
          * arbitrary unary functors ("manipulators").
+         *
+         * Provides two versions of operator() to either operate on T_Area or a custom area,
+         * @see pmacc::particles::algorithm::CallForEach.
          *
          * @warning Does NOT call FillAllGaps after manipulation! If the
          *          manipulation deactivates particles or creates "gaps" in any
@@ -69,18 +75,24 @@ namespace picongpu
          * @tparam T_Species type or name as boost::mpl::string of the used species
          * @tparam T_Filter picongpu::particles::filter, particle filter type to
          *                  select particles in `T_Species` to manipulate
+         * @tparam T_Area area to process particles in operator()(currentStep),
+         *                wrapped into std::integral_constant for boost::mpl::apply to work;
+         *                does not affect operator()(currentStep, areaMapperFactory)
          */
-        template<typename T_Manipulator, typename T_Species = bmpl::_1, typename T_Filter = filter::All>
+        template<
+            typename T_Manipulator,
+            typename T_Species = bmpl::_1,
+            typename T_Filter = filter::All,
+            typename T_Area = std::integral_constant<uint32_t, CORE + BORDER>>
         struct Manipulate
             : public pmacc::particles::algorithm::CallForEach<
                   pmacc::particles::meta::FindByNameOrType<VectorAllSpecies, T_Species>,
-                  detail::MakeUnaryFilteredFunctor<T_Manipulator, T_Species, T_Filter>>
+                  detail::MakeUnaryFilteredFunctor<T_Manipulator, T_Species, T_Filter>,
+                  T_Area::value>
         {
         };
 
-
-        /** Apply a manipulation for each particle of a species or a sequence of
-         *  species
+        /** Apply a manipulation for each particle of a species or a sequence of species
          *
          * This function provides a high-level interface to particle manipulation
          * from simulation stages and plugins, but not .param files. The common
@@ -95,6 +107,9 @@ namespace picongpu
          * calling its operator(). Unlike Manipulate, it supports both single
          * species and sequences of species.
          *
+         * Has a version for a fixed area, and for a user-provided mapper factory.
+         * They differ only in how the area is defined.
+         *
          * @tparam T_Manipulator unary lambda functor accepting one particle
          *                       species, @see picongpu::particles::manipulators
          * @tparam T_Species a single species or a sequence of species; in both
@@ -104,14 +119,48 @@ namespace picongpu
          *                  `T_DestSpeciesType`
          *
          * @param currentStep index of the current time iteration
+         *
+         * @{
          */
-        template<typename T_Manipulator, typename T_Species, typename T_Filter = filter::All>
+
+        /** Version for a fixed area
+         *
+         * @tparam T_area area to process particles in
+         */
+        template<
+            typename T_Manipulator,
+            typename T_Species,
+            typename T_Filter = filter::All,
+            uint32_t T_area = CORE + BORDER>
         inline void manipulate(uint32_t const currentStep)
+        {
+            using SpeciesSeq = typename pmacc::ToSeq<T_Species>::type;
+            using Functor = Manipulate<T_Manipulator, bmpl::_1, T_Filter, std::integral_constant<uint32_t, T_area>>;
+            pmacc::meta::ForEach<SpeciesSeq, Functor> forEach;
+            forEach(currentStep);
+        }
+
+        /** Version for a custom area mapper factory
+         *
+         * @tparam T_AreaMapperFactory factory type to construct an area mapper that defines the area to process,
+         *                             adheres to the AreaMapperFactory concept
+         * @param areaMapperFactory factory to construct an area mapper,
+         *                          the area is defined by the constructed mapper object
+         */
+        template<
+            typename T_Manipulator,
+            typename T_Species,
+            typename T_AreaMapperFactory,
+            typename T_Filter = filter::All>
+        inline void manipulate(uint32_t const currentStep, T_AreaMapperFactory const& areaMapperFactory)
         {
             using SpeciesSeq = typename pmacc::ToSeq<T_Species>::type;
             using Functor = Manipulate<T_Manipulator, bmpl::_1, T_Filter>;
             pmacc::meta::ForEach<SpeciesSeq, Functor> forEach;
-            forEach(currentStep);
+            forEach(currentStep, areaMapperFactory);
         }
+
+        /** @} */
+
     } // namespace particles
 } // namespace picongpu

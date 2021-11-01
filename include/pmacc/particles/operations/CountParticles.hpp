@@ -80,18 +80,20 @@ namespace pmacc
             using SuperCellSize = typename T_Mapping::SuperCellSize;
 
             DataSpace<dim> const threadIndex(cupla::threadIdx(acc));
-            uint32_t const workerIdx
+            auto const workerIdx
                 = static_cast<uint32_t>(DataSpaceOperations<dim>::template map<SuperCellSize>(threadIndex));
 
             DataSpace<dim> const superCellIdx(mapper.getSuperCellIndex(DataSpace<dim>(cupla::blockIdx(acc))));
 
             auto onlyMaster = lockstep::makeMaster(workerIdx);
 
-            onlyMaster([&]() {
-                frame = pb.getLastFrame(superCellIdx);
-                particlesInSuperCell = pb.getSuperCell(superCellIdx).getSizeLastFrame();
-                counter = 0;
-            });
+            onlyMaster(
+                [&]()
+                {
+                    frame = pb.getLastFrame(superCellIdx);
+                    particlesInSuperCell = pb.getSuperCell(superCellIdx).getSizeLastFrame();
+                    counter = 0;
+                });
 
             cupla::__syncthreads(acc);
 
@@ -108,32 +110,36 @@ namespace pmacc
 
             while(frame.isValid())
             {
-                forEachParticle([&](uint32_t const linearIdx) {
-                    if(linearIdx < particlesInSuperCell)
+                forEachParticle(
+                    [&](uint32_t const linearIdx)
                     {
-                        bool const useParticle = filter(*frame, linearIdx);
-                        if(useParticle)
+                        if(linearIdx < particlesInSuperCell)
                         {
-                            auto parSrc = (frame[linearIdx]);
-                            if(accParFilter(acc, parSrc))
-                                kernel::atomicAllInc(acc, &counter, ::alpaka::hierarchy::Threads{});
+                            bool const useParticle = filter(*frame, linearIdx);
+                            if(useParticle)
+                            {
+                                auto parSrc = (frame[linearIdx]);
+                                if(accParFilter(acc, parSrc))
+                                    kernel::atomicAllInc(acc, &counter, ::alpaka::hierarchy::Threads{});
+                            }
                         }
-                    }
-                });
+                    });
 
                 cupla::__syncthreads(acc);
 
-                onlyMaster([&]() {
-                    frame = pb.getPreviousFrame(frame);
-                    particlesInSuperCell = frameSize;
-                });
+                onlyMaster(
+                    [&]()
+                    {
+                        frame = pb.getPreviousFrame(frame);
+                        particlesInSuperCell = frameSize;
+                    });
 
                 cupla::__syncthreads(acc);
             }
 
-            onlyMaster([&]() {
-                cupla::atomicAdd(acc, gCounter, static_cast<uint64_cu>(counter), ::alpaka::hierarchy::Blocks{});
-            });
+            onlyMaster(
+                [&]()
+                { cupla::atomicAdd(acc, gCounter, static_cast<uint64_cu>(counter), ::alpaka::hierarchy::Blocks{}); });
         }
     };
 
@@ -159,7 +165,7 @@ namespace pmacc
         {
             GridBuffer<uint64_cu, DIM1> counter(DataSpace<DIM1>(1));
 
-            AreaMapping<AREA, CellDesc> mapper(cellDescription);
+            auto const mapper = makeAreaMapper<AREA>(cellDescription);
             constexpr uint32_t numWorkers
                 = traits::GetNumWorkers<math::CT::volume<typename CellDesc::SuperCellSize>::type::value>::value;
 
@@ -218,8 +224,8 @@ namespace pmacc
             const Space& size,
             T_ParticleFilter& parFilter)
         {
-            typedef bmpl::vector<typename GetPositionFilter<Space::Dim>::type> usedFilters;
-            typedef typename FilterFactory<usedFilters>::FilterType MyParticleFilter;
+            using usedFilters = bmpl::vector<typename GetPositionFilter<Space::Dim>::type>;
+            using MyParticleFilter = typename FilterFactory<usedFilters>::FilterType;
             MyParticleFilter filter;
             filter.setStatus(true); /*activeate filter pipline*/
             filter.setWindowPosition(origin, size);

@@ -15,8 +15,8 @@
 #        error If ALPAKA_ACC_ANY_BT_OMP5_ENABLED is set, the compiler has to support OpenMP 4.0 or higher!
 #    endif
 
-#    include <alpaka/block/shared/st/BlockSharedMemStMember.hpp>
 #    include <alpaka/block/shared/st/Traits.hpp>
+#    include <alpaka/block/shared/st/detail/BlockSharedMemStMemberImpl.hpp>
 
 #    include <omp.h>
 
@@ -25,7 +25,6 @@
 
 namespace alpaka
 {
-    //#############################################################################
     //! The OpenMP 5 block shared memory allocator.
     class BlockSharedMemStOmp5
         : public detail::BlockSharedMemStMemberImpl<4>
@@ -37,27 +36,34 @@ namespace alpaka
 
     namespace traits
     {
-        //#############################################################################
         template<typename T, std::size_t TuniqueId>
         struct DeclareSharedVar<T, TuniqueId, BlockSharedMemStOmp5>
         {
-            //-----------------------------------------------------------------------------
             static auto declareVar(BlockSharedMemStOmp5 const& smem) -> T&
             {
+                auto* data = smem.template getVarPtr<T>(TuniqueId);
+
+                if(!data)
+                {
 #    pragma omp barrier
-                smem.alloc<T>();
-#    pragma omp barrier
-                return smem.getLatestVar<T>();
+#    pragma omp single
+                    {
+                        smem.template alloc<T>(TuniqueId);
+                    }
+                    // lookup for the data chunk allocated by the master thread
+                    data = smem.template getLatestVarPtr<T>();
+                }
+                ALPAKA_ASSERT_OFFLOAD(data != nullptr);
+
+                return *data;
             }
         };
-        //#############################################################################
         template<>
         struct FreeSharedVars<BlockSharedMemStOmp5>
         {
-            //-----------------------------------------------------------------------------
-            static auto freeVars(BlockSharedMemStOmp5 const& mem) -> void
+            static auto freeVars(BlockSharedMemStOmp5 const&) -> void
             {
-                mem.free();
+                // shared memory block data will be reused
             }
         };
     } // namespace traits

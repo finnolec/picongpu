@@ -112,13 +112,15 @@ namespace picongpu
 
             auto forEachSuperCellInY = lockstep::makeForEach<SuperCellSize::y::value, numWorkers>(workerIdx);
 
-            forEachSuperCellInY([&](uint32_t const linearIdx) {
-                // set shared sums of x^2, ux^2, x*ux, particle counter to zero
-                shSumMom2[linearIdx] = 0.0_X;
-                shSumPos2[linearIdx] = 0.0_X;
-                shSumMomPos[linearIdx] = 0.0_X;
-                shCount_e[linearIdx] = 0.0_X;
-            });
+            forEachSuperCellInY(
+                [&](uint32_t const linearIdx)
+                {
+                    // set shared sums of x^2, ux^2, x*ux, particle counter to zero
+                    shSumMom2[linearIdx] = 0.0_X;
+                    shSumPos2[linearIdx] = 0.0_X;
+                    shSumMomPos[linearIdx] = 0.0_X;
+                    shCount_e[linearIdx] = 0.0_X;
+                });
             cupla::__syncthreads(acc);
 
             DataSpace<simDim> const superCellIdx(mapper.getSuperCellIndex(DataSpace<simDim>(cupla::blockIdx(acc))));
@@ -135,7 +137,8 @@ namespace picongpu
 
             auto currentParticleCtx = forEachParticleInFrame(
 
-                [&](uint32_t const linearIdx) -> typename FramePtr::type::ParticleType {
+                [&](uint32_t const linearIdx) -> typename FramePtr::type::ParticleType
+                {
                     auto particle = frame[linearIdx];
                     /* - only particles from the last frame must be checked
                      * - all other particles are always valid
@@ -148,55 +151,63 @@ namespace picongpu
             while(frame.isValid())
             {
                 // loop over all particles in the frame
-                forEachParticleInFrame([&](lockstep::Idx const idx) {
-                    /* get one particle */
-                    auto& particle = currentParticleCtx[idx];
-                    if(accFilter(acc, particle))
+                forEachParticleInFrame(
+                    [&](lockstep::Idx const idx)
                     {
-                        float_X const weighting = particle[weighting_];
-                        float_X const normedWeighting
-                            = weighting / float_X(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE);
-                        float3_X const mom = particle[momentum_] / weighting;
-                        floatD_X const pos = particle[position_];
-                        lcellId_t const cellIdx = particle[localCellIdx_];
-                        DataSpace<simDim> const frameCellOffset(
-                            DataSpaceOperations<simDim>::template map<MappingDesc::SuperCellSize>(cellIdx));
-                        auto const localSupercellStart
-                            = (superCellIdx - mapper.getGuardingSuperCells()) * MappingDesc::SuperCellSize::toRT();
-                        int const index_y = frameCellOffset.y();
-                        auto const globalCellOffset = globalOffset + localSupercellStart + frameCellOffset;
-                        float_X const posX = (float_X(globalCellOffset.x()) + pos.x()) * cellSize.x();
+                        /* get one particle */
+                        auto& particle = currentParticleCtx[idx];
+                        if(accFilter(acc, particle))
+                        {
+                            float_X const weighting = particle[weighting_];
+                            float_X const normedWeighting
+                                = weighting / float_X(particles::TYPICAL_NUM_PARTICLES_PER_MACROPARTICLE);
+                            float3_X const mom = particle[momentum_] / weighting;
+                            floatD_X const pos = particle[position_];
+                            lcellId_t const cellIdx = particle[localCellIdx_];
+                            DataSpace<simDim> const frameCellOffset(
+                                DataSpaceOperations<simDim>::template map<MappingDesc::SuperCellSize>(cellIdx));
+                            auto const localSupercellStart
+                                = (superCellIdx - mapper.getGuardingSuperCells()) * MappingDesc::SuperCellSize::toRT();
+                            int const index_y = frameCellOffset.y();
+                            auto const globalCellOffset = globalOffset + localSupercellStart + frameCellOffset;
+                            float_X const posX = (float_X(globalCellOffset.x()) + pos.x()) * cellSize.x();
 
-                        cupla::atomicAdd(acc, &(shCount_e[index_y]), normedWeighting, ::alpaka::hierarchy::Threads{});
-                        // weighted sum of single Electron values (Momentum = particle_momentum/weighting)
-                        cupla::atomicAdd(
-                            acc,
-                            &(shSumMom2[index_y]),
-                            mom.x() * mom.x() * normedWeighting,
-                            ::alpaka::hierarchy::Threads{});
-                        cupla::atomicAdd(
-                            acc,
-                            &(shSumPos2[index_y]),
-                            posX * posX * normedWeighting,
-                            ::alpaka::hierarchy::Threads{});
-                        cupla::atomicAdd(
-                            acc,
-                            &(shSumMomPos[index_y]),
-                            mom.x() * posX * normedWeighting,
-                            ::alpaka::hierarchy::Threads{});
-                    }
-                });
+                            cupla::atomicAdd(
+                                acc,
+                                &(shCount_e[index_y]),
+                                normedWeighting,
+                                ::alpaka::hierarchy::Threads{});
+                            // weighted sum of single Electron values (Momentum = particle_momentum/weighting)
+                            cupla::atomicAdd(
+                                acc,
+                                &(shSumMom2[index_y]),
+                                mom.x() * mom.x() * normedWeighting,
+                                ::alpaka::hierarchy::Threads{});
+                            cupla::atomicAdd(
+                                acc,
+                                &(shSumPos2[index_y]),
+                                posX * posX * normedWeighting,
+                                ::alpaka::hierarchy::Threads{});
+                            cupla::atomicAdd(
+                                acc,
+                                &(shSumMomPos[index_y]),
+                                mom.x() * posX * normedWeighting,
+                                ::alpaka::hierarchy::Threads{});
+                        }
+                    });
 
                 // set frame to next particle frame
                 frame = pb.getPreviousFrame(frame);
-                forEachParticleInFrame([&](lockstep::Idx const idx) {
-                    /* Update particle for the next round.
-                     * The frame list is traversed from the last to the first frame.
-                     * Only the last frame can contain gaps therefore all following
-                     * frames are fully filled with particles.
-                     */
-                    currentParticleCtx[idx] = frame[idx];
-                });
+                forEachParticleInFrame(
+                    [&](lockstep::Idx const idx)
+                    {
+                        /* Update particle for the next round.
+                         * The frame list is traversed from the last to the first frame.
+                         * Only the last frame can contain gaps therefore all following
+                         * frames are fully filled with particles.
+                         */
+                        currentParticleCtx[idx] = frame[idx];
+                    });
             }
 
 
@@ -206,47 +217,51 @@ namespace picongpu
             const int gOffset
                 = ((superCellIdx - mapper.getGuardingSuperCells()) * MappingDesc::SuperCellSize::toRT()).y();
 
-            forEachSuperCellInY([&](uint32_t const linearIdx) {
-                cupla::atomicAdd(
-                    acc,
-                    &(gSumMom2[gOffset + linearIdx]),
-                    static_cast<float_64>(shSumMom2[linearIdx]),
-                    ::alpaka::hierarchy::Blocks{});
-                cupla::atomicAdd(
-                    acc,
-                    &(gSumPos2[gOffset + linearIdx]),
-                    static_cast<float_64>(shSumPos2[linearIdx]),
-                    ::alpaka::hierarchy::Blocks{});
-                cupla::atomicAdd(
-                    acc,
-                    &(gSumMomPos[gOffset + linearIdx]),
-                    static_cast<float_64>(shSumMomPos[linearIdx]),
-                    ::alpaka::hierarchy::Blocks{});
-                cupla::atomicAdd(
-                    acc,
-                    &(gCount_e[gOffset + linearIdx]),
-                    static_cast<float_64>(shCount_e[linearIdx]),
-                    ::alpaka::hierarchy::Blocks{});
-            });
+            forEachSuperCellInY(
+                [&](uint32_t const linearIdx)
+                {
+                    cupla::atomicAdd(
+                        acc,
+                        &(gSumMom2[gOffset + linearIdx]),
+                        static_cast<float_64>(shSumMom2[linearIdx]),
+                        ::alpaka::hierarchy::Blocks{});
+                    cupla::atomicAdd(
+                        acc,
+                        &(gSumPos2[gOffset + linearIdx]),
+                        static_cast<float_64>(shSumPos2[linearIdx]),
+                        ::alpaka::hierarchy::Blocks{});
+                    cupla::atomicAdd(
+                        acc,
+                        &(gSumMomPos[gOffset + linearIdx]),
+                        static_cast<float_64>(shSumMomPos[linearIdx]),
+                        ::alpaka::hierarchy::Blocks{});
+                    cupla::atomicAdd(
+                        acc,
+                        &(gCount_e[gOffset + linearIdx]),
+                        static_cast<float_64>(shCount_e[linearIdx]),
+                        ::alpaka::hierarchy::Blocks{});
+                });
         }
     };
 
 
     template<typename ParticlesType>
-    class CalcEmittance : public plugins::multi::ISlave
+    class CalcEmittance : public plugins::multi::IInstance
     {
     public:
         struct Help : public plugins::multi::IHelp
         {
-            /** creates an instance of ISlave
+            /** creates an instance
              *
-             * @tparam T_Slave type of the interface implementation (must inherit from ISlave)
              * @param help plugin defined help
              * @param id index of the plugin, range: [ 0;help->getNumPlugins( ) )
              */
-            std::shared_ptr<ISlave> create(std::shared_ptr<IHelp>& help, size_t const id, MappingDesc* cellDescription)
+            std::shared_ptr<IInstance> create(
+                std::shared_ptr<IHelp>& help,
+                size_t const id,
+                MappingDesc* cellDescription) override
             {
-                return std::shared_ptr<ISlave>(new CalcEmittance<ParticlesType>(help, id, cellDescription));
+                return std::shared_ptr<IInstance>(new CalcEmittance<ParticlesType>(help, id, cellDescription));
             }
 
             // find all valid filter for the current used species
@@ -266,7 +281,7 @@ namespace picongpu
             ///! method used by plugin controller to get --help description
             void registerHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
                 meta::ForEach<EligibleFilters, plugins::misc::AppendName<bmpl::_1>> getEligibleFilterNames;
                 getEligibleFilterNames(allowedFilters);
@@ -279,12 +294,12 @@ namespace picongpu
 
             void expandHelp(
                 boost::program_options::options_description& desc,
-                std::string const& masterPrefix = std::string{})
+                std::string const& masterPrefix = std::string{}) override
             {
             }
 
 
-            void validateOptions()
+            void validateOptions() override
             {
                 if(notifyPeriod.size() != filter.size())
                     throw std::runtime_error(
@@ -300,12 +315,12 @@ namespace picongpu
                 }
             }
 
-            size_t getNumPlugins() const
+            size_t getNumPlugins() const override
             {
                 return notifyPeriod.size();
             }
 
-            std::string getDescription() const
+            std::string getDescription() const override
             {
                 return description;
             }
@@ -315,7 +330,7 @@ namespace picongpu
                 return prefix;
             }
 
-            std::string getName() const
+            std::string getName() const override
             {
                 return name;
             }
@@ -380,15 +395,14 @@ namespace picongpu
                     if(inPlaneGPU == pmacc::math::Int<simDim>::create(0))
                         isGroupRoot = true;
                 }
-                algorithm::mpi::Reduce<simDim>* createReduce
-                    = new algorithm::mpi::Reduce<simDim>(zoneTransversalPlane, isGroupRoot);
+                auto* createReduce = new algorithm::mpi::Reduce<simDim>(zoneTransversalPlane, isGroupRoot);
                 if(isInGroup)
                 {
                     planeReduce = createReduce;
                     isPlaneReduceRoot = isGroupRoot;
                 }
                 else
-                    __delete(createReduce);
+                    delete createReduce;
             }
 
             /* Create communicator with ranks of each plane reduce root */
@@ -428,10 +442,14 @@ namespace picongpu
             writeToFile = (gatherRank == 0);
 
             const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
-            gSumMom2 = new GridBuffer<float_64, DIM1>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
-            gSumPos2 = new GridBuffer<float_64, DIM1>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
-            gSumMomPos = new GridBuffer<float_64, DIM1>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
-            gCount_e = new GridBuffer<float_64, DIM1>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
+            gSumMom2
+                = std::make_unique<GridBuffer<float_64, DIM1>>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
+            gSumPos2
+                = std::make_unique<GridBuffer<float_64, DIM1>>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
+            gSumMomPos
+                = std::make_unique<GridBuffer<float_64, DIM1>>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
+            gCount_e
+                = std::make_unique<GridBuffer<float_64, DIM1>>(DataSpace<DIM1>(subGrid.getLocalDomain().size.y()));
 
             // only MPI rank that writes to file
             if(writeToFile)
@@ -452,7 +470,7 @@ namespace picongpu
             Environment<>::get().PluginConnector().setNotificationPeriod(this, m_help->notifyPeriod.get(id));
         }
 
-        virtual ~CalcEmittance()
+        ~CalcEmittance() override
         {
             if(writeToFile)
             {
@@ -463,24 +481,19 @@ namespace picongpu
                     std::cerr << "Error on flushing file [" << filename << "]. " << std::endl;
                 outFile.close();
             }
-            // free global memory on GPU
-            __delete(gSumMom2);
-            __delete(gSumPos2);
-            __delete(gSumMomPos);
-            __delete(gCount_e);
         }
 
         /** this code is executed if the current time step is supposed to compute
          * gSumMom2, gSumPos2, gSumMomPos, gCount_e
          */
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             // call the method that calls the plugin kernel
             calculateCalcEmittance<CORE + BORDER>(currentStep);
         }
 
 
-        void restart(uint32_t restartStep, std::string const& restartDirectory)
+        void restart(uint32_t restartStep, std::string const& restartDirectory) override
         {
             if(!writeToFile)
                 return;
@@ -488,7 +501,7 @@ namespace picongpu
             writeToFile = restoreTxtFile(outFile, filename, restartStep, restartDirectory);
         }
 
-        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory)
+        void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory) override
         {
             if(!writeToFile)
                 return;
@@ -514,7 +527,7 @@ namespace picongpu
             constexpr uint32_t numWorkers
                 = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
 
-            AreaMapping<AREA, MappingDesc> mapper(*m_cellDescription);
+            auto const mapper = makeAreaMapper<AREA>(*m_cellDescription);
 
             auto kernel = PMACC_KERNEL(KernelCalcEmittance<numWorkers>{})(mapper.getGridDim(), numWorkers);
 
@@ -737,13 +750,13 @@ namespace picongpu
             }
         }
 
-        GridBuffer<float_64, DIM1>* gSumMom2 = nullptr;
+        std::unique_ptr<GridBuffer<float_64, DIM1>> gSumMom2;
 
-        GridBuffer<float_64, DIM1>* gSumPos2 = nullptr;
+        std::unique_ptr<GridBuffer<float_64, DIM1>> gSumPos2;
 
-        GridBuffer<float_64, DIM1>* gSumMomPos = nullptr;
+        std::unique_ptr<GridBuffer<float_64, DIM1>> gSumMomPos;
 
-        GridBuffer<float_64, DIM1>* gCount_e = nullptr;
+        std::unique_ptr<GridBuffer<float_64, DIM1>> gCount_e;
 
         MappingDesc* m_cellDescription = nullptr;
 

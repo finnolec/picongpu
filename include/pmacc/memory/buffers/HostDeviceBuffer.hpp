@@ -27,7 +27,8 @@
 #include "pmacc/memory/buffers/HostBufferIntern.hpp"
 #include "pmacc/types.hpp"
 
-#include <boost/type_traits.hpp>
+#include <memory>
+#include <type_traits>
 
 
 namespace pmacc
@@ -36,17 +37,17 @@ namespace pmacc
     template<typename T_Type, unsigned T_dim>
     class HostDeviceBuffer
     {
-        typedef HostBufferIntern<T_Type, T_dim> HostBufferType;
-        typedef DeviceBufferIntern<T_Type, T_dim> DeviceBufferType;
+        using HostBufferType = HostBufferIntern<T_Type, T_dim>;
+        using DeviceBufferType = DeviceBufferIntern<T_Type, T_dim>;
 
     public:
         using ValueType = T_Type;
-        typedef HostBuffer<T_Type, T_dim> HBuffer;
-        typedef DeviceBuffer<T_Type, T_dim> DBuffer;
-        typedef typename HostBufferType::DataBoxType DataBoxType;
+        using HBuffer = HostBuffer<T_Type, T_dim>;
+        using DBuffer = DeviceBuffer<T_Type, T_dim>;
+        using DataBoxType = typename HostBufferType::DataBoxType;
         PMACC_CASSERT_MSG(
             DataBoxTypes_must_match,
-            boost::is_same<DataBoxType, typename DeviceBufferType::DataBoxType>::value);
+            std::is_same<DataBoxType, typename DeviceBufferType::DataBoxType>::value);
 
         /**
          * Constructor that creates the buffers with the given size
@@ -79,8 +80,6 @@ namespace pmacc
             const DataSpace<T_dim>& offsetDevice,
             const GridLayout<T_dim> size,
             bool sizeOnDevice = false);
-
-        HINLINE virtual ~HostDeviceBuffer();
 
         /**
          * Returns the internal data buffer on host side
@@ -117,8 +116,8 @@ namespace pmacc
         HINLINE void deviceToHost();
 
     private:
-        HBuffer* hostBuffer;
-        DBuffer* deviceBuffer;
+        std::unique_ptr<HBuffer> hostBuffer;
+        std::unique_ptr<DBuffer> deviceBuffer;
     };
 
 } // namespace pmacc

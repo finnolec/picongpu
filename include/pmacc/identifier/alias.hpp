@@ -28,9 +28,9 @@
 #include "pmacc/types.hpp"
 
 #include <boost/mpl/if.hpp>
-#include <boost/type_traits/is_same.hpp>
 
 #include <string>
+#include <type_traits>
 
 namespace pmacc
 {
@@ -73,10 +73,10 @@ namespace pmacc
         struct Resolve<T_Object<T_AnyType, pmacc::pmacc_isAlias>>
         {
             /*solve recursive if alias is nested*/
-            typedef typename bmpl::if_<
-                boost::is_same<T_AnyType, typename Resolve<T_AnyType>::type>,
+            using type = typename bmpl::if_<
+                std::is_same<T_AnyType, typename Resolve<T_AnyType>::type>,
                 T_AnyType,
-                typename Resolve<T_AnyType>::type>::type type;
+                typename Resolve<T_AnyType>::type>::type;
         };
 
     } // namespace traits

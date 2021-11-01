@@ -24,7 +24,6 @@
 #include "picongpu/plugins/ISimulationPlugin.hpp"
 
 #include <pmacc/dataManagement/DataConnector.hpp>
-#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/meta/conversion/MakeSeq.hpp>
 #include <pmacc/meta/conversion/RemoveFromSeq.hpp>
 #include <pmacc/traits/Resolve.hpp>
@@ -35,8 +34,6 @@
 #include <boost/mpl/pair.hpp>
 #include <boost/mpl/size.hpp>
 #include <boost/mpl/vector.hpp>
-#include <boost/type_traits.hpp>
-#include <boost/type_traits/is_same.hpp>
 
 
 namespace picongpu
@@ -161,16 +158,13 @@ namespace picongpu
 #elif(ALPAKA_ACC_GPU_HIP_ENABLED == 1)
                 CUDA_CHECK((cuplaError_t) hipHostFree(ptr));
 #else
-                __deleteArray(ptr);
+                delete[] ptr;
 #endif
             }
         }
     };
 
-    /** free memory
-     *
-     * use `__deleteArray()` to free memory
-     */
+    //! Free memory
     template<typename T_Attribute>
     struct FreeHostMemory
     {
@@ -181,11 +175,7 @@ namespace picongpu
             typedef typename pmacc::traits::Resolve<Attribute>::type::type type;
 
             type* ptr = value.getIdentifier(Attribute()).getPointer();
-            if(ptr != nullptr)
-            {
-                __deleteArray(ptr);
-                ptr = nullptr;
-            }
+            delete[] ptr;
         }
     };
 

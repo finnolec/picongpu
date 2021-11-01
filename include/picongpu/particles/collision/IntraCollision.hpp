@@ -26,6 +26,7 @@
 #include "picongpu/particles/collision/detail/cellDensity.hpp"
 
 #include <pmacc/lockstep.hpp>
+#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/math/Vector.hpp>
 #include <pmacc/random/RNGProvider.hpp>
 #include <pmacc/random/distributions/Uniform.hpp>
@@ -132,8 +133,8 @@ namespace picongpu
                     cupla::__syncthreads(acc);
 
                     // shuffle indices list
-                    forEachFrameElem(
-                        [&](uint32_t const linearIdx) { parCellList[linearIdx].shuffle(acc, rngHandle); });
+                    forEachFrameElem([&](uint32_t const linearIdx)
+                                     { parCellList[linearIdx].shuffle(acc, rngHandle); });
 
                     auto collisionFunctorCtx = lockstep::makeVar<decltype(collisionFunctor(
                         acc,
@@ -147,38 +148,44 @@ namespace picongpu
                         alpaka::core::declval<uint32_t const>(),
                         alpaka::core::declval<float_X const>()))>(forEachFrameElem);
 
-                    forEachFrameElem([&](lockstep::Idx const idx) {
-                        uint32_t const sizeAll = parCellList[idx].size;
-                        if(sizeAll < 2u)
-                            return;
-                        // skip particle offset counter
-                        uint32_t* listAll = parCellList[idx].ptrToIndicies;
-                        uint32_t potentialPartners = sizeAll - 1u + sizeAll % 2u;
-                        collisionFunctorCtx[idx] = collisionFunctor(
-                            acc,
-                            localSuperCellOffset,
-                            lockstep::Worker<T_numWorkers>{workerIdx},
-                            densityArray[idx],
-                            densityArray[idx],
-                            potentialPartners,
-                            coulombLog);
-                        for(uint32_t i = 0; i < sizeAll; i += 2)
+                    forEachFrameElem(
+                        [&](lockstep::Idx const idx)
                         {
-                            auto parEven = detail::getParticle(pb, firstFrame, listAll[i]);
-                            auto parOdd = detail::getParticle(pb, firstFrame, listAll[(i + 1) % sizeAll]);
-                            // TODO: duplicationCorrection * 2 is just a quick fix. The formula for s12 in the
-                            // RelativisticBinaryCollision functor has an additional 1/2 factor for intraCollisions.
-                            // We should instead let RelativisticBinaryCollision know which type of collision it is
-                            // and multiply the 1/2 inside the functor.
-                            collisionFunctorCtx[idx].duplicationCorrection = duplicationCorrection(i, sizeAll) * 2u;
-                            (collisionFunctorCtx[idx])(detail::makeCollisionContext(acc, rngHandle), parEven, parOdd);
-                        }
-                    });
+                            uint32_t const sizeAll = parCellList[idx].size;
+                            if(sizeAll < 2u)
+                                return;
+                            // skip particle offset counter
+                            uint32_t* listAll = parCellList[idx].ptrToIndicies;
+                            uint32_t potentialPartners = sizeAll - 1u + sizeAll % 2u;
+                            collisionFunctorCtx[idx] = collisionFunctor(
+                                acc,
+                                localSuperCellOffset,
+                                lockstep::Worker<T_numWorkers>{workerIdx},
+                                densityArray[idx],
+                                densityArray[idx],
+                                potentialPartners,
+                                coulombLog);
+                            for(uint32_t i = 0; i < sizeAll; i += 2)
+                            {
+                                auto parEven = detail::getParticle(pb, firstFrame, listAll[i]);
+                                auto parOdd = detail::getParticle(pb, firstFrame, listAll[(i + 1) % sizeAll]);
+                                // TODO: duplicationCorrection * 2 is just a quick fix. The formula for s12 in the
+                                // RelativisticBinaryCollision functor has an additional 1/2 factor for
+                                // intraCollisions. We should instead let RelativisticBinaryCollision know which type
+                                // of collision it is and multiply the 1/2 inside the functor.
+                                collisionFunctorCtx[idx].duplicationCorrection
+                                    = duplicationCorrection(i, sizeAll) * 2u;
+                                (collisionFunctorCtx[idx])(
+                                    detail::makeCollisionContext(acc, rngHandle),
+                                    parEven,
+                                    parOdd);
+                            }
+                        });
 
                     cupla::__syncthreads(acc);
 
-                    forEachFrameElem(
-                        [&](uint32_t const linearIdx) { parCellList[linearIdx].finalize(acc, deviceHeapHandle); });
+                    forEachFrameElem([&](uint32_t const linearIdx)
+                                     { parCellList[linearIdx].finalize(acc, deviceHeapHandle); });
                 }
             };
 
@@ -215,7 +222,7 @@ namespace picongpu
                     DataConnector& dc = Environment<>::get().DataConnector();
                     auto species = dc.get<Species>(FrameType::getName(), true);
 
-                    AreaMapping<CORE + BORDER, picongpu::MappingDesc> mapper(species->getCellDescription());
+                    auto const mapper = makeAreaMapper<CORE + BORDER>(species->getCellDescription());
 
                     constexpr uint32_t numWorkers
                         = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;

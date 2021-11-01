@@ -27,7 +27,6 @@
 
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/dimensions/SuperCellDescription.hpp>
-#include <pmacc/mappings/kernel/AreaMapping.hpp>
 #include <pmacc/math/Vector.hpp>
 #include <pmacc/memory/Array.hpp>
 #include <pmacc/memory/boxes/CachedBox.hpp>
@@ -36,7 +35,9 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include <mpi.h>
 
@@ -120,11 +121,10 @@ namespace picongpu
     class IntensityPlugin : public ILightweightPlugin
     {
     private:
-        typedef MappingDesc::SuperCellSize SuperCellSize;
+        using SuperCellSize = MappingDesc::SuperCellSize;
 
-
-        GridBuffer<float_32, DIM1>* localMaxIntensity;
-        GridBuffer<float_32, DIM1>* localIntegratedIntensity;
+        std::unique_ptr<GridBuffer<float_32, DIM1>> localMaxIntensity;
+        std::unique_ptr<GridBuffer<float_32, DIM1>> localIntegratedIntensity;
         MappingDesc* cellDescription;
         std::string notifyPeriod;
 
@@ -145,8 +145,6 @@ namespace picongpu
             : pluginName("IntensityPlugin: calculate the maximum and integrated E-Field energy\nover laser "
                          "propagation direction")
             , pluginPrefix(FieldE::getName() + std::string("_intensity"))
-            , localMaxIntensity(nullptr)
-            , localIntegratedIntensity(nullptr)
             , cellDescription(nullptr)
             , writeToFile(false)
         {
@@ -157,13 +155,13 @@ namespace picongpu
         {
         }
 
-        void notify(uint32_t currentStep)
+        void notify(uint32_t currentStep) override
         {
             calcIntensity(currentStep);
             combineData(currentStep);
         }
 
-        void pluginRegisterHelp(po::options_description& desc)
+        void pluginRegisterHelp(po::options_description& desc) override
         {
             desc.add_options()(
                 (pluginPrefix + ".period").c_str(),
@@ -171,28 +169,28 @@ namespace picongpu
                 "enable plugin [for each n-th step]");
         }
 
-        std::string pluginGetName() const
+        std::string pluginGetName() const override
         {
             return pluginName;
         }
 
-        void setMappingDescription(MappingDesc* cellDescription)
+        void setMappingDescription(MappingDesc* cellDescription) override
         {
             this->cellDescription = cellDescription;
         }
 
     private:
-        void pluginLoad()
+        void pluginLoad() override
         {
             if(!notifyPeriod.empty())
             {
                 writeToFile = Environment<simDim>::get().GridController().getGlobalRank() == 0;
                 int yCells = cellDescription->getGridLayout().getDataSpaceWithoutGuarding().y();
 
-                localMaxIntensity
-                    = new GridBuffer<float_32, DIM1>(DataSpace<DIM1>(yCells)); // create one int on gpu und host
-                localIntegratedIntensity
-                    = new GridBuffer<float_32, DIM1>(DataSpace<DIM1>(yCells)); // create one int on gpu und host
+                localMaxIntensity = std::make_unique<GridBuffer<float_32, DIM1>>(
+                    DataSpace<DIM1>(yCells)); // create one int on gpu und host
+                localIntegratedIntensity = std::make_unique<GridBuffer<float_32, DIM1>>(
+                    DataSpace<DIM1>(yCells)); // create one int on gpu und host
 
                 if(writeToFile)
                 {
@@ -204,7 +202,7 @@ namespace picongpu
             }
         }
 
-        void pluginUnload()
+        void pluginUnload() override
         {
             if(!notifyPeriod.empty())
             {
@@ -213,8 +211,6 @@ namespace picongpu
                     flushAndCloseFile(outFileIntegrated);
                     flushAndCloseFile(outFileMax);
                 }
-                __delete(localMaxIntensity);
-                __delete(localIntegratedIntensity);
             }
         }
 
@@ -238,23 +234,21 @@ namespace picongpu
             /**\todo: fixme I cant work with not regular domains (use mpi_gatherv)*/
             DataSpace<simDim> globalRootCell(subGrid.getLocalDomain().offset);
             int yOffset = globalRootCell.y();
-            int* yOffsetsAll = new int[gpus];
-            float_32* maxAll = new float_32[yGlobalSize];
-            float_32* maxAllTmp = new float_32[yLocalSize * gpus];
-            memset(maxAll, 0, sizeof(float_32) * yGlobalSize);
-            float_32* integretedAll = new float_32[yGlobalSize];
-            float_32* integretedAllTmp = new float_32[yLocalSize * gpus];
-            memset(integretedAll, 0, sizeof(float_32) * yGlobalSize);
+            auto yOffsetsAll = std::vector<int>(gpus);
+            auto maxAll = std::vector<float_32>(yGlobalSize, 0.0f);
+            auto maxAllTmp = std::vector<float_32>(yLocalSize * gpus);
+            auto integretedAll = std::vector<float_32>(yGlobalSize, 0.0f);
+            auto integretedAllTmp = std::vector<float_32>(yLocalSize * gpus);
 
             // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
             __getTransactionEvent().waitForFinished();
-            MPI_CHECK(MPI_Gather(&yOffset, 1, MPI_INT, yOffsetsAll, 1, MPI_INT, 0, MPI_COMM_WORLD));
+            MPI_CHECK(MPI_Gather(&yOffset, 1, MPI_INT, yOffsetsAll.data(), 1, MPI_INT, 0, MPI_COMM_WORLD));
 
             MPI_CHECK(MPI_Gather(
                 localMaxIntensity->getHostBuffer().getBasePointer(),
                 yLocalSize,
                 MPI_FLOAT,
-                maxAllTmp,
+                maxAllTmp.data(),
                 yLocalSize,
                 MPI_FLOAT,
                 0,
@@ -263,7 +257,7 @@ namespace picongpu
                 localIntegratedIntensity->getHostBuffer().getBasePointer(),
                 yLocalSize,
                 MPI_FLOAT,
-                integretedAllTmp,
+                integretedAllTmp.data(),
                 yLocalSize,
                 MPI_FLOAT,
                 0,
@@ -286,7 +280,7 @@ namespace picongpu
                 size_t physicelYCellOffset = numSlides * yLocalSize + window.globalDimensions.offset.y();
                 writeFile(
                     currentStep,
-                    maxAll + window.globalDimensions.offset.y(),
+                    maxAll.data() + window.globalDimensions.offset.y(),
                     window.globalDimensions.size.y(),
                     physicelYCellOffset,
                     outFileMax,
@@ -298,18 +292,12 @@ namespace picongpu
 
                 writeFile(
                     currentStep,
-                    integretedAll + window.globalDimensions.offset.y(),
+                    integretedAll.data() + window.globalDimensions.offset.y(),
                     window.globalDimensions.size.y(),
                     physicelYCellOffset,
                     outFileIntegrated,
                     unit);
             }
-
-            __deleteArray(yOffsetsAll);
-            __deleteArray(maxAll);
-            __deleteArray(integretedAll);
-            __deleteArray(maxAllTmp);
-            __deleteArray(integretedAllTmp);
         }
 
         /* write data from array to a file
@@ -338,7 +326,7 @@ namespace picongpu
             stream << std::endl << currentStep << " ";
             for(size_t i = 0; i < count; ++i)
             {
-                stream << sqrt((float_64)(array[i])) * unit << " ";
+                stream << sqrt((float_64) (array[i])) * unit << " ";
             }
             stream << std::endl;
         }

@@ -32,32 +32,15 @@ namespace pmacc
     class VectorDataBox : public DataBox<PitchedBox<TYPE, DIM1>>
     {
     public:
-        typedef DataBox<PitchedBox<TYPE, DIM1>> BaseType;
-        typedef TYPE type;
+        using BaseType = DataBox<PitchedBox<TYPE, 1U>>;
+        using type = TYPE;
 
-        template<class>
-        struct result;
-
-        template<class F, typename T>
-        struct result<F(T)>
-        {
-            typedef TYPE& type;
-        };
-
-        template<class F, typename T>
-        struct result<const F(T)>
-        {
-            typedef const TYPE& type;
-        };
-
-        HDINLINE VectorDataBox(TYPE* pointer, const DataSpace<DIM1>& offset = DataSpace<DIM1>(0))
-            : BaseType(PitchedBox<TYPE, DIM1>(pointer, offset))
+        HDINLINE VectorDataBox(TYPE* pointer, const DataSpace<DIM1>& offset = {})
+            : BaseType(BaseType(PitchedBox<TYPE, DIM1>(pointer)).shift(offset))
         {
         }
 
-        HDINLINE VectorDataBox()
-        {
-        }
+        HDINLINE VectorDataBox() = default;
     };
 
     /**
@@ -69,7 +52,7 @@ namespace pmacc
     class TileDataBox : public VectorDataBox<TYPE>
     {
     public:
-        typedef VectorDataBox<TYPE> BaseType;
+        using BaseType = VectorDataBox<TYPE>;
 
         HDINLINE TileDataBox(TYPE* pointer, const DataSpace<DIM1>& offset = DataSpace<DIM1>(0), uint32_t size = 0)
             : BaseType(pointer, offset)
@@ -88,9 +71,7 @@ namespace pmacc
         }
 
         /*object is not  initialized valid, copy a valid instance to this object to get a valid instance*/
-        HDINLINE TileDataBox()
-        {
-        }
+        HDINLINE TileDataBox() = default;
 
 
     protected:

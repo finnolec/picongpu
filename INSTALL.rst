@@ -33,7 +33,7 @@ gcc
 """
 - 5.5 - 10.0 (if you want to build for Nvidia GPUs, supported compilers depend on your current `CUDA version <https://gist.github.com/ax3l/9489132>`_)
 
-  - CUDA 9.2 - 10.0: Use gcc 5.5 - 7
+  - CUDA 10.0: Use gcc 5.5 - 7
   - CUDA 10.1/10.2: Use gcc 5.5 - 8
   - CUDA 11.x: Used gcc 5.5 - 10.0
 - *note:* be sure to build all libraries/dependencies with the *same* gcc version; GCC 5 or newer is recommended
@@ -118,16 +118,16 @@ rsync
 - *Arch Linux:* ``sudo pacman --sync rsync``
 - *Spack:* ``spack install rsync``
 
-alpaka 0.4.0
+alpaka 0.6.X
 """"""""""""
-- `alpaka <https://github.com/ComputationalRadiationPhysics/alpaka>`_ is included in the PIConGPU source code
+- `alpaka <https://github.com/alpaka-group/alpaka>`_ is included in the PIConGPU source code
 
-cupla 0.2.0
+cupla 0.3.0
 """""""""""
-- `cupla <https://github.com/ComputationalRadiationPhysics/cupla>`_ is included in the PIConGPU source code
+- `cupla <https://github.com/alpaka-group/cupla>`_ is included in the PIConGPU source code
 
-mallocMC 2.3.0crp
-"""""""""""""""""
+mallocMC 2.6.0crp-dev
+"""""""""""""""""""""
 - only required for CUDA backend
 - `mallocMC <https://github.com/ComputationalRadiationPhysics/mallocMC>`_ is included in the PIConGPU source code
 
@@ -154,7 +154,7 @@ Optional Libraries
 
 CUDA
 """"
-- `9.2 - 10.2 <https://developer.nvidia.com/cuda-downloads>`_
+- `10.0+ <https://developer.nvidia.com/cuda-downloads>`_
 - required if you want to run on Nvidia GPUs
 - *Debian/Ubuntu:* ``sudo apt-get install nvidia-cuda-toolkit``
 - *Arch Linux:* ``sudo pacman --sync cuda``
@@ -209,25 +209,6 @@ pngwriter
   - ``export CMAKE_PREFIX_PATH=$HOME/lib/pngwriter:$CMAKE_PREFIX_PATH``
   - ``export LD_LIBRARY_PATH=$HOME/lib/pngwriter/lib:$LD_LIBRARY_PATH``
 
-libSplash
-"""""""""
-- 1.7.0+ (requires *HDF5*, *boost program-options*)
-- *Debian/Ubuntu dependencies:* ``sudo apt-get install libhdf5-openmpi-dev libboost-program-options-dev``
-- *Arch Linux dependencies:* ``sudo pacman --sync hdf5-openmpi boost``
-- *Spack:* ``spack install libsplash ^hdf5~fortran``
-- *from source:*
-
-  - ``mkdir -p ~/src ~/build ~/lib``
-  - ``git clone https://github.com/ComputationalRadiationPhysics/libSplash.git ~/src/splash/``
-  - ``cd ~/build && rm -rf ../build/*``
-  - ``cmake -DCMAKE_INSTALL_PREFIX=$HOME/lib/splash -DSplash_USE_MPI=ON -DSplash_USE_PARALLEL=ON ~/src/splash``
-  - ``make install``
-
-- *environment:* (assumes install from source in ``$HOME/lib/splash``)
-
-  - ``export CMAKE_PREFIX_PATH=$HOME/lib/splash:$CMAKE_PREFIX_PATH``
-  - ``export LD_LIBRARY_PATH=$HOME/lib/splash/lib:$LD_LIBRARY_PATH``
-
 HDF5
 """"
 - 1.8.13+
@@ -253,29 +234,6 @@ HDF5
 
   - ``export HDF5_ROOT=$HOME/lib/hdf5``
   - ``export LD_LIBRARY_PATH=$HDF5_ROOT/lib:$LD_LIBRARY_PATH``
-
-splash2txt
-""""""""""
-- requires *libSplash* and *boost* ``program_options``
-- converts slices in dumped hdf5 files to plain txt matrices
-- assume you [downloaded](#requirements) PIConGPU to `PICSRC=$HOME/src/picongpu`
-- ``mkdir -p ~/build && cd ~/build``
-- ``cmake -DCMAKE_INSTALL_PREFIX=$PICSRC/src/tools/bin $PICSRC/src/tools/splash2txt``
-- ``make``
-- ``make install``
-- *environment:*
-
-  - ``export PATH=$PATH:$PICSRC/src/splash2txt/build``
-- options:
-
-  - ``splash2txt --help``
-  - list all available datasets: ``splash2txt --list <FILE_PREFIX>``
-
-png2gas
-"""""""
-- requires *libSplash*, *pngwriter* and *boost* ``program_options``)
-- converts png files to hdf5 files that can be used as an input for species initial density profiles
-- compile and install exactly as *splash2txt* above
 
 c-blosc
 """""""

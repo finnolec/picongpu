@@ -79,11 +79,8 @@ namespace picongpu
                  */
                 constexpr uint32_t skipSuperCells
                     = (MaxMargin::value + SuperCellMinSize::value - 1u) / SuperCellMinSize::value;
-                StrideMapping<
-                    T_area,
-                    skipSuperCells + 1u, // stride 1u means each supercell is used
-                    MappingDesc>
-                    mapper(cellDescription);
+                // stride 1u means each supercell is used
+                auto mapper = makeStrideAreaMapper<T_area, skipSuperCells + 1u>(cellDescription);
 
                 do
                 {
@@ -115,7 +112,7 @@ namespace picongpu
                 T_JBox const& jBox,
                 T_ParticleBox const& parBox) const
             {
-                AreaMapping<T_area, MappingDesc> mapper(cellDescription);
+                auto const mapper = makeAreaMapper<T_area>(cellDescription);
 
                 PMACC_KERNEL(depositionKernel)(mapper.getGridDim(), T_numWorkers)(jBox, parBox, frameSolver, mapper);
             }
