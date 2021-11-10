@@ -1,4 +1,4 @@
-/* Copyright 2016-2021 Rene Widera
+/* Copyright 2016-2021 Rene Widera, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
  *
@@ -25,6 +25,7 @@
 #include "picongpu/fields/currentDeposition/RelayPoint.hpp"
 
 #include <pmacc/cuSTL/cursor/Cursor.hpp>
+#include <pmacc/meta/InvokeIf.hpp>
 
 
 namespace picongpu
@@ -104,16 +105,10 @@ namespace picongpu
                     line.m_pos1[d] = calc_InCellPos(relayPoint[d], I[0][d]);
                 }
 
-                const bool twoParticlesNeeded = I[0] != I[1];
-
-                deposit(
-                    acc,
-                    dataBoxJ.shift(I[0]).toCursor(),
-                    line,
-                    chargeDensity,
-                    velocity.z() * (twoParticlesNeeded ? float_X(0.5) : float_X(1.0)));
+                deposit(acc, dataBoxJ.shift(I[0]).toCursor(), line, chargeDensity);
 
                 /* detect if there is a second virtual particle */
+                const bool twoParticlesNeeded = (I[0] != I[1]);
                 if(twoParticlesNeeded)
                 {
                     /* calculate positions for the second virtual particle */
@@ -123,8 +118,46 @@ namespace picongpu
                         line.m_pos1[d] = calc_InCellPos(posEnd[d], I[1][d]);
                         line.m_pos0[d] = calc_InCellPos(relayPoint[d], I[1][d]);
                     }
-                    deposit(acc, dataBoxJ.shift(I[1]).toCursor(), line, chargeDensity, velocity.z() * float_X(0.5));
+                    deposit(acc, dataBoxJ.shift(I[1]).toCursor(), line, chargeDensity);
                 }
+
+                /* 2d case requires special handling of Jz as explained in #3889.
+                 * Pass dataBoxJ as auto&& to defer evaluation for 3d case.
+                 */
+                pmacc::meta::invokeIf<simDim == 2>(
+                    [&, this](auto&& dataBoxJ)
+                    {
+                        /* For Jz we consider the whole movement on a step.
+                         * This movement is not necessarily on support.
+                         * A naive implementation would be to extend the bounds in x, y by 1 in both sides, and use
+                         * general assignment function. To optimize it, we redefine I[1] as component-wise minimum
+                         * between old I[1] and I[0]. We calculate everything relative to the new I[1]. Since it is the
+                         * minimum in both x and y, the same begin value can be used. Thus, the bounds only have to be
+                         * extended by 1 in the max side, not both. Still, the general assignment function has to be
+                         * used.
+                         */
+                        for(uint32_t d = 0; d < simDim; ++d)
+                        {
+                            I[1][d] = math::min(I[0][d], I[1][d]);
+                            line.m_pos0[d] = this->calc_InCellPos(posStart[d], I[1][d]);
+                            line.m_pos1[d] = this->calc_InCellPos(posEnd[d], I[1][d]);
+                        }
+                        /* Have to use DIM2, otherwise 3d case wouldn't compile due to
+                         * no computeCurrentZ() method.
+                         * In this case it is parsed even though the invokeIf condition is false and dataBoxJ is passed
+                         * as auto&&.
+                         */
+                        emz::DepositCurrent<
+                            typename T_Strategy::BlockReductionOp,
+                            typename T_ParticleShape::ChargeAssignment,
+                            begin,
+                            end + 1,
+                            DIM2>
+                            depositZ;
+                        depositZ
+                            .computeCurrentZ(acc, dataBoxJ.shift(I[1]).toCursor(), line, velocity.z() * chargeDensity);
+                    },
+                    dataBoxJ);
             }
 
             static pmacc::traits::StringProperty getStringProperties()
