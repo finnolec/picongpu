@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Rene Widera
+/* Copyright 2013-2022 Rene Widera
  *
  * This file is part of PMacc.
  *
@@ -39,12 +39,12 @@ namespace pmacc
 
         TaskSendParticlesExchange(ParBase& parBase, uint32_t exchange)
             : parBase(parBase)
-            , exchange(exchange)
             , state(Constructor)
-            , maxSize(parBase.getParticlesBuffer().getSendExchangeStack(exchange).getMaxParticlesCount())
-            , initDependency(__getTransactionEvent())
-            , lastSize(0)
             , lastSendEvent(EventTask())
+            , initDependency(__getTransactionEvent())
+            , exchange(exchange)
+            , maxSize(parBase.getParticlesBuffer().getSendExchangeStack(exchange).getMaxParticlesCount())
+            , lastSize(0)
             , retryCounter(0)
         {
         }

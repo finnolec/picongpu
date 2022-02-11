@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Felix Schmitt, Rene Widera, Benjamin Worpitz
+/* Copyright 2013-2022 Axel Huebl, Felix Schmitt, Rene Widera, Benjamin Worpitz
  *
  * This file is part of PMacc.
  *
@@ -143,9 +143,9 @@ namespace pmacc
             const std::shared_ptr<DeviceHeap>& deviceHeap,
             DataSpace<DIM> layout,
             DataSpace<DIM> superCellSize)
-            : m_deviceHeap(deviceHeap)
-            , superCellSize(superCellSize)
+            : superCellSize(superCellSize)
             , gridSize(layout)
+            , m_deviceHeap(deviceHeap)
         {
             exchangeMemoryIndexer = std::make_unique<GridBuffer<BorderFrameIndex, DIM1>>(DataSpace<DIM1>(0));
             framesExchanges = std::make_unique<GridBuffer<FrameType, DIM1, FrameTypeBorder>>(DataSpace<DIM1>(0));

@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Rene Widera
+/* Copyright 2013-2022 Axel Huebl, Rene Widera
  *
  * This file is part of PIConGPU.
  *
@@ -98,8 +98,6 @@ namespace picongpu
             if(!std::string(PICONGPU_VERSION_LABEL).empty())
                 softwareVersion << "-" << PICONGPU_VERSION_LABEL;
             series.setSoftware(software, softwareVersion.str());
-
-            pmacc::GridController<simDim>& gc = pmacc::Environment<simDim>::get().GridController();
 
             /** calculate GUARD offset in the source hBuffer *****************/
             const uint32_t rGuardCells

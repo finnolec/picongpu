@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2013-2021 Axel Huebl, Richard Pausch, Rene Widera
+# Copyright 2013-2022 Axel Huebl, Richard Pausch, Rene Widera
 #
 # This file is part of PIConGPU.
 #
@@ -27,6 +27,7 @@
 #SBATCH --job-name=!TBG_jobName
 #SBATCH --nodes=!TBG_nodes
 #SBATCH --ntasks=!TBG_tasks
+#SBATCH --ntasks-per-node=!TBG_mpiTasksPerNode
 #SBATCH --cpus-per-task=!TBG_coresPerCPU
 #SBATCH --mem=!TBG_memPerNode
 # must be 1 else we can not use hyperthreading
@@ -104,6 +105,6 @@ export OMPI_MCA_io=^ompio
 
 if [ $? -eq 0 ] ; then
   # Run PIConGPU
-  source !TBG_dstPath/tbg/handleSlurmSignals.sh mpiexec --bind-to none !TBG_dstPath/tbg/cpuNumaStarter.sh \
+  source !TBG_dstPath/tbg/handleSlurmSignals.sh mpiexec -np !TBG_tasks --bind-to none !TBG_dstPath/tbg/cpuNumaStarter.sh \
     !TBG_dstPath/input/bin/picongpu !TBG_author !TBG_programParams
 fi

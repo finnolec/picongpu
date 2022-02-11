@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Felix Schmitt, Heiko Burau,
+/* Copyright 2013-2022 Axel Huebl, Felix Schmitt, Heiko Burau,
  *                     Rene Widera, Richard Pausch, Benjamin Worpitz
  *
  * This file is part of PIConGPU.
@@ -306,9 +306,9 @@ namespace picongpu
         }
 
         EnergyParticles(std::shared_ptr<plugins::multi::IHelp>& help, size_t const id, MappingDesc* cellDescription)
-            : m_help(std::static_pointer_cast<Help>(help))
+            : m_cellDescription(cellDescription)
+            , m_help(std::static_pointer_cast<Help>(help))
             , m_id(id)
-            , m_cellDescription(cellDescription)
         {
             filename = m_help->getOptionPrefix() + "_" + m_help->filter.get(m_id) + ".dat";
 

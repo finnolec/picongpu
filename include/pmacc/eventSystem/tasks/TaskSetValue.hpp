@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Felix Schmitt, Heiko Burau, Rene Widera,
+/* Copyright 2013-2022 Felix Schmitt, Heiko Burau, Rene Widera,
  *                     Benjamin Worpitz
  *
  * This file is part of PMacc.
@@ -70,9 +70,9 @@ namespace pmacc
         /** Get access to a value from a pointer or reference with the same method
          */
         template<typename T_Type>
-        HDINLINE typename Value<T_Type, std::is_pointer<T_Type>::value>::type& getValue(T_Type& value)
+        HDINLINE typename Value<T_Type, std::is_pointer_v<T_Type>>::type& getValue(T_Type& value)
         {
-            typedef Value<T_Type, std::is_pointer<T_Type>::value> Functor;
+            typedef Value<T_Type, std::is_pointer_v<T_Type>> Functor;
             return Functor()(value);
         }
 

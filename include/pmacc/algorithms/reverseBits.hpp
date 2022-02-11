@@ -1,4 +1,4 @@
-/* Copyright 2015-2021 Alexander Grund
+/* Copyright 2015-2022 Alexander Grund
  *
  * This file is part of PMacc.
  *
@@ -44,7 +44,7 @@ namespace pmacc
     T reverseBits(T value)
     {
         PMACC_STATIC_ASSERT_MSG(
-            std::is_integral<T>::value && std::is_unsigned<T>::value,
+            std::is_integral_v<T> && std::is_unsigned_v<T>,
             Only_allowed_for_unsigned_integral_types, );
         /* init with value (to get LSB) */
         T result = value;

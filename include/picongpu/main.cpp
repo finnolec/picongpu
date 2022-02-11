@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
+/* Copyright 2013-2022 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
  *                     Sergei Bastrakov
  *
  * This file is part of PIConGPU.
@@ -57,7 +57,7 @@ namespace
             sim.load();
             sim.start();
             sim.unload();
-            PMACC_FALLTHROUGH;
+            [[fallthrough]];
         case ArgsParser::Status::successExit:
             errorCode = 0;
             break;

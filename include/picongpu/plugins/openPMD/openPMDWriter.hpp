@@ -1,4 +1,4 @@
-/* Copyright 2014-2021 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
+/* Copyright 2014-2022 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
  *                     Benjamin Worpitz, Alexander Grund, Franz Poeschel,
  *                     Pawel Ordyna, Sergei Bastrakov
  *
@@ -28,6 +28,8 @@
 #include "picongpu/fields/FieldJ.hpp"
 #include "picongpu/fields/FieldTmp.hpp"
 #include "picongpu/particles/filter/filter.hpp"
+#include "picongpu/particles/particleToGrid/CombinedDerive.def"
+#include "picongpu/particles/particleToGrid/ComputeFieldValue.hpp"
 #include "picongpu/particles/traits/SpeciesEligibleForSolver.hpp"
 #include "picongpu/plugins/common/openPMDVersion.def"
 #include "picongpu/plugins/common/openPMDWriteMeta.hpp"
@@ -60,6 +62,7 @@
 #include <pmacc/particles/memory/buffers/MallocMCBuffer.hpp>
 #include <pmacc/particles/operations/CountParticles.hpp>
 #include <pmacc/pluginSystem/PluginConnector.hpp>
+#include <pmacc/pluginSystem/toTimeSlice.hpp>
 #include <pmacc/simulationControl/TimeInterval.hpp>
 #include <pmacc/static_assert.hpp>
 #include <pmacc/traits/Limits.hpp>
@@ -81,6 +84,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib> // getenv
+#include <iostream>
 #include <list>
 #include <sstream>
 #include <string>
@@ -107,7 +111,7 @@ namespace picongpu
         {
             std::vector<uint64_t> v = asStandardVector(globalDimensions);
             ::openPMD::Dataset dataset{datatype, std::move(v)};
-            setDatasetOptions(dataset, jsonMatcher->get(datasetName));
+            dataset.options = jsonMatcher->get(datasetName);
             recordComponent.resetDataset(std::move(dataset));
             return recordComponent;
         }
@@ -201,6 +205,8 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
             plugins::multi::Option<std::string> source = {"source", "data sources: ", "species_all, fields_all"};
 
+            plugins::multi::Option<std::string> tomlSources = {"toml", "specify dynamic data sources via TOML"};
+
             std::vector<std::string> allowedDataSources = {"species_all", "fields_all"};
 
             plugins::multi::Option<std::string> fileName = {"file", "openPMD file basename"};
@@ -275,6 +281,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                 notifyPeriod.registerHelp(desc, masterPrefix + prefix);
                 source.registerHelp(desc, masterPrefix + prefix, std::string("[") + concatenatedSourceNames + "]");
+                tomlSources.registerHelp(desc, masterPrefix + prefix);
 
                 expandHelp(desc, "");
                 selfRegister = true;
@@ -295,8 +302,9 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             {
                 if(selfRegister)
                 {
-                    if(notifyPeriod.empty() || fileName.empty())
-                        throw std::runtime_error(name + ": parameter period and file must be defined");
+                    if(tomlSources.empty() && (notifyPeriod.empty() || fileName.empty()))
+                        throw std::runtime_error(
+                            name + ": If not defining parameter toml, then parameter period and file must be defined");
 
                     // check if user passed data source names are valid
                     for(auto const& dataSourceNames : source)
@@ -318,7 +326,12 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             size_t getNumPlugins() const override
             {
                 if(selfRegister)
-                    return notifyPeriod.size();
+                {
+                    // If using periods in some instances and TOML sources in others, then the other parameter
+                    // must be specified as empty.
+                    // Not this method's task to check this though.
+                    return tomlSources.size() > notifyPeriod.size() ? tomlSources.size() : notifyPeriod.size();
+                }
                 else
                     return 1;
             }
@@ -345,10 +358,65 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             std::string const prefix = "openPMD";
         };
 
-        void ThreadParams::initFromConfig(Help& help, size_t id, std::string const& file, std::string const& dir)
+        void ThreadParams::initFromConfig(
+            Help& help,
+            size_t id,
+            std::string const& dir,
+            std::optional<std::string> file)
         {
-            fileExtension = help.fileNameExtension.get(id);
-            fileInfix = help.fileNameInfix.get(id);
+            std::string strategyString;
+            std::string jsonString;
+
+            switch(m_configurationSource)
+            {
+            case ConfigurationVia::Toml:
+                {
+                    std::tie(fileName, fileInfix, fileExtension, strategyString, jsonString)
+                        = tomlDataSources->openPMDPluginOptions;
+                    break;
+                }
+            case ConfigurationVia::CommandLine:
+                {
+                    if(!file.has_value())
+                    {
+                        /*
+                         * If file is empty, then the openPMD plugin is running as a normal IO plugin.
+                         * In this case, read the file from command line parameters.
+                         * If there is a filename, it is running as a checkpoint and the filename
+                         * has been supplied from outside.
+                         * We must not read it from the command line since it's not there.
+                         * Reason: A checkpoint is triggered by writing something like:
+                         * > --checkpoint.file asdf --checkpoint.period 100
+                         * ... and NOT by something like:
+                         * > --checkpoint.openPMD.file asdf --checkpoint.period 100
+                         */
+                        /* if file name is relative, prepend with common directory */
+                        fileName = help.fileName.get(id);
+                    }
+
+                    /*
+                     * These two however should always be read because they have default values.
+                     */
+                    fileExtension = help.fileNameExtension.get(id);
+                    fileInfix = help.fileNameInfix.get(id);
+
+                    strategyString = help.dataPreparationStrategy.get(id);
+                    jsonString = help.jsonConfig.get(id);
+                    break;
+                }
+            }
+
+            if(file.has_value())
+            {
+                // If file was specified as function parameter (i.e. when checkpointing), ignore command line
+                // parameters for it
+                fileName = file.value();
+            }
+
+            fileName = boost::filesystem::path(fileName).has_root_path() ? fileName : dir + "/" + fileName;
+            log<picLog::INPUT_OUTPUT>("openPMD: setting file pattern: %1%%2%.%3%") % fileName % fileInfix
+                % fileExtension;
+
             /*
              * Enforce group-based iteration layout for streaming backends
              */
@@ -356,25 +424,18 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             {
                 fileInfix = "";
             }
-            /* if file name is relative, prepend with common directory */
-            fileName = boost::filesystem::path(file).has_root_path() ? file : dir + "/" + file;
-
-            // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
-            __getTransactionEvent().waitForFinished();
-
-            log<picLog::INPUT_OUTPUT>("openPMD: setting file pattern: %1%%2%.%3%") % fileName % fileInfix
-                % fileExtension;
 
             // Avoid repeatedly parsing the JSON config
             if(!jsonMatcher)
             {
-                jsonMatcher = AbstractJsonMatcher::construct(help.jsonConfig.get(id), communicator);
+                // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
+                __getTransactionEvent().waitForFinished();
+                jsonMatcher = AbstractJsonMatcher::construct(jsonString, communicator);
             }
 
             log<picLog::INPUT_OUTPUT>("openPMD: global JSON config: %1%") % jsonMatcher->getDefault();
 
             {
-                std::string strategyString = help.dataPreparationStrategy.get(id);
                 if(strategyString == "adios" || strategyString == "doubleBuffer")
                 {
                     strategy = WriteSpeciesStrategy::ADIOS;
@@ -524,17 +585,21 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                     /*## update field ##*/
 
                     /*load FieldTmp without copy data to host*/
-                    PMACC_CASSERT_MSG(_please_allocate_at_least_one_FieldTmp_in_memory_param, fieldTmpNumSlots > 0);
+                    constexpr uint32_t requiredExtraSlots
+                        = particles::particleToGrid::RequiredExtraSlots<Solver>::type::value;
+                    PMACC_CASSERT_MSG(
+                        _please_allocate_at_least_one_or_two_when_using_combined_attributes_FieldTmp_in_memory_param,
+                        fieldTmpNumSlots >= 1u + requiredExtraSlots);
                     auto fieldTmp = dc.get<FieldTmp>(FieldTmp::getUniqueId(0), true);
-                    /*load particle without copy particle data to host*/
-                    auto speciesTmp = dc.get<Species>(Species::FrameType::getName(), true);
-
-                    fieldTmp->getGridBuffer().getDeviceBuffer().setValue(ValueType::create(0.0));
-                    /*run algorithm*/
-                    fieldTmp->template computeValue<CORE + BORDER, Solver, Filter>(*speciesTmp, params->currentStep);
-
-                    EventTask fieldTmpEvent = fieldTmp->asyncCommunication(__getTransactionEvent());
-                    __setTransactionEvent(fieldTmpEvent);
+                    // compute field values
+                    auto eventPtr
+                        = particles::particleToGrid::ComputeFieldValue<CORE + BORDER, Solver, Species, Filter>()(
+                            *fieldTmp,
+                            params->currentStep,
+                            1u);
+                    // wait for unfinished asynchronous communication
+                    if(eventPtr != nullptr)
+                        __setTransactionEvent(*eventPtr);
                     /* copy data to host that we can write same to disk*/
                     fieldTmp->getGridBuffer().deviceToHost();
                     /*## finish update field ##*/
@@ -587,7 +652,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 rngProvider->synchronize();
                 auto const name = rngProvider->getName();
 
-                ::openPMD::Iteration iteration = params->openPMDSeries->WRITE_ITERATIONS[params->currentStep];
+                ::openPMD::Iteration iteration = params->openPMDSeries->writeIterations()[params->currentStep];
                 ::openPMD::Mesh mesh = iteration.meshes[name];
 
                 auto const unitDimension = std::vector<float_64>(7, 0.0);
@@ -651,7 +716,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 auto rngProvider = dc.get<RNGProvider>(RNGProvider::getName());
                 auto const name = rngProvider->getName();
 
-                ::openPMD::Iteration iteration = params->openPMDSeries->WRITE_ITERATIONS[params->currentStep];
+                ::openPMD::Iteration iteration = params->openPMDSeries->writeIterations()[params->currentStep];
                 ::openPMD::Mesh mesh = iteration.meshes[name];
                 ::openPMD::MeshRecordComponent mrc = mesh[::openPMD::RecordComponent::SCALAR];
 
@@ -730,25 +795,75 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 mpi_pos = gc.getPosition();
                 mpi_size = gc.getGpuNodes();
 
-                if(m_help->selfRegister)
-                {
-                    std::string notifyPeriod = m_help->notifyPeriod.get(id);
-                    /* only register for notify callback when .period is set on
-                     * command line */
-                    if(!notifyPeriod.empty())
-                    {
-                        Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
-
-                        /** create notify directory */
-                        Environment<simDim>::get().Filesystem().createDirectoryWithPermissions(outputDirectory);
-                    }
-                }
-
                 // avoid deadlock between not finished pmacc tasks and mpi blocking
                 // collectives
                 __getTransactionEvent().waitForFinished();
                 mThreadParams.communicator = MPI_COMM_NULL;
                 MPI_CHECK(MPI_Comm_dup(gc.getCommunicator().getMPIComm(), &(mThreadParams.communicator)));
+
+                if(m_help->selfRegister)
+                {
+                    /* only register for notify callback when .period is set on
+                     * command line */
+                    bool tomlSourcesSpecified
+                        = m_help->tomlSources.optionDefined(m_id) && not m_help->tomlSources.get(m_id).empty();
+                    bool notifyPeriodSpecified
+                        = m_help->notifyPeriod.optionDefined(m_id) && not m_help->notifyPeriod.get(m_id).empty();
+                    if(tomlSourcesSpecified && not notifyPeriodSpecified)
+                    {
+                        // Verify that all other parameters are empty for this instance of the plugin
+                        std::vector<plugins::multi::Option<std::string>> theseMustBeEmpty{
+                            m_help->source,
+                            m_help->fileName,
+                            m_help->fileNameExtension,
+                            m_help->fileNameInfix,
+                            m_help->jsonConfig,
+                            m_help->dataPreparationStrategy};
+                        for(auto const& option : theseMustBeEmpty)
+                        {
+                            if(option.optionDefined(m_id) && not option.get(m_id).empty())
+                            {
+                                throw std::runtime_error(
+                                    "[openPMD plugin] If using parameter toml, no other parameter may be used (do not "
+                                    "define '"
+                                    + option.getName() + "').");
+                            }
+                        }
+
+                        std::string const& tomlSources = m_help->tomlSources.get(id);
+                        mThreadParams.m_configurationSource = ConfigurationVia::Toml;
+
+                        mThreadParams.tomlDataSources = std::make_unique<toml::DataSources>(
+                            m_help->tomlSources.get(id),
+                            m_help->allowedDataSources,
+                            mThreadParams.communicator);
+
+                        Environment<>::get().PluginConnector().setNotificationPeriod(
+                            this,
+                            mThreadParams.tomlDataSources->periods());
+
+                        /** create notify directory */
+                        Environment<simDim>::get().Filesystem().createDirectoryWithPermissions(outputDirectory);
+                    }
+                    else if(not tomlSourcesSpecified && notifyPeriodSpecified)
+                    {
+                        if(m_help->fileName.empty())
+                            throw std::runtime_error("[openPMD plugin] If defining parameter period, then parameter "
+                                                     "file must also be defined");
+
+                        std::string const& notifyPeriod = m_help->notifyPeriod.get(id);
+                        mThreadParams.m_configurationSource = ConfigurationVia::CommandLine;
+                        Environment<>::get().PluginConnector().setNotificationPeriod(this, notifyPeriod);
+
+                        /** create notify directory */
+                        Environment<simDim>::get().Filesystem().createDirectoryWithPermissions(outputDirectory);
+                    }
+                    else
+                    {
+                        throw std::runtime_error("[openPMD plugin] Either the notify period or the TOML sources must "
+                                                 "be specified, but not both.");
+                    }
+                }
             }
 
             virtual ~openPMDWriter()
@@ -770,7 +885,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                 __getTransactionEvent().waitForFinished();
 
-                mThreadParams.initFromConfig(*m_help, m_id, m_help->fileName.get(m_id), outputDirectory);
+                mThreadParams.initFromConfig(*m_help, m_id, outputDirectory);
 
                 /* window selection */
                 mThreadParams.window = MovingWindow::getInstance().getWindow(currentStep);
@@ -805,7 +920,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 /* if file name is relative, prepend with common directory */
 
                 mThreadParams.isCheckpoint = true;
-                mThreadParams.initFromConfig(*m_help, m_id, checkpointFilename, checkpointDirectory);
+                mThreadParams.initFromConfig(*m_help, m_id, checkpointDirectory, checkpointFilename);
 
                 mThreadParams.window = MovingWindow::getInstance().getDomainAsWindow(currentStep);
 
@@ -822,7 +937,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 // Checkpoint
                 assert(!m_help->selfRegister);
 
-                mThreadParams.initFromConfig(*m_help, m_id, constRestartFilename, restartDirectory);
+                mThreadParams.initFromConfig(*m_help, m_id, restartDirectory, constRestartFilename);
 
                 // mThreadParams.isCheckpoint = isCheckpoint;
                 mThreadParams.currentStep = restartStep;
@@ -893,6 +1008,21 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             }
 
         private:
+            std::vector<std::string> currentDataSources(uint32_t currentStep)
+            {
+                switch(mThreadParams.m_configurationSource)
+                {
+                case ConfigurationVia::Toml:
+                    return mThreadParams.tomlDataSources->currentDataSources(currentStep);
+                case ConfigurationVia::CommandLine:
+                    {
+                        std::string dataSourceNames = m_help->source.get(m_id);
+                        return plugins::misc::splitString(plugins::misc::removeSpaces(dataSourceNames));
+                    }
+                }
+                throw std::runtime_error("Unreachable!");
+            }
+
             void endWrite()
             {
                 mThreadParams.fieldBuffer.resize(0);
@@ -1056,7 +1186,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
 
                 log<picLog::INPUT_OUTPUT>("openPMD: write field: %1% %2% %3%") % name % nComponents % ptr;
 
-                ::openPMD::Iteration iteration = params->openPMDSeries->WRITE_ITERATIONS[params->currentStep];
+                ::openPMD::Iteration iteration = params->openPMDSeries->writeIterations()[params->currentStep];
                 ::openPMD::Mesh mesh = iteration.meshes[name];
 
                 // set mesh attributes
@@ -1082,7 +1212,6 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                     field_no_guard = field_layout.getDataSpaceWithoutGuarding();
                     field_guard = field_layout.getGuard();
 
-                    DataConnector& dc = Environment<>::get().DataConnector();
                     fieldsSizeDims = precisionCast<uint64_t>(params->gridLayout.getDataSpaceWithoutGuarding());
 
                     /* Scan the PML buffer local size along all local domains
@@ -1263,9 +1392,7 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 std::vector<std::string> vectorOfDataSourceNames;
                 if(m_help->selfRegister)
                 {
-                    std::string dataSourceNames = m_help->source.get(m_id);
-
-                    vectorOfDataSourceNames = plugins::misc::splitString(plugins::misc::removeSpaces(dataSourceNames));
+                    vectorOfDataSourceNames = currentDataSources(threadParams->currentStep);
                 }
 
                 bool dumpFields = plugins::misc::containsObject(vectorOfDataSourceNames, "fields_all");
@@ -1363,13 +1490,13 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                 WriteMeta writeMetaAttributes;
                 writeMetaAttributes(
                     *threadParams->openPMDSeries,
-                    (*threadParams->openPMDSeries).WRITE_ITERATIONS[threadParams->currentStep],
+                    (*threadParams->openPMDSeries).writeIterations()[threadParams->currentStep],
                     threadParams->currentStep);
 
                 // avoid deadlock between not finished pmacc tasks and mpi calls in
                 // openPMD
                 __getTransactionEvent().waitForFinished();
-                mThreadParams.openPMDSeries->WRITE_ITERATIONS[mThreadParams.currentStep].close();
+                mThreadParams.openPMDSeries->writeIterations()[mThreadParams.currentStep].close();
 
                 return;
             }
@@ -1401,4 +1528,37 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
         }
 
     } // namespace openPMD
+
+    /*
+     * Logically, these functions should be defined inside toml.cpp.
+     * However, their implementation relies on includes that PIConGPU's
+     * structure currently prevents from being included into hostonly files.
+     * So, let's NVCC compile their definitions.
+     */
+    namespace toml
+    {
+        void writeLog(char const* message, size_t argsc, char const* const* argsv)
+        {
+            auto logg = log<picLog::INPUT_OUTPUT>(message);
+            for(size_t i = 0; i < argsc; ++i)
+            {
+                logg = logg % argsv[i];
+            }
+        }
+
+        std::vector<TimeSlice> parseTimeSlice(std::string const& asString)
+        {
+            std::vector<TimeSlice> res;
+            auto parsed = pmacc::pluginSystem::toTimeSlice(asString);
+            res.reserve(parsed.size());
+            std::transform(
+                parsed.begin(),
+                parsed.end(),
+                std::back_inserter(res),
+                [](pmacc::pluginSystem::TimeSlice timeSlice) -> TimeSlice {
+                    return {timeSlice.values[0], timeSlice.values[1], timeSlice.values[2]};
+                });
+            return res;
+        }
+    } // namespace toml
 } // namespace picongpu

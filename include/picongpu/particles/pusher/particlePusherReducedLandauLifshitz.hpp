@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch
  *
  * This file is part of PIConGPU.
  *
@@ -202,7 +202,6 @@ namespace picongpu
 
                     const float_X c2 = c * c;
                     const float_X charge2 = charge * charge;
-                    const float3_X beta = velocity / c;
 
                     const float_X prefactorRR = 2. / 3. * charge2 * charge2 / (4. * PI * EPS0 * mass * mass * c2 * c2);
                     const float3_X lorentz = fieldE + conversionMomentum2Beta * c * pmacc::math::cross(mom, fieldB);

@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch,
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch,
  *                     Klaus Steiniger, Felix Schmitt, Benjamin Worpitz
  *                     Finn-Ole Carstens
  *
@@ -104,11 +104,11 @@ namespace picongpu
                 std::string notifyPeriod;
                 uint32_t timeStep;
 
-                std::string speciesName;
                 std::string pluginName;
+                std::string speciesName;
                 std::string pluginPrefix;
-                std::string filenamePrefix;
                 std::string folderTransRad;
+                std::string filenamePrefix;
 
                 float3_X* detectorPositions = nullptr;
                 float_X* detectorFrequencies = nullptr;

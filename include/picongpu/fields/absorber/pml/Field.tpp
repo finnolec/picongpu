@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
  *                     Richard Pausch, Benjamin Worpitz, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
@@ -109,8 +109,9 @@ namespace picongpu
                     GridLayout<simDim> const& gridLayout,
                     Thickness const& globalThickness,
                     DataBox box)
-                    : guardSize(gridLayout.getGuard())
-                    , box(box)
+                    : box(box)
+                    , guardSize(gridLayout.getGuard())
+
                 {
                     auto const negativeSize = globalThickness.getNegativeBorder();
                     auto const positiveSize = globalThickness.getPositiveBorder();

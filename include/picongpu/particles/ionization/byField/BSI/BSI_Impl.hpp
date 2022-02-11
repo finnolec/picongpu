@@ -1,4 +1,4 @@
-/* Copyright 2015-2021 Marco Garten, Jakob Trojok
+/* Copyright 2015-2022 Marco Garten, Jakob Trojok
  *
  * This file is part of PIConGPU.
  *
@@ -187,9 +187,6 @@ namespace picongpu
                     const picongpu::traits::FieldPosition<fields::CellType, FieldE> fieldPosE;
                     ValueType_E eField
                         = Field2ParticleInterpolation()(cachedE.shift(localCell).toCursor(), pos, fieldPosE());
-
-                    /* define number of bound macro electrons before ionization */
-                    float_X prevBoundElectrons = particle[boundElectrons_];
 
                     /* this is the point where actual ionization takes place */
                     IonizationAlgorithm ionizeAlgo{};

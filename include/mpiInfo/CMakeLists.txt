@@ -1,5 +1,5 @@
 #
-# Copyright 2013-2021 Axel Huebl, Rene Widera, Felix Schmitt
+# Copyright 2013-2022 Axel Huebl, Rene Widera, Felix Schmitt
 #
 # This file is part of mpiInfo.
 #
@@ -61,10 +61,10 @@ endif()
 # Language Flags
 ###############################################################################
 
-# enforce C++14
+# enforce C++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 
 ################################################################################
@@ -92,7 +92,7 @@ endif(MPI_CXX_FOUND)
 # Find Boost
 ################################################################################
 
-find_package(Boost 1.65.1 REQUIRED COMPONENTS program_options)
+find_package(Boost 1.66.0 REQUIRED COMPONENTS program_options)
 if(TARGET Boost::program_options)
     set(MPIINFO_LIBS ${MPIINFO_LIBS} Boost::boost Boost::program_options)
 else()

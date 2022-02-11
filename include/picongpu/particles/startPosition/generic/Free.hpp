@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Rene Widera, Axel Huebl
+/* Copyright 2013-2022 Rene Widera, Axel Huebl
  *
  * This file is part of PIConGPU.
  *
@@ -97,7 +97,7 @@ namespace picongpu
                     template<typename DeferFunctor = Functor>
                     HINLINE Free(
                         uint32_t currentStep,
-                        typename std::enable_if<std::is_constructible<DeferFunctor, uint32_t>::value>::type* = 0)
+                        std::enable_if_t<std::is_constructible_v<DeferFunctor, uint32_t>>* = 0)
                         : Functor(currentStep)
                     {
                     }
@@ -112,9 +112,7 @@ namespace picongpu
                      * @param is used to enable/disable the constructor (do not pass any value to this parameter)
                      */
                     template<typename DeferFunctor = Functor>
-                    HINLINE Free(
-                        uint32_t,
-                        typename std::enable_if<std::is_constructible<DeferFunctor>::value>::type* = nullptr)
+                    HINLINE Free(uint32_t, typename std::enable_if_t<std::is_constructible_v<DeferFunctor>>* = nullptr)
                         : Functor()
                     {
                     }

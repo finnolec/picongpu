@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
  *                     Richard Pausch, Benjamin Worpitz, Pawel Ordyna
  *
  * This file is part of PIConGPU.
@@ -185,6 +185,18 @@ namespace picongpu
         } while(mapper.next());
     }
 
+    template<uint32_t AREA, typename T_ModifyingOperation, typename T_ModifyingField>
+    void FieldTmp::modifyByField(T_ModifyingField& modifyingField)
+    {
+        constexpr uint32_t numWorkers
+            = pmacc::traits::GetNumWorkers<pmacc::math::CT::volume<SuperCellSize>::type::value>::value;
+        auto mapper = makeAreaMapper<AREA>(cellDescription);
+        FieldTmp::DataBoxType thisBox = this->fieldTmp->getDeviceBuffer().getDataBox();
+        const auto modifyingBox = modifyingField.getGridBuffer().getDeviceBuffer().getDataBox();
+
+        using Kernel = ModifyByFieldKernel<numWorkers, T_ModifyingOperation, MappingDesc::SuperCellSize>;
+        PMACC_KERNEL(Kernel{})(mapper.getGridDim(), numWorkers)(mapper, thisBox, modifyingBox);
+    }
 
     SimulationDataId FieldTmp::getUniqueId(uint32_t slotId)
     {

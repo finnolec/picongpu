@@ -1,4 +1,4 @@
-/* Copyright 2014-2021 Rene Widera, Marco Garten, Alexander Grund,
+/* Copyright 2014-2022 Rene Widera, Marco Garten, Alexander Grund,
  *                     Heiko Burau, Axel Huebl, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
@@ -375,8 +375,6 @@ namespace picongpu
             template<typename T_CellDescription>
             HINLINE void operator()(T_CellDescription cellDesc, const uint32_t currentStep) const
             {
-                DataConnector& dc = Environment<>::get().DataConnector();
-
                 // only if an ionizer has been specified, this is executed
                 using hasIonizers = typename HasFlag<FrameType, ionizers<>>::type;
                 if(hasIonizers::value)

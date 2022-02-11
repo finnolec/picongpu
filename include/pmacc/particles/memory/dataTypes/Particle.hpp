@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Rene Widera
+/* Copyright 2013-2022 Rene Widera
  *
  * This file is part of PMacc.
  *
@@ -71,15 +71,15 @@ namespace pmacc
         using ThisType = Particle<FrameType, ValueTypeSeq>;
         using MethodsList = typename FrameType::MethodsList;
 
-        /** index of particle inside the Frame*/
-        PMACC_ALIGN(idx, uint32_t);
-
         /** pointer to parent frame where this particle is from
          *
          * ATTENTION: The pointer must be the last member to avoid local memory usage
          *            https://github.com/ComputationalRadiationPhysics/picongpu/pull/762
          */
         PMACC_ALIGN(frame, FrameType*);
+
+        /** index of particle inside the Frame*/
+        PMACC_ALIGN(idx, uint32_t);
 
         /** set particle handle to invalid
          *

@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
+/* Copyright 2013-2022 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera,
  *                     Richard Pausch, Alexander Debus, Marco Garten,
  *                     Benjamin Worpitz, Alexander Grund, Sergei Bastrakov
  *
@@ -68,10 +68,10 @@ namespace picongpu
                      * @param useDuplicateField flag to store duplicate of the field
                      */
                     ApplyFieldBackground(MappingDesc const cellDescription, bool const useDuplicateField)
-                        : cellDescription(cellDescription)
+                        : isEnabled(FieldBackground::InfluenceParticlePusher)
                         , useDuplicateField(useDuplicateField)
                         , restoreFromDuplicateField(false)
-                        , isEnabled(FieldBackground::InfluenceParticlePusher)
+                        , cellDescription(cellDescription)
                     {
                         if(isEnabled && useDuplicateField)
                         {

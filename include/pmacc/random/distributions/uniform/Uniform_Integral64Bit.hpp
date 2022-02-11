@@ -1,4 +1,4 @@
-/* Copyright 2015-2021 Alexander Grund, Rene Widera
+/* Copyright 2015-2022 Alexander Grund, Rene Widera
  *
  * This file is part of PMacc.
  *
@@ -42,7 +42,7 @@ namespace pmacc
                 class Uniform<
                     T_Type,
                     T_RNGMethod,
-                    typename bmpl::if_c<std::is_integral<T_Type>::value && sizeof(T_Type) == 8, void, T_Type>::type>
+                    typename bmpl::if_c<std::is_integral_v<T_Type> && sizeof(T_Type) == 8, void, T_Type>::type>
                 {
                     using RNGMethod = T_RNGMethod;
                     using StateType = typename RNGMethod::StateType;

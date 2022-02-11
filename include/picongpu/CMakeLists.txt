@@ -1,4 +1,4 @@
-# Copyright 2013-2021 Axel Huebl, Benjamin Schneider, Felix Schmitt, Heiko Burau,
+# Copyright 2013-2022 Axel Huebl, Benjamin Schneider, Felix Schmitt, Heiko Burau,
 #                     Rene Widera, Alexander Grund, Alexander Matthes,
 #                     Franz Poeschel, Richard Pausch
 #
@@ -117,10 +117,10 @@ endif()
 # Language Flags
 ###############################################################################
 
-# enforce C++14
+# enforce C++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 
 ################################################################################
@@ -192,7 +192,7 @@ endif()
 # Find Boost
 ################################################################################
 
-find_package(Boost 1.65.1 REQUIRED COMPONENTS program_options filesystem
+find_package(Boost 1.66.0 REQUIRED COMPONENTS program_options filesystem
                                               system math_tr1 serialization)
 if(TARGET Boost::program_options)
     set(HOST_LIBS ${HOST_LIBS} Boost::boost Boost::program_options
@@ -284,26 +284,30 @@ add_definitions(-DCMAKE_CXX_COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION})
 # Warnings
 ################################################################################
 
-# GNU
-if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-local-typedefs")
-# ICC
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-# PGI
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "PGI")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Minform=inform")
-# MSVS
-elseif(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
-    # Required for MSVS 15.8+ due to alignment change
-    # https://devblogs.microsoft.com/cppblog/stl-features-and-fixes-in-vs-2017-15-8/
-    if(MSVC_VERSION GREATER_EQUAL 1916)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D _ENABLE_EXTENDED_ALIGNED_STORAGE")
+option(PIC_CI_COMPILE "Enable strict error checking." OFF)
+if(PIC_CI_COMPILE)
+    # GNU
+    if(CMAKE_COMPILER_IS_GNUCXX)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-local-typedefs")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    # ICC
+    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+    # PGI
+    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "PGI")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Minform=inform")
+    # MSVS
+    elseif(MSVC)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
+        # Required for MSVS 15.8+ due to alignment change
+        # https://devblogs.microsoft.com/cppblog/stl-features-and-fixes-in-vs-2017-15-8/
+        if(MSVC_VERSION GREATER_EQUAL 1916)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D _ENABLE_EXTENDED_ALIGNED_STORAGE")
+        endif()
     endif()
 endif()
 
@@ -316,7 +320,7 @@ PIC_dependency(openPMD "API for IO" AUTO)
 
 if(PIC_SEARCH_openPMD)
     # find openPMD installation
-    find_package(openPMD 0.12.0 CONFIG COMPONENTS MPI)
+    find_package(openPMD 0.14.3 CONFIG COMPONENTS MPI)
     if(openPMD_FOUND)
         if(openPMD_HAVE_ADIOS2 OR openPMD_HAVE_HDF5)
             message(STATUS "Found openPMD: ${openPMD_DIR}")
@@ -343,7 +347,23 @@ if(PIC_SEARCH_openPMD)
             else()
                 find_package(nlohmann_json 3.9.1 CONFIG REQUIRED)
                 message(STATUS "nlohmann-json: Found version '${nlohmann_json_VERSION}'")
-                PIC_dependency_set_status(openPMD FALSE)
+            endif()
+
+            # TOML
+            set(
+                PIC_toml11_PROVIDER "intern" CACHE
+                STRING "Use internally shipped or external nlohmann_json library.")
+            set_property(
+                CACHE PIC_toml11_PROVIDER
+                PROPERTY STRINGS "intern;extern")
+            mark_as_advanced(PIC_toml11_PROVIDER)
+            if(${PIC_toml11_PROVIDER} STREQUAL "intern")
+                add_subdirectory(
+                    "${PIConGPUapp_SOURCE_DIR}/../../thirdParty/toml11"
+                    "${CMAKE_CURRENT_BINARY_DIR}/build_toml11")
+            else()
+                find_package(toml11 3.7.0 CONFIG REQUIRED)
+                message(STATUS "toml11: Found version '${toml11_VERSION}'")
             endif()
             set(HOST_LIBS ${HOST_LIBS} openPMD::openPMD)
         else()
@@ -500,6 +520,13 @@ if(PIC_HAVE_openPMD)
         SYSTEM PRIVATE
         $<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>)
     target_link_libraries(picongpu-hostonly PRIVATE nlohmann_json::nlohmann_json)
+
+    # same tricks for toml11
+    target_include_directories(
+        picongpu-hostonly
+        SYSTEM PRIVATE
+        $<TARGET_PROPERTY:toml11::toml11,INTERFACE_INCLUDE_DIRECTORIES>)
+    target_link_libraries(picongpu-hostonly PRIVATE toml11::toml11)
 endif()
 
 
@@ -542,7 +569,7 @@ if(${CLANG_TIDY_RETURN} EQUAL 0)
             # -checks='-*,modernize-use-using'
             # -fix # -fix-errors
             --
-            -std=c++14
+            -std=c++17
             ${OpenMP_CXX_FLAGS}
             ${ALL_INCLUDES_STR}
             ${ALL_DEFINES_STR}

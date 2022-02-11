@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 Alexander Matthes, Pawel Ordyna
+ * Copyright 2013-2022 Alexander Matthes, Pawel Ordyna
  *
  * This file is part of PIConGPU.
  *
@@ -131,17 +131,21 @@ namespace picongpu
                     uint32_t* currentStep = (uint32_t*) pointer;
                     DataConnector& dc = Environment<simDim>::get().DataConnector();
 
-                    PMACC_CASSERT_MSG(_please_allocate_at_least_one_FieldTmp_in_memory_param, fieldTmpNumSlots > 0);
+                    constexpr uint32_t requiredExtraSlots
+                        = particles::particleToGrid::RequiredExtraSlots<FrameSolver>::type::value;
+                    PMACC_CASSERT_MSG(
+                        _please_allocate_at_least_one_FieldTmp_slot_in_memory_param_or_two_when_using_combined_attributes,
+                        fieldTmpNumSlots >= 1u + requiredExtraSlots);
+
                     auto fieldTmp = dc.get<FieldTmp>(FieldTmp::getUniqueId(0), true);
-                    auto particles = dc.get<ParticleType>(ParticleType::FrameType::getName(), true);
-
-                    fieldTmp->getGridBuffer().getDeviceBuffer().setValue(FieldTmp::ValueType(0.0));
-                    fieldTmp->template computeValue<CORE + BORDER, FrameSolver, ParticleFilter>(
-                        *particles,
-                        *currentStep);
-                    EventTask fieldTmpEvent = fieldTmp->asyncCommunication(__getTransactionEvent());
-
-                    __setTransactionEvent(fieldTmpEvent);
+                    auto eventPtr = particles::particleToGrid::
+                        ComputeFieldValue<CORE + BORDER, FrameSolver, ParticleType, ParticleFilter>()(
+                            *fieldTmp,
+                            *currentStep,
+                            1u);
+                    // wait for unfinished asynchronous communication
+                    if(eventPtr != nullptr)
+                        __setTransactionEvent(*eventPtr);
                     __getTransactionEvent().waitForFinished();
 
                     DataSpace<simDim> guarding = SuperCellSize::toRT() * cellDescription->getGuardingSuperCells();
@@ -284,8 +288,8 @@ namespace picongpu
         private:
             ParticlesBoxType pb;
             FramePtr frame;
-            int i;
             int frameSize;
+            int i;
         };
 
 
@@ -401,22 +405,9 @@ namespace picongpu
 #    endif
 #endif
                 >;
-            VisualizationType* visualization;
+            VisualizationType* visualization = nullptr;
 
             IsaacPlugin()
-                : visualization(nullptr)
-                , cellDescription(nullptr)
-                , movingWindow(false)
-                , renderInterval(1)
-                , step(0)
-                , drawingTime(0)
-                , simulationTime(0)
-                , cellCount(0)
-                , particleCount(0)
-                , lastNotify(0)
-                , runSteps(-10)
-                , timingsFileExist(0)
-                , recording(false)
             {
                 Environment<>::get().PluginConnector().registerPlugin(this);
             }
@@ -654,7 +645,7 @@ namespace picongpu
             }
 
         private:
-            MappingDesc* cellDescription;
+            MappingDesc* cellDescription = nullptr;
             std::string notifyPeriod;
             std::string url;
             std::string name;
@@ -665,7 +656,7 @@ namespace picongpu
             uint32_t jpeg_quality;
             int rank;
             int numProc;
-            bool movingWindow;
+            bool movingWindow = false;
             SourceList sources;
             VectorFieldSourceList vecFieldSources;
             ParticleList particleSources;
@@ -673,20 +664,20 @@ namespace picongpu
              *
              * render each n-th time step within an interval defined by notifyPeriod
              */
-            uint32_t renderInterval;
-            uint32_t step;
-            int drawingTime;
-            int simulationTime;
-            bool directPause;
-            int cellCount;
-            int particleCount;
-            uint64_t lastNotify;
-            bool reconnect;
+            uint32_t renderInterval = 1;
+            uint32_t step = 0;
+            int drawingTime = 0;
+            int simulationTime = 0;
+            bool directPause = false;
+            int cellCount = 0;
+            int particleCount = 0;
+            uint64_t lastNotify = 0;
+            bool reconnect = false;
 
             // storage for timings and control variables
-            bool timingsFileExist;
-            bool recording;
-            int runSteps;
+            bool timingsFileExist = false;
+            bool recording = false;
+            int runSteps = 0;
             std::ofstream timingsFile;
             std::string timingsFilename;
 

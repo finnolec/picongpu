@@ -1,4 +1,4 @@
-/* Copyright 2016-2021 Alexander Grund
+/* Copyright 2016-2022 Alexander Grund
  *
  * This file is part of PMacc.
  *
@@ -47,7 +47,7 @@ namespace pmacc
         using DataBoxType = typename HostBufferType::DataBoxType;
         PMACC_CASSERT_MSG(
             DataBoxTypes_must_match,
-            std::is_same<DataBoxType, typename DeviceBufferType::DataBoxType>::value);
+            std::is_same_v<DataBoxType, typename DeviceBufferType::DataBoxType>);
 
         /**
          * Constructor that creates the buffers with the given size

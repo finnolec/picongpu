@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Felix Schmitt, Rene Widera, Benjamin Worpitz,
+/* Copyright 2013-2022 Felix Schmitt, Rene Widera, Benjamin Worpitz,
  *                     Alexander Grund
  *
  * This file is part of PMacc.
@@ -31,7 +31,7 @@ namespace pmacc
     class TaskKernel : public StreamTask
     {
     public:
-        TaskKernel(std::string kernelName) : StreamTask(), kernelName(kernelName), canBeChecked(false)
+        TaskKernel(std::string kernelName) : StreamTask(), canBeChecked(false), kernelName(kernelName)
         {
         }
 

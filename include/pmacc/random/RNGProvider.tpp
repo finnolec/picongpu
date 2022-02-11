@@ -1,4 +1,4 @@
-/* Copyright 2015-2021 Alexander Grund, Sergei Bastrakov
+/* Copyright 2015-2022 Alexander Grund, Sergei Bastrakov
  *
  * This file is part of PMacc.
  *
@@ -51,7 +51,7 @@ namespace pmacc
                     forEachCell(
                         [&](uint32_t const linearIdx)
                         {
-                            uint32_t const linearTid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
+                            int32_t const linearTid = cupla::blockIdx(acc).x * T_blockSize + linearIdx;
                             if(linearTid >= size.productOfComponents())
                                 return;
 
@@ -66,8 +66,8 @@ namespace pmacc
         template<uint32_t T_dim, class T_RNGMethod>
         RNGProvider<T_dim, T_RNGMethod>::RNGProvider(const Space& size, const std::string& uniqueId)
             : m_size(size)
-            , m_uniqueId(uniqueId.empty() ? getName() : uniqueId)
             , buffer(std::make_unique<Buffer>(size))
+            , m_uniqueId(uniqueId.empty() ? getName() : uniqueId)
         {
             if(m_size.productOfComponents() == 0)
                 throw std::invalid_argument("Cannot create RNGProvider with zero size");

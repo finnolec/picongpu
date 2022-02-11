@@ -89,15 +89,15 @@ zlib
 
 boost
 """""
-- 1.65.1 - 1.74.0 (``program_options``, ``filesystem``, ``system``, ``math``, ``serialization`` and header-only libs, optional: ``fiber`` with ``context``, ``thread``, ``chrono``, ``atomic``, ``date_time``)
+- 1.66.0 - 1.74.0 (``program_options``, ``filesystem``, ``system``, ``math``, ``serialization`` and header-only libs, optional: ``fiber`` with ``context``, ``thread``, ``chrono``, ``atomic``, ``date_time``)
 - *Debian/Ubuntu:* ``sudo apt-get install libboost-program-options-dev libboost-filesystem-dev libboost-system-dev libboost-thread-dev libboost-chrono-dev libboost-atomic-dev libboost-date-time-dev libboost-math-dev libboost-serialization-dev libboost-fiber-dev libboost-context-dev``
 - *Arch Linux:* ``sudo pacman --sync boost``
 - *Spack:* ``spack install boost``
 - *from source:*
 
-  - ``curl -Lo boost_1_65_1.tar.gz https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.gz``
-  - ``tar -xzf boost_1_65_1.tar.gz``
-  - ``cd boost_1_65_1``
+  - ``curl -Lo boost_1_66_0.tar.gz https://boostorg.jfrog.io/ui/native/main/release/1.66.0/source/boost_1_66_0.tar.gz``
+  - ``tar -xzf boost_1_66_0.tar.gz``
+  - ``cd boost_1_66_0``
   - ``./bootstrap.sh --with-libraries=atomic,chrono,context,date_time,fiber,filesystem,math,program_options,serialization,system,thread --prefix=$HOME/lib/boost``
   - ``./b2 cxxflags="-std=c++11" -j4 && ./b2 install``
 - *environment:* (assumes install from source in ``$HOME/lib/boost``)
@@ -259,7 +259,7 @@ c-blosc
 
 openPMD API
 """""""""""
-- 0.12.0+ (bare minimum) / 0.13.0+ (for streaming IO)
+- 0.14.3+
 - *Spack*: ``spack install openpmd-api``
 - For usage in PIConGPU, the openPMD API must have been built either with support for ADIOS2 or HDF5 (or both).
   When building the openPMD API from source (described below), these dependencies must be built and installed first.
@@ -281,7 +281,7 @@ openPMD API
 - environment:* (assumes install from source in ``$HOME/lib/openPMD-api``)
 
   - ``export CMAKE_PREFIX_PATH="$HOME/lib/openPMD-api:$CMAKE_PREFIX_PATH"``
-  - ``export LD_LIBRARY_PATH="$HOME/lib/openPMD-api/lib:$LD_LIBRARY_PATH"``
+  - ``export LD_LIBRARY_PATH="$HOME/lib/openPMD-api/lib64:$HOME/lib/openPMD-api/lib:$LD_LIBRARY_PATH"``
 - If PIConGPU is built with openPMD output enabled, the JSON library
   nlohmann_json will automatically be used, found in the ``thirdParty/``
   directory.

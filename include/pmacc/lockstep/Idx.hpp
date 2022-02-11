@@ -1,4 +1,4 @@
-/* Copyright 2017-2021 Rene Widera
+/* Copyright 2017-2022 Rene Widera
  *
  * This file is part of PMacc.
  *
@@ -40,8 +40,8 @@ namespace pmacc
              * @param workerElemIndex virtual workers linear index of the work item
              */
             HDINLINE Idx(uint32_t const domElemIndex, uint32_t const workerElemIndex)
-                : domElemIdx(std::move(domElemIndex))
-                , workerElemIdx(std::move(workerElemIndex))
+                : workerElemIdx(std::move(workerElemIndex))
+                , domElemIdx(std::move(domElemIndex))
             {
             }
 

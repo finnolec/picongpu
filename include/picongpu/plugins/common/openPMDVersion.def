@@ -1,4 +1,4 @@
-/* Copyright 2020-2021 Franz Poeschel
+/* Copyright 2020-2022 Franz Poeschel
  *
  * This file is part of PIConGPU.
  *
@@ -20,15 +20,10 @@
 
 #include "openPMD/openPMD.hpp"
 
+#include <cstdlib> // std::getenv
+#include <memory>
+#include <string> // std::stoull
 #include <utility> // std::declval
-
-#if OPENPMDAPI_VERSION_GE(0, 13, 0)
-// Streaming API is available, use it
-#    define WRITE_ITERATIONS writeIterations()
-#else
-// Not available, don't use it
-#    define WRITE_ITERATIONS iterations
-#endif
 
 namespace picongpu
 {
@@ -40,84 +35,19 @@ namespace picongpu
          */
         namespace detail
         {
-            // As std::void_t in C++17.
-            template<typename>
-            using void_t = void;
-
-            template<typename = ::openPMD::Dataset, typename = void>
-            struct SetDatasetOptions
-            {
-                static void run(::openPMD::Dataset const&, std::string const& options)
-                {
-                    if(options != "{}")
-                    {
-                        std::cerr
-                            << "[openPMD plugin] Setting dataset-specific JSON options requires openPMD API 0.13.0 "
-                               "or later."
-                            << std::endl;
-                    }
-                }
-            };
-
-            template<typename Dataset>
-            struct SetDatasetOptions<Dataset, void_t<decltype(Dataset::options)>>
-            {
-                static void run(Dataset& ds, std::string options)
-                {
-                    ds.options = std::move(options);
-                }
-            };
-
-            template<typename ValueType, typename = ::openPMD::RecordComponent, typename = void>
+            template<typename ValueType>
             struct openPMDSpan
             {
-                // default implementation if the span-based storeChunk API is
-                // not available in openPMD
+                using DynamicMemoryView = ::openPMD::DynamicMemoryView<ValueType>;
 
-                std::shared_ptr<ValueType> m_buffer;
-                ValueType* currentBuffer() const
-                {
-                    return m_buffer.get();
-                }
+                bool m_useSpanAPI; // depending on the value of this, use either m_bufferFallback or m_bufferSpan
+                // need a pointer here since DynamicMemoryView has no default constructor
+                std::unique_ptr<DynamicMemoryView> m_bufferSpan;
+                std::shared_ptr<ValueType> m_bufferFallback;
 
-                template<typename Functor>
-                openPMDSpan(
-                    ::openPMD::RecordComponent& rc,
-                    ::openPMD::Offset offset,
-                    ::openPMD::Extent extent,
-                    Functor&& createBaseBuffer)
-                {
-                    using extent_t = ::openPMD::Extent::value_type;
-                    extent_t scalarExtent = 1;
-                    for(auto val : extent)
-                    {
-                        scalarExtent *= val;
-                    }
-                    m_buffer = std::forward<Functor>(createBaseBuffer)(scalarExtent);
-                    rc.storeChunk(m_buffer, std::move(offset), std::move(extent));
-                }
-            };
-
-            template<typename ValueType, typename RecordComponent>
-            struct openPMDSpan<
-                ValueType,
-                RecordComponent,
-                // check for existence of span-based storeChunk API
-                void_t<decltype(std::declval<RecordComponent>().template storeChunk<ValueType>(
-                    std::declval<::openPMD::Offset>(),
-                    std::declval<::openPMD::Extent>()))>>
-            {
-                // pass-through to the span-based storeChunk API
-
-                // We cannot use ::openPMD::DynamicMemoryView directly since that is non-dependent lookup
-                // so, use a dependent type
-                using DynamicMemoryView = decltype(std::declval<RecordComponent>().template storeChunk<ValueType>(
-                    std::declval<::openPMD::Offset>(),
-                    std::declval<::openPMD::Extent>()));
-                DynamicMemoryView m_buffer;
                 ValueType* currentBuffer()
                 {
-                    return m_buffer.currentBuffer().data();
+                    return m_useSpanAPI ? m_bufferSpan->currentBuffer().data() : m_bufferFallback.get();
                 }
 
                 template<typename Functor>
@@ -125,20 +55,31 @@ namespace picongpu
                     ::openPMD::RecordComponent& rc,
                     ::openPMD::Offset offset,
                     ::openPMD::Extent extent,
+                    bool useSpanAPI,
                     Functor&& createBaseBuffer)
-                    : m_buffer{rc.storeChunk<ValueType>(
-                        std::move(offset),
-                        std::move(extent),
-                        std::forward<Functor>(createBaseBuffer))}
+                    : m_useSpanAPI(useSpanAPI)
                 {
+                    if(m_useSpanAPI)
+                    {
+                        m_bufferSpan = std::make_unique<DynamicMemoryView>(rc.storeChunk<ValueType>(
+                            std::move(offset),
+                            std::move(extent),
+                            std::forward<Functor>(createBaseBuffer)));
+                    }
+                    else
+                    {
+                        using extent_t = ::openPMD::Extent::value_type;
+                        extent_t scalarExtent = 1;
+                        for(auto val : extent)
+                        {
+                            scalarExtent *= val;
+                        }
+                        m_bufferFallback = std::forward<Functor>(createBaseBuffer)(scalarExtent);
+                        rc.storeChunk(m_bufferFallback, std::move(offset), std::move(extent));
+                    }
                 }
             };
         } // namespace detail
-
-        void setDatasetOptions(::openPMD::Dataset& ds, std::string options)
-        {
-            detail::SetDatasetOptions<>::run(ds, std::move(options));
-        }
 
         /*
          * This mocks the span-based storeChunk API available in openPMD with
@@ -156,10 +97,40 @@ namespace picongpu
             ::openPMD::Extent extent,
             Functor&& createBaseBuffer) -> detail::openPMDSpan<ValueType>
         {
+            bool useSpanAPI = false;
+            {
+                auto value = std::getenv("openPMD_USE_STORECHUNK_SPAN");
+                unsigned long long valueAsLong{};
+                if(value)
+                {
+                    try
+                    {
+                        valueAsLong = std::stoull(value);
+                    }
+                    catch(std::invalid_argument const&)
+                    {
+                        throw std::runtime_error("Environment variable 'openPMD_USE_STORECHUNK_SPAN' may only be set "
+                                                 "to values '0' or '1'.");
+                    }
+                    switch(valueAsLong)
+                    {
+                    case 0:
+                        useSpanAPI = false;
+                        break;
+                    case 1:
+                        useSpanAPI = true;
+                        break;
+                    default:
+                        throw std::runtime_error("Environment variable 'openPMD_USE_STORECHUNK_SPAN' may only be set "
+                                                 "to values '0' or '1'.");
+                    }
+                }
+            }
             return detail::openPMDSpan<ValueType>(
                 rc,
                 std::move(offset),
                 std::move(extent),
+                useSpanAPI,
                 std::forward<Functor>(createBaseBuffer));
         }
     } // namespace openPMD

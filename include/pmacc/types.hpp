@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Felix Schmitt, Heiko Burau, Rene Widera,
+/* Copyright 2013-2022 Felix Schmitt, Heiko Burau, Rene Widera,
  *                     Wolfgang Hoenig, Benjamin Worpitz,
  *                     Alexander Grund
  *
@@ -42,7 +42,6 @@
 
 
 #include "pmacc/attribute/Constexpr.hpp"
-#include "pmacc/attribute/Fallthrough.hpp"
 #include "pmacc/attribute/FunctionSpecifier.hpp"
 #include "pmacc/cuplaHelper/ValidateCall.hpp"
 #include "pmacc/debug/PMaccVerbose.hpp"

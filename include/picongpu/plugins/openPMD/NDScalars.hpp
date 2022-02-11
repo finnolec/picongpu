@@ -1,4 +1,4 @@
-/* Copyright 2016-2021 Alexander Grund, Franz Poeschel
+/* Copyright 2016-2022 Alexander Grund, Franz Poeschel
  *
  * This file is part of PIConGPU.
  *
@@ -19,7 +19,6 @@
 
 #pragma once
 
-#include "picongpu/plugins/common/openPMDVersion.def"
 #include "picongpu/plugins/openPMD/openPMDWriter.def"
 
 #include <pmacc/Environment.hpp>
@@ -86,7 +85,7 @@ namespace picongpu
 
                 ::openPMD::Series& series = *params.openPMDSeries;
                 ::openPMD::MeshRecordComponent mrc
-                    = series.WRITE_ITERATIONS[params.currentStep].meshes[baseName + "_" + group][dataset];
+                    = series.writeIterations()[params.currentStep].meshes[baseName + "_" + group][dataset];
 
                 if(!attrName.empty())
                 {

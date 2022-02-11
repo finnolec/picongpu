@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Rene Widera, Benjamin Worpitz, Alexander Grund
+/* Copyright 2013-2022 Rene Widera, Benjamin Worpitz, Alexander Grund
  *
  * This file is part of PMacc.
  *
@@ -96,8 +96,8 @@ namespace pmacc
          */
         GridBuffer(const GridLayout<DIM>& gridLayout, bool sizeOnDevice = false)
             : Parent(gridLayout.getDataSpace(), sizeOnDevice)
-            , gridLayout(gridLayout)
             , hasOneExchange(false)
+            , gridLayout(gridLayout)
             , maxExchange(0)
         {
             init();
@@ -115,8 +115,8 @@ namespace pmacc
          */
         GridBuffer(const DataSpace<DIM>& dataSpace, bool sizeOnDevice = false)
             : Parent(dataSpace, sizeOnDevice)
-            , gridLayout(dataSpace)
             , hasOneExchange(false)
+            , gridLayout(dataSpace)
             , maxExchange(0)
         {
             init();
@@ -138,8 +138,8 @@ namespace pmacc
             const GridLayout<DIM>& gridLayout,
             bool sizeOnDevice = false)
             : Parent(otherDeviceBuffer, gridLayout.getDataSpace(), sizeOnDevice)
-            , gridLayout(gridLayout)
             , hasOneExchange(false)
+            , gridLayout(gridLayout)
             , maxExchange(0)
         {
             init();
@@ -159,8 +159,8 @@ namespace pmacc
                 offsetDevice,
                 gridLayout.getDataSpace(),
                 sizeOnDevice)
-            , gridLayout(gridLayout)
             , hasOneExchange(false)
+            , gridLayout(gridLayout)
             , maxExchange(0)
         {
             init();

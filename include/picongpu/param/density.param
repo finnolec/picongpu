@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Felix Schmitt,
  *                     Richard Pausch, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
@@ -236,6 +236,10 @@ namespace picongpu
         PMACC_STRUCT(
             FromOpenPMDParam,
             /** Path to the openPMD input file
+             *
+             * This value can alternatively be controlled at runtime by setting it to "" here and providing
+             * command-line option <species>_runtimeDensityFile. Refer to description of this command-line option for
+             * details. Note that runtime option only exists for this parameter, and not others in this struct.
              *
              * File-based iteration format is also supported, with the usual openPMD API naming scheme.
              *

@@ -1,5 +1,5 @@
 #
-# Copyright 2015-2021 Erik Zenker, Alexander Grund
+# Copyright 2015-2022 Erik Zenker, Alexander Grund
 #
 # This file is part of PMacc.
 #
@@ -53,10 +53,10 @@ endif()
 # Language Flags
 ###############################################################################
 
-# enforce C++14
+# enforce C++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 
 ################################################################################

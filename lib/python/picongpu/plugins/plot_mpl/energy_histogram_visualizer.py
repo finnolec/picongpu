@@ -1,7 +1,7 @@
 """
 This file is part of the PIConGPU.
 
-Copyright 2017-2021 PIConGPU contributors
+Copyright 2017-2022 PIConGPU contributors
 Authors: Sebastian Starke
 License: GPLv3+
 """
@@ -53,7 +53,7 @@ class Visualizer(BaseVisualizer):
             return
 
         self.plt_obj[idx] = self.ax.semilogy(
-            bins, counts, nonposy='clip', label=label,
+            bins, counts, nonpositive='clip', label=label,
             color=self.colors[idx])[0]
 
     def _update_plt_obj(self, idx):

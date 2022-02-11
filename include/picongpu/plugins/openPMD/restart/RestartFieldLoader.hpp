@@ -1,4 +1,4 @@
-/* Copyright 2014-2021 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera
+/* Copyright 2014-2022 Axel Huebl, Felix Schmitt, Heiko Burau, Rene Widera
  *                     Benjamin Worpitz, Franz Poeschel
  *
  * This file is part of PIConGPU.
@@ -138,7 +138,6 @@ namespace picongpu
 
                     log<picLog::INPUT_OUTPUT>("openPMD: Read from field '%1%'") % objectName;
 
-                    auto ndim = rc.getDimensionality();
                     ::openPMD::Offset start = asStandardVector<DataSpace<simDim>&, ::openPMD::Offset>(domain_offset);
                     ::openPMD::Extent count
                         = asStandardVector<DataSpace<simDim>&, ::openPMD::Extent>(local_domain_size);

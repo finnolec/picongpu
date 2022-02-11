@@ -1,4 +1,4 @@
-/* Copyright 2013-2021 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch,
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch,
  *                     Klaus Steiniger, Felix Schmitt, Benjamin Worpitz
  *
  * This file is part of PIConGPU.
@@ -100,21 +100,21 @@ namespace picongpu
                 radiation_frequencies::InitFreqFunctor freqInit;
                 radiation_frequencies::FreqFunctor freqFkt;
 
-                MappingDesc* cellDescription;
+                MappingDesc* cellDescription = nullptr;
                 std::string notifyPeriod;
-                uint32_t dumpPeriod;
+                uint32_t dumpPeriod = 0;
                 uint32_t radStart;
                 uint32_t radEnd;
 
-                std::string speciesName;
                 std::string pluginName;
+                std::string speciesName;
                 std::string pluginPrefix;
                 std::string filename_prefix;
-                bool totalRad;
-                bool lastRad;
+                bool totalRad = false;
+                bool lastRad = false;
                 std::string folderLastRad;
                 std::string folderTotalRad;
-                bool radPerGPU;
+                bool radPerGPU = false;
                 std::string folderRadPerGPU;
                 DataSpace<simDim> lastGPUpos;
                 int numJobs;
@@ -129,10 +129,10 @@ namespace picongpu
                 std::vector<vector_64> detectorPositions;
                 std::vector<float_64> detectorFrequencies;
 
-                bool isMaster;
+                bool isMaster = false;
 
-                uint32_t currentStep;
-                uint32_t lastStep;
+                uint32_t currentStep = 0;
+                uint32_t lastStep = 0;
 
                 std::string pathRestart;
                 std::string meshesPathName;
@@ -146,14 +146,6 @@ namespace picongpu
                     , speciesName(ParticlesType::FrameType::getName())
                     , pluginPrefix(speciesName + std::string("_radiation"))
                     , filename_prefix(pluginPrefix)
-                    , cellDescription(nullptr)
-                    , dumpPeriod(0)
-                    , totalRad(false)
-                    , lastRad(false)
-                    , isMaster(false)
-                    , currentStep(0)
-                    , radPerGPU(false)
-                    , lastStep(0)
                     , meshesPathName("DetectorMesh/")
                 {
                     Environment<>::get().PluginConnector().registerPlugin(this);
@@ -722,7 +714,7 @@ namespace picongpu
                                       .currentBuffer();
 
                             // select data
-                            for(int copyIndex = 0; copyIndex < N_tmpBuffer; ++copyIndex)
+                            for(uint32_t copyIndex = 0; copyIndex < N_tmpBuffer; ++copyIndex)
                             {
                                 span[copyIndex] = reinterpret_cast<picongpu::float_64*>(
                                     values.data())[ampIndex + Amplitude::numComponents * copyIndex];
@@ -782,10 +774,10 @@ namespace picongpu
                                       .currentBuffer();
 
                             // select data
-                            for(int copyIndex = 0; copyIndex < parameters::N_observer; ++copyIndex)
+                            for(uint32_t copyIndex = 0u; copyIndex < parameters::N_observer; ++copyIndex)
                             {
                                 span[copyIndex] = reinterpret_cast<picongpu::float_64*>(
-                                    detectorPositions.data())[detectorDim + 3 * copyIndex];
+                                    detectorPositions.data())[detectorDim + 3u * copyIndex];
                             }
 
                             // flush data now
@@ -875,12 +867,12 @@ namespace picongpu
                 {
                     std::ostringstream filename;
                     /* add to standard file ending */
-                    filename << name << timeStep << ".h5";
+                    filename << name << timeStep << "_0_0_0.h5";
 
                     /* check if restart file exists */
                     if(!boost::filesystem::exists(filename.str()))
                     {
-                        log<picLog::INPUT_OUTPUT>(
+                        log<radLog::SIMULATION_STATE>(
                             "Radiation (%1%): restart file not found (%2%) - start with zero values")
                             % speciesName % filename.str();
                     }
@@ -904,7 +896,7 @@ namespace picongpu
 
                             openPMDdataFile.flush();
 
-                            for(int copyIndex = 0; copyIndex < N_tmpBuffer; ++copyIndex)
+                            for(uint32_t copyIndex = 0u; copyIndex < N_tmpBuffer; ++copyIndex)
                             {
                                 /* convert data directly because Amplitude is just 6 float_32 */
                                 ((picongpu::float_64*) values.data())[ampIndex + Amplitude::numComponents * copyIndex]
@@ -915,7 +907,8 @@ namespace picongpu
                         delete[] tmpBuffer;
                         openPMDdataFile.iterations[timeStep].close();
 
-                        log<picLog::INPUT_OUTPUT>("Radiation (%1%): read radiation data from openPMD") % speciesName;
+                        log<radLog::SIMULATION_STATE>("Radiation (%1%): read radiation data from openPMD")
+                            % speciesName;
                     }
                 }
 
