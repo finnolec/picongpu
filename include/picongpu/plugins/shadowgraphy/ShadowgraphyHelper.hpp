@@ -8,21 +8,11 @@ namespace picongpu
     {
         namespace shadowgraphy
         {
-            using complex_X = pmacc::math::Complex<float_X>;
-            using complex_64 = pmacc::math::Complex<float_64>;
-            using vec2c = std::vector<std::vector<complex_64>>;
-            using vec3c = std::vector<std::vector<std::vector<complex_64>>>;
-            using vec2r = std::vector<std::vector<float_X>>;
-            using vec3r = std::vector<std::vector<std::vector<float_X>>>;
-
             class Helper
             {
             private:
-                // Arrays for fields after longitudinal DFT
-                vec3c fourierEx;
-                vec3c fourierEy;
-                vec3c fourierBx;
-                vec3c fourierBy;
+                // Arrays for the energy densities E_x * B_y and E_y * B_x
+                fftw_complex *
 
                 // Array to store the result
                 vec2r shadowgram;
