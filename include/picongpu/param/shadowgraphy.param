@@ -1,0 +1,21 @@
+#pragma once
+
+namespace picongpu
+{
+    namespace plugins
+    {
+        namespace shadowgraphy
+        {
+            namespace parameters
+            {
+                // Numerical aperture to remove e.g. side scattered light from probe laser and drive laser from shadowgraphy simulations
+                constexpr unsigned float_X numerical_aperture = 0.23;
+
+                // Values for frequency filter to extract probe laser better in m
+                // Make sure to respect the time bandwidth limit
+                constexpr unsigned float_X min_lambda = 750e-9;
+                constexpr unsigned float_X max_lambda = 850e-9;
+            }
+        }
+    }
+}
