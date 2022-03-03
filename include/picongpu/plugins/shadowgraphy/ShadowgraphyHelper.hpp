@@ -12,51 +12,72 @@ namespace picongpu
             {
             private:
                 // Arrays for the energy densities E_x * B_y and E_y * B_x
-                fftw_complex *
+                fftw_complex *;
 
                 // Array to store the result
                 vec2r shadowgram;
             public:
+                // Constructor of the shadowgraphy helper class
+                // To be called at the first time step when the shadowgraphy time integration starts
                 Helper()
                 {
+                    // Create fftw plan for transverse fft for real to complex
+                    // Many ffts will be performed -> use FFTW_MEASURE as flag
+
+                    // Create fftw plan for transverse ifft for complex to complex
+                    // Even more iffts will be performed -> use FFTW_MEASURE as flag
                 }
 
+                // Destructor of the shadowgraphy helper class
+                // To be called at the last time step when the shadowgraphy time integration ends
                 ~Helper()
                 {
                 }
                 
-                /** Add the fields from simulation to time integrated fields in Fourier space, is supposed to be called each step the plugin gets called
-                 *
-                 */
-                void append_fields(vec2r Ex, vec2r Ey, vec2r Bx, vec2r By)
+                // Energy flux calculation loop
+                void calculate_energy_flux()
                 {
-                    // Go through all 4 fields
-                    fourierEx += propagate_dft(transversal_fft(Ex));
-                    fourierEy += propagate_dft(transversal_fft(Ey));
-                    fourierBx += propagate_dft(transversal_fft(Bx));
-                    fourierBy += propagate_dft(transversal_fft(By));
+                    // Transversal FFT of E and B fields to get k_x and k_y components
+                    // Use fftw plan for fft
+                    // E(x, y, zs, tn), B(x, y, zs, tn) -> E(kx, ky, zs, tn), B(kx, ky, zs, tn)
+
+                    // Loop through all omega
+                    // E(kx, ky, zs, tn), B(kx, ky, zs, tn) -> E(kx, ky, zs, omega), B(kx, ky, zs, omega)
+
+                        // Apply masks and propagate
+                        // E(kx, ky, zs, omega), B(kx, ky, zs, omega) -> M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky omega)*B(kx, ky, zo, omega)
+
+                        // iFFT back into position space
+                        // Use fftw plan ifft
+                        // M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky, omega)*B(kx, ky, zo, omega) -> E'(x, y, zo, omega), B'(x, y, zo, omega) 
+
+                        // Sum energy fluxes
+                        // EF(x, y, zo, omega, tn)
+                        // = E'(x, y, zo, omega) * B'(x, y, zo, omega)
+                        // + E'(x, y, zo, omega) * Bsum(x, y, zo, omega, tn-1)
+                        // + Esum(x, y, zo, omega, tn-1) * B'(x, y, zo, omega)
+                        // + EF(x, y, zo, omega, tn-1)
+
+                        // Only do this if it's not the last step of the shadowgraphy integration:
+                            // Calculate E edge sum
+                            // Esum(x, y, zo, omega, tn) = Esum(x, y, zo, omega, tn-1) + E'(x, y, zo, omega)
+
+                            // Calculate B edge sum
+                            // Bsum(x, y, zo, omega, tn) = Bsum(x, y, zo, omega, tn-1) + B'(x, y, zo, omega)
+                        // else if this is the last step of the loop:
+                            // Free Esum and Bsum from memory ?
+
                 }
 
-                /** Calculate the shadowgrams to be called after last simulation step which adds to plugin
-                 *
-                 */
-                void calculate_shadowgrams()
+                // Calculate the shadowgram after the independent energy fluxes have been calculated for all time steps
+                real2darray calculate_shadowgram()
                 {
-                    // Go through all 4 fields and go back to position space
-                    vec3c const tmpEx = longitudinal_idft(transversal_ifft(apply_masks(fourierEx)));
-                    vec3c const tmpEy = longitudinal_idft(transversal_ifft(apply_masks(fourierEy)));
-                    vec3c const tmpBx = longitudinal_idft(transversal_ifft(apply_masks(fourierBx)));
-                    vec3c const tmpBy = longitudinal_idft(transversal_ifft(apply_masks(fourierBy)));
+                    // Initialize 2d array for shadowgram
 
-                    perform_time_integration(calculate_poynting_vectors(tmpEx, tmpEy, tmpBx, tmpBy));
-                }
+                    // Loop through all omega
+                        // shadowgram(x, y) += real(EF1(x, y, zo, omega, tmax)) - real(EF2(x, y, zo, omega, tmax))
 
-                /** Get shadowgram
-                 *
-                 */
-                const vec2r get_shadowgram() const
-                {
-                    return shadowgram;
+                    // return shadowgram
                 }
 
             private:
