@@ -24,7 +24,21 @@
 
 #include "picongpu/plugins/ILightweightPlugin.hpp"
 
+#include <pmacc/cuSTL/algorithm/host/Foreach.hpp>
+#include <pmacc/cuSTL/algorithm/mpi/Gather.hpp>
+#include <pmacc/cuSTL/container/DeviceBuffer.hpp>
+#include <pmacc/cuSTL/container/HostBuffer.hpp>
+#include <pmacc/cuSTL/cursor/tools/slice.hpp>
+#include <pmacc/dataManagement/DataConnector.hpp>
+#include <pmacc/math/Vector.hpp>
+#include <pmacc/math/vector/Float.hpp>
+#include <pmacc/math/vector/Int.hpp>
+#include <pmacc/math/vector/Size_t.hpp>
+
+#include <sstream>
 #include <iostream>
+
+#include <pmacc/cuSTL/algorithm/kernel/run-time/Foreach.hpp>
 
 namespace picongpu
 {
@@ -134,64 +148,55 @@ namespace picongpu
                 this->cellDescription = cellDescription;
             }
 
-        private:
-            //! Moves transition radiation data from GPUs to CPUs.
-            void copyRadiationDeviceToHost()
+            template<typename Field>  
+            template<typename TField>
+            void storeSlice(const TField& field, int nAxis, float slicePoint, std::string filename)
             {
-                incTransRad->deviceToHost();
-                __getTransactionEvent().waitForFinished();
-                cohTransRadPara->deviceToHost();
-                __getTransactionEvent().waitForFinished();
-                cohTransRadPerp->deviceToHost();
-                __getTransactionEvent().waitForFinished();
-                numParticles->deviceToHost();
-                __getTransactionEvent().waitForFinished();
-            }
+                namespace vec = pmacc::math;
 
-            /** Combine transition radiation data from each CPU and store result on master.
-            *
-            * @remark copyRadiationDeviceToHost( ) should be called before.
-            */
-            void collectRadiationOnMaster()
-            {
-                reduce(
-                    pmacc::math::operation::Add(),
-                    tmpITR.data(),
-                    incTransRad->getHostBuffer().getBasePointer(),
-                    elementsTransitionRadiation(),
-                    mpi::reduceMethods::Reduce());
-                reduce(
-                    pmacc::math::operation::Add(),
-                    tmpCTRpara.data(),
-                    cohTransRadPara->getHostBuffer().getBasePointer(),
-                    elementsTransitionRadiation(),
-                    mpi::reduceMethods::Reduce());
-                reduce(
-                    pmacc::math::operation::Add(),
-                    tmpCTRperp.data(),
-                    cohTransRadPerp->getHostBuffer().getBasePointer(),
-                    elementsTransitionRadiation(),
-                    mpi::reduceMethods::Reduce());
-                reduce(
-                    pmacc::math::operation::Add(),
-                    tmpNum.data(),
-                    numParticles->getHostBuffer().getBasePointer(),
-                    elementsTransitionRadiation(),
-                    mpi::reduceMethods::Reduce());
-            }
+                pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
+                vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
+                vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
+                int globalPlane = globalGridSize[nAxis] * slicePoint;
+                int localPlane = globalPlane % field.size()[nAxis];
+                int gpuPlane = globalPlane / field.size()[nAxis];
 
-            //! perform all operations to get data from GPU to master
-            void collectDataGPUToMaster()
-            {
-                // collect data GPU -> CPU -> Master
-                copyRadiationDeviceToHost();
-                collectRadiationOnMaster();
-                sumTransitionRadiation(
-                    theTransRad.data(),
-                    tmpITR.data(),
-                    tmpCTRpara.data(),
-                    tmpCTRperp.data(),
-                    tmpNum.data());
+                vec::Int<simDim> nVector(vec::Int<simDim>::create(0));
+                nVector[nAxis] = 1;
+
+                zone::SphericZone<simDim> gpuGatheringZone(gpuDim, nVector * gpuPlane);
+                gpuGatheringZone.size[nAxis] = 1;
+
+                algorithm::mpi::Gather<simDim> gather(gpuGatheringZone);
+
+                if(!gather.participate())
+                    return;
+
+                vec::UInt32<3> twistedAxesVec((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
+
+                /* convert data to higher precision and to SI units */
+                SliceFieldPrinterHelper::ConversionFunctor<Field> cf;
+                algorithm::kernel::RT::Foreach()(
+                    dBuffer_SI->zone(),
+                    dBuffer_SI->origin(),
+                    cursor::tools::slice(field.originCustomAxes(twistedAxesVec)(0, 0, localPlane)),
+                    cf);
+        
+
+                /* copy selected plane from device to host */
+                container::HostBuffer<float3_64, simDim - 1> hBuffer(dBuffer_SI->size());
+                hBuffer = *dBuffer_SI;
+
+                /* collect data from all nodes/GPUs */
+                vec::Size_t<simDim> globalDomainSize = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
+                vec::Size_t<simDim - 1> globalSliceSize = globalDomainSize.shrink<simDim - 1>((nAxis + 1) % simDim);
+                container::HostBuffer<float3_64, simDim - 1> globalBuffer(globalSliceSize);
+                gather(globalBuffer, hBuffer, nAxis);
+                if(!gather.root())
+                    return;
+
+                std::ofstream file(filename.c_str());
+                file << globalBuffer;
             }
         };
     }
