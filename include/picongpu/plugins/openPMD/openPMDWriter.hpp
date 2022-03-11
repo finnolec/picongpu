@@ -212,10 +212,24 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             plugins::multi::Option<std::string> fileName = {"file", "openPMD file basename"};
 
             plugins::multi::Option<std::string> fileNameExtension
-                = {"ext",
-                   "openPMD filename extension (this controls the"
-                   "backend picked by the openPMD API)",
-                   "bp"};
+                = { "ext",
+                    "openPMD filename extension (this controls the"
+                    "backend picked by the openPMD API)",
+#if openPMD_HAVE_ADIOS2
+                    "bp"
+#elif openPMD_HAVE_HDF5
+                    "h5"
+#else
+                    /*
+                     * This branch should never be activated because CMake will
+                     * not enable the openPMD plugin in that case anyway.
+                     */
+                    static_assert(
+                        false,
+                        "openPMD-api has neither ADIOS2 or HDF5 backend available. Use CMake to deactivate the "
+                        "openPMD plugin.")
+#endif
+                  };
 
             plugins::multi::Option<std::string> fileNameInfix
                 = {"infix",
@@ -561,7 +575,14 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
             private:
                 using UnitType = typename FieldTmp::UnitValueType;
                 using ValueType = typename FieldTmp::ValueType;
-                using ComponentType = typename GetComponentsType<ValueType>::type;
+                /*
+                 * Do not change the following lines.
+                 * NVCC 11.6 seems to have a parser bug and it does not understand the short form:
+                 * `using ComponentType = typename GetComponentsType<ValueType>`
+                 * more info: https://github.com/ComputationalRadiationPhysics/picongpu/pull/4006
+                 */
+                using GetComponentsTypeValueType = GetComponentsType<ValueType>;
+                using ComponentType = typename GetComponentsTypeValueType::type;
 
                 /** Get the unit for the result from the solver*/
                 static std::vector<float_64> getUnit()
