@@ -24,6 +24,9 @@
 
 #include "picongpu/plugins/ILightweightPlugin.hpp"
 
+#include "picongpu/fields/FieldB.hpp"
+#include "picongpu/fields/FieldE.hpp"
+
 #include <pmacc/cuSTL/algorithm/host/Foreach.hpp>
 #include <pmacc/cuSTL/algorithm/mpi/Gather.hpp>
 #include <pmacc/cuSTL/container/DeviceBuffer.hpp>
@@ -57,6 +60,7 @@ namespace picongpu
 
             bool sliceIsOK;
             int plane;
+            std::string fileName;
 
 
         public:
@@ -79,11 +83,21 @@ namespace picongpu
                 * called every notifyPeriod steps */
                 std::cout << "Shadowgraphy notify period is: " << currentStep;
 
-                resetBuffers();
+                if(sliceIsOK)
+                {
+                    namespace vec = ::pmacc::math;
+                    typedef SuperCellSize BlockDim;
+                    DataConnector& dc = Environment<>::get().DataConnector();
+                    auto field_coreBorder = dc.get<FieldE>(FieldE::getName(), true)
+                                                ->getGridBuffer()
+                                                .getDeviceBuffer()
+                                                .cartBuffer()
+                                                .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                calculateTransitionRadiation(currentStep);
-
-                collectDataGPUToMaster();
+                    std::ostringstream filename;
+                    filename << this->fileName << "_" << currentStep << ".dat";
+                    printSlice(field_coreBorder, this->plane, this->slicePoint, filename.str());
+                }
             }
 
             void pluginRegisterHelp(po::options_description& desc) override
@@ -104,6 +118,10 @@ namespace picongpu
                     (pluginPrefix + ".slicePoint").c_str(),
                     po::value<std::vector<float_X>>(&this->slicePoint)->multitoken(),
                     "slice point 0.0 <= x <= 1.0");
+                desc.add_options()(
+                    (this->prefix + ".fileName").c_str(),
+                    po::value<std::vector<std::string>>(&this->fileName)->multitoken(),
+                    "file name to store slices in");
             }
 
             void pluginLoad() override
@@ -148,9 +166,7 @@ namespace picongpu
                 this->cellDescription = cellDescription;
             }
 
-            template<typename Field>  
-            template<typename TField>
-            void storeSlice(const TField& field, int nAxis, float slicePoint, std::string filename)
+            void storeSlice(const FieldE& field, int nAxis, float slicePoint, std::string filename)
             {
                 namespace vec = pmacc::math;
 
@@ -175,7 +191,7 @@ namespace picongpu
                 vec::UInt32<3> twistedAxesVec((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
 
                 /* convert data to higher precision and to SI units */
-                SliceFieldPrinterHelper::ConversionFunctor<Field> cf;
+                SliceFieldPrinterHelper::ConversionFunctor<FieldE> cf;
                 algorithm::kernel::RT::Foreach()(
                     dBuffer_SI->zone(),
                     dBuffer_SI->origin(),
