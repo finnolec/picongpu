@@ -215,8 +215,8 @@ namespace picongpu
              *
              * Here we generate a plane wave from the X min border.
              */
-            using XMin = MyXMinSource;
-            using XMax = None;
+            using XMin = None;
+            using XMax = MyXMinSource;
             using YMin = None;
             using YMax = MyYMaxSource;
             using ZMin = None;
