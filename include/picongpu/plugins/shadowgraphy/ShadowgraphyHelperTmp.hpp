@@ -19,6 +19,10 @@ namespace picongpu
                 typedef std::vector< std::vector< std::vector< float_X > > > vec3r;
                 typedef std::vector< std::vector< float_X > > vec2r;
 
+                // Arrays to store Ex, Ey, Bx and Bz per time step temporarily
+                vec2r tmp_Ex, tmp_Ey;
+                vec2r tmp_Bx, tmp_By;
+
                 // Arrays for FFTW
                 fftw_complex *fftw_in_f_E; // @TODO: Can this be real? Issue is forward / backward FFT
                 fftw_complex *fftw_out_f_E;
@@ -98,6 +102,19 @@ namespace picongpu
                     fftw_free(fftw_out_b_E);
                     fftw_free(fftw_in_b_B);
                     fftw_free(fftw_out_b_B);
+                }
+
+                template<typename F>
+                void store_field(container::HostBuffer<float3_64, 2> fieldBuffer)
+                {
+                    for(int i = 0; i < n_x; ++i){
+                        for(int j = 0; j < n_y; ++j){
+                            if(F::getName() == "E")
+                                tmp_Ex[i][j] = fieldBuffer[i * params::x_res][j * param::y_res][];
+                            else  
+
+                        }
+                    }
                 }
                 
                 // Energy flux calculation loop

@@ -105,7 +105,7 @@ namespace picongpu
                 std::unique_ptr<container::DeviceBuffer<float3_64, 2>> dBuffer_SI;
 
                 bool isIntegrating;
-                int starttime;
+                int startTime;
     /*
             std::string name;
             std::string prefix;
@@ -165,7 +165,19 @@ namespace picongpu
                     {
                         /* in case the slice point is inside of [0.0,1.0] */
                         sliceIsOK = true;
-                        Environment<>::get().PluginConnector().setNotificationPeriod(this, this->notifyPeriod);
+
+                        // Time integration from param files
+                        std::cout<<"hello world"<<std::endl;
+                        std::cout<<std::stoi(this->notifyPeriod) << std::endl;
+                        int startTime = std::stoi(this->notifyPeriod);
+                        int endTime = std::stoi(this->notifyPeriod) + params::t_n;
+
+                        std::cout<<endTime<<std::endl;
+                        std::string internalNotifyPeriod = std::to_string(startTime) + ":" + std::to_string(endTime) + ":" + std::to_string(params::t_res);
+
+                        std::cout<<internalNotifyPeriod<<std::endl;
+                        
+                        Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
                         namespace vec = ::pmacc::math;
                         typedef SuperCellSize BlockDim;
 
@@ -206,7 +218,7 @@ namespace picongpu
                 {
                     /* notification callback for simulation step currentStep
                     * called every notifyPeriod steps */
-                    std::cout << "Shadowgraphy notify period is: " << currentStep;
+                    std::cout << "Shadowgraphy notify period is: " << currentStep << std::endl;
 
 
                     if(sliceIsOK)
@@ -219,14 +231,16 @@ namespace picongpu
                             isIntegrating = true;
                         }
 
-                        int localstep = currenStep - startTime;
+                        int localStep = currentStep - startTime;
 
-                        if(localstep != params::t_n)
+                        std::cout << "localStep: " << localStep << std::endl;
+
+                        if(localStep != params::t_n)
                         {
                             namespace vec = ::pmacc::math;
                             typedef SuperCellSize BlockDim;
                             DataConnector& dc = Environment<>::get().DataConnector();
-                            auto field_coreBorder = dc.get<FieldE>(FieldE::getName(), true)
+                            auto field_coreBorderE = dc.get<FieldE>(FieldE::getName(), true)
                                                         ->getGridBuffer()
                                                         .getDeviceBuffer()
                                                         .cartBuffer()
@@ -234,9 +248,9 @@ namespace picongpu
 
                             std::ostringstream filenameE;
                             filenameE << this->fileName << "_E_" << currentStep << ".dat";
-                            storeSlice<FieldE>(field_coreBorder, this->plane, this->slicePoint, filenameE.str());
+                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint, filenameE.str());
 
-                            field_coreBorder = dc.get<FieldB>(FieldB::getName(), true)
+                            auto field_coreBorderB = dc.get<FieldB>(FieldB::getName(), true)
                                                         ->getGridBuffer()
                                                         .getDeviceBuffer()
                                                         .cartBuffer()
@@ -244,7 +258,7 @@ namespace picongpu
 
                             std::ostringstream filenameB;
                             filenameB << this->fileName << "_B_" << currentStep << ".dat";
-                            storeSlice<FieldB>(field_coreBorder, this->plane, this->slicePoint, filenameB.str());
+                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, filenameB.str());
                             
                         }
                         else
@@ -304,6 +318,11 @@ namespace picongpu
 
                     std::ofstream file(filename.c_str());
                     file << globalBuffer;
+
+                    std::cout << "dbuffersize" << dBuffer_SI->size() << std::endl;
+                    std::cout << "dbufferelement1 " << (*globalBuffer.origin()(1,1)).z() << std::endl;
+                    //std::cout << "dbufferelement3 " << globalBuffer.getDataSpace(1,1,1) << std::endl;
+
                 }
             };
         }
