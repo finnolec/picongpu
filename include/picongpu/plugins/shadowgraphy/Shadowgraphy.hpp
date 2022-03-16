@@ -58,6 +58,8 @@
 #include <pmacc/math/vector/Int.hpp>
 #include <pmacc/math/vector/Size_t.hpp>
 
+#include "picongpu/plugins/shadowgraphy/ShadowgraphyHelper.hpp"
+
 #include <sstream>
 
 namespace picongpu
@@ -106,6 +108,8 @@ namespace picongpu
 
                 bool isIntegrating;
                 int startTime;
+
+                shadowgraphy::Helper* helper = nullptr;
     /*
             std::string name;
             std::string prefix;
@@ -226,6 +230,23 @@ namespace picongpu
                         // First time the plugin is called:
                         if(isIntegrating == false)
                         {
+                            // Get grid size
+                            namespace vec = pmacc::math;
+                            typedef SuperCellSize BlockDim;
+                            DataConnector& dc = Environment<>::get().DataConnector();
+                            auto field = dc.get<FieldE>(FieldE::getName(), true)
+                                                        ->getGridBuffer()
+                                                        .getDeviceBuffer()
+                                                        .cartBuffer()
+                                                        .view(BlockDim::toRT(), -BlockDim::toRT());
+
+                            pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
+                            vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
+                            vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
+
+                            helper = new Helper(globalGridSize);
+
+
                             // Create Integrator object %TODO
                             startTime = currentStep;
                             isIntegrating = true;
@@ -266,7 +287,6 @@ namespace picongpu
                             //delete(Integrator) %TODO
                             isIntegrating = false;
                         }
-                        
                     }
                 }
 
@@ -278,6 +298,8 @@ namespace picongpu
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                     vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
+
+                    std::cout << "global grid size: " << globalGridSize.z() << std::endl;
                     int globalPlane = globalGridSize[nAxis] * slicePoint;
                     int localPlane = globalPlane % field.size()[nAxis];
                     int gpuPlane = globalPlane / field.size()[nAxis];

@@ -34,6 +34,9 @@ namespace picongpu
                 // Transverse resolution of shadowgram in PIConGPU cell size units
                 constexpr unsigned int x_res = 2;
                 constexpr unsigned int y_res = 4;
+
+                // Propagation distance in SI
+                constexpr float delta_z = 10e-6;
                 
             }
 
