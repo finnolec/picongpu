@@ -1,6 +1,9 @@
  #pragma once
 
 #include <fftw3.h>
+#include <pmacc/algorithms/math/defines/pi.hpp>
+#include "picongpu/simulation_defines.hpp"
+#include <cmath> // what
 
 namespace picongpu
 {
@@ -71,12 +74,14 @@ namespace picongpu
                     n_omegas = params::t_n / params::t_res ;
 
                     // Initialization of storage arrays
-                    edge_Ex = vec3c(this->n_x, vec2c(this->n_y, vec1c(this->n_omegas)));
-                    edge_Ey = vec3c(this->n_x, vec2c(this->n_y, vec1c(this->n_omegas)));
-                    edge_Bx = vec3c(this->n_x, vec2c(this->n_y, vec1c(this->n_omegas)));
-                    edge_By = vec3c(this->n_x, vec2c(this->n_y, vec1c(this->n_omegas)));
-                    energydensity_ExBy = vec3c(this->n_x, vec2c(this->n_y, vec1c(this->n_omegas)));
-                    energydensity_EyBx = vec3c(this->n_x, vec2c(this->n_y, vec1c(this->n_omegas)));
+                    edge_Ex = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    edge_Ey = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    edge_Bx = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    edge_By = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    energydensity_ExBy = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    energydensity_EyBx = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+
+                    init_fftw();
                 }
 
                 // Destructor of the shadowgraphy helper class
@@ -126,18 +131,20 @@ namespace picongpu
                     // E(x, y, zs, tn), B(x, y, zs, tn) -> E(kx, ky, zs, tn), B(kx, ky, zs, tn)
                     for(int i = 0; i < n_x; i++){
                         for(int j = 0; j < n_y; j++){
+                            int index = i + j * n_x;
+
                             // Real values
                             if(is_exby){
-                                fftw_in_f_E[i][j][0] = (this->tmp_Ex)[i][j];
-                                fftw_in_f_B[i][j][0] = this->tmp_By[i][j];
+                                fftw_in_f_E[index][0] = tmp_Ex[i][j];
+                                fftw_in_f_B[index][0] = tmp_By[i][j];
                             } else {
-                                fftw_in_f_E[i][j][0] = tmp_Ey[i][j];
-                                fftw_in_f_B[i][j][0] = tmp_Bx[i][j];
+                                fftw_in_f_E[index][0] = tmp_Ey[i][j];
+                                fftw_in_f_B[index][0] = tmp_Bx[i][j];
                             }
 
                             // Imaginary values
-                            fftw_in_f_E[i][j][1] = 0.0;
-                            fftw_in_f_B[i][j][1] = 0.0;
+                            fftw_in_f_E[index][1] = 0.0;
+                            fftw_in_f_B[index][1] = 0.0;
                         }
                     }
 
@@ -149,9 +156,10 @@ namespace picongpu
 
                     for(int i = 0; i < n_x; i++){
                         for(int j = 0; j < n_y; j++){
+                            int index = i + j * n_x;
                             // @TODO write this in nice
-                            E_k[i][j] = fftw_out_f_E[i][j][0] + 1i * fftw_out_f_E[i][j][1];
-                            B_k[i][j] = fftw_out_f_B[i][j][0] + 1i * fftw_out_f_B[i][j][1];
+                            E_k[i][j] = complex_64(fftw_out_f_E[index][0], fftw_out_f_E[index][1]);
+                            B_k[i][j] = complex_64(fftw_out_f_B[index][0], fftw_out_f_B[index][1]);
                         }
                     }
 
@@ -159,14 +167,24 @@ namespace picongpu
                     // E(kx, ky, zs, tn), B(kx, ky, zs, tn) -> E(kx, ky, zs, omega), B(kx, ky, zs, omega)
                     for(int o = 0; o < n_omegas; o++){
                         // Omega for time domain Fourier trafo
-                        float_X omega = 2 * math::PI  * (o - nt / 2.0) / nt / dt;
+                        float_X omega = 2 * pmacc::math::Pi<float_X>::value  * (o - nt / 2.0) / nt / dt;
 
                         // Apply masks and propagate
                         // E(kx, ky, zs, omega), B(kx, ky, zs, omega) -> M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky omega)*B(kx, ky, zo, omega)
-                        for(int i = 0; i < this->n_x; i++){
-                            for(int j = 0; j < this->n_y; j++){
-                                fftw_in_b_E[i][j] = masks::mask(i, j, o) * E_k[i][j] * math::exp(-1i * omega * (t - params::delta_z / const::c));
-                                fftw_in_b_B[i][j] = masks::mask(i, j, o) * B_k[i][j] * math::exp(+1i * omega * (t + params::delta_z / const::c));
+                        for(int i = 0; i < n_x; i++){
+                            for(int j = 0; j < n_y; j++){
+                                int index = i + j * n_x;
+
+                                complex_64 const phase_e = complex_64(0, -omega * (t * picongpu::SI::DELTA_T_SI - params::delta_z / SPEED_OF_LIGHT));
+                                complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
+
+                                complex_64 const phase_b = complex_64(0, +omega * (t * picongpu::SI::DELTA_T_SI + params::delta_z / SPEED_OF_LIGHT));
+                                complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
+
+                                fftw_in_b_E[index][0] = tmp_e.get_real();
+                                fftw_in_b_E[index][1] = tmp_e.get_imag();
+                                fftw_in_b_B[index][0] = tmp_b.get_real();
+                                fftw_in_b_B[index][1] = tmp_b.get_imag();
                             }
                         }
 
@@ -176,10 +194,12 @@ namespace picongpu
                         fftw_execute(plan_backward_E);
                         fftw_execute(plan_backward_B);
 
-                        for(int i = 0; i < this->n_x; i++){
-                            for(int j = 0; j < this->n_y; j++){
-                                constexpr complex_X E = fftw_out_b_E[i][j][0] + 1i * fftw_out_b_E[i][j][1];
-                                constexpr complex_X B = fftw_out_b_B[i][j][0] + 1i * fftw_out_b_B[i][j][1];
+                        for(int i = 0; i < n_x; i++){
+                            for(int j = 0; j < n_y; j++){
+                                int index = i + j * n_x;
+
+                                complex_64 const E = complex_64(fftw_out_b_E[index][0], fftw_out_b_E[index][1]);
+                                complex_64 const B = complex_64(fftw_out_b_B[index][0], fftw_out_b_B[index][1]);
 
                                 if (is_exby)
                                 {
@@ -234,12 +254,12 @@ namespace picongpu
                 // Calculate the shadowgram after the independent energy fluxes have been calculated for all time steps
                 vec2r calculate_shadowgram()
                 {
-                    vec2r shadowgram(this->n_x, vec1r(this->n_y));
+                    vec2r shadowgram(n_x, vec1r(n_y));
 
                     // Loop through all omega
-                    for(int i = 0; i < this->n_x; i++){
-                        for(int j = 0; j < this->n_y; j++){
-                            for(int o = 0; o < this->n_omegas; ++o)
+                    for(int i = 0; i < n_x; i++){
+                        for(int j = 0; j < n_y; j++){
+                            for(int o = 0; o < n_omegas; ++o)
                             {
                                 // shadowgram(x, y) += real(EF1(x, y, zo, omega, tmax)) - real(EF2(x, y, zo, omega, tmax))
                                 shadowgram[i][j] += (energydensity_ExBy[i][j][o] - energydensity_EyBx[i][j][o]).get_real();
@@ -252,7 +272,7 @@ namespace picongpu
 
             private:
                 // Initialize fftw memory things, supposed to be called once per plugin loop
-                void init_fftw(int n_x, int n_y)
+                void init_fftw()
                 {
                     // Input and output arrays for the FFT transforms
                     fftw_in_f_E = fftw_alloc_complex(n_x * n_y);
@@ -267,13 +287,13 @@ namespace picongpu
 
                     // Create fftw plan for transverse fft for real to complex
                     // Many ffts will be performed -> use FFTW_MEASURE as flag
-                    plan_forward_E = fftw_plan_dft_2d(n_x, n_y, fftw_in_f_E, fftw_out_f_E, FFTW_FORWARD, FFTW_MEASURE);
-                    plan_forward_B = fftw_plan_dft_2d(n_x, n_y, fftw_in_f_B, fftw_out_f_B, FFTW_BACKWARD, FFTW_MEASURE);
+                    plan_forward_E = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_E, fftw_out_f_E, FFTW_FORWARD, FFTW_MEASURE);
+                    plan_forward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_B, fftw_out_f_B, FFTW_BACKWARD, FFTW_MEASURE);
 
                     // Create fftw plan for transverse ifft for complex to complex
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag
-                    plan_backward_E = fftw_plan_dft_2d(n_x, n_y, fftw_in_b_E, fftw_out_b_E, FFTW_BACKWARD, FFTW_MEASURE);
-                    plan_backward_B = fftw_plan_dft_2d(n_x, n_y, fftw_in_b_B, fftw_out_b_B, FFTW_FORWARD, FFTW_MEASURE);
+                    plan_backward_E = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_E, fftw_out_b_E, FFTW_BACKWARD, FFTW_MEASURE);
+                    plan_backward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_B, fftw_out_b_B, FFTW_FORWARD, FFTW_MEASURE);
                 }
 
             }; // class Helper
