@@ -37,6 +37,12 @@ module load openpmd/0.13.2-cuda112-adios271
 module load libpng/1.6.35
 module load pngwriter/0.7.0
 
+# path to own libraries
+export PIC_LIBS=$HOME/lib
+
+export FFTW3_ROOT=$PIC_LIBS/fftw-3.3.10
+export LD_LIBRARY_PATH=$FFTW3_ROOT/lib:$LD_LIBRARY_PATH
+
 # Environment #################################################################
 #
 #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$BOOST_LIB
