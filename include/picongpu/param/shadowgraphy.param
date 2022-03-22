@@ -1,0 +1,96 @@
+#pragma once
+
+
+#include "picongpu/simulation_defines.hpp"
+
+#include <pmacc/dataManagement/DataConnector.hpp>
+//#include "picongpu/include/picongpu/param/grid.param"
+
+namespace picongpu
+{
+    namespace plugins
+    {
+        namespace shadowgraphy
+        {
+            namespace params
+            {
+                // The time integration part of the plugin will be called each t_res'ed step
+                // until t_res * t_n steps after the start of the integration in the .cfg file
+
+                // Make sure that the Nyquist-Shannon theorem is fulfilled
+                //     t_res * dt * c < lambda_probe / 2
+                constexpr unsigned int t_res = 2;
+
+                // Make sure that the Time-Bandwidth product is fulfilled @TODO
+                //     omega_n = t_n
+                //     domega = 2pi / (t_res * dt)
+                //     domega * omega_n * fwhm_probe[t] / 2 pi > 0.441 (for gauss)
+                constexpr unsigned int t_n = 402 - 150;//128
+
+
+                constexpr unsigned int x_n = 128;
+                constexpr unsigned int y_n = 128;
+
+                // Transverse resolution of shadowgram in PIConGPU cell size units
+                constexpr unsigned int x_res = 1;//2
+                constexpr unsigned int y_res = 1;//4
+
+                // Propagation distance in SI
+                constexpr float delta_z = 10e-6;
+                
+            }
+
+            namespace masks
+            {
+                // Numerical aperture to remove e.g. side scattered light from probe laser and drive laser from shadowgraphy simulations
+                constexpr float_X numerical_aperture = 0.23;
+
+                // Values for frequency filter to extract probe laser better in m
+                // Make sure to respect the time bandwidth limit
+                constexpr float_X min_lambda = 750e-9;
+                constexpr float_X max_lambda = 850e-9;
+
+                HINLINE float omega(int i){
+                    return 2 * PI  * (i - shadowgraphy::params::t_n / 2.0) / shadowgraphy::params::t_n / shadowgraphy::params::t_res / SI::DELTA_T_SI;
+                }
+
+                HINLINE float kx(int i){
+                    return 2 * PI  * (i - shadowgraphy::params::x_n / 2.0) / shadowgraphy::params::x_n / shadowgraphy::params::x_res / SI::CELL_WIDTH_SI;
+                }
+
+                HINLINE float ky(int i){
+                    return 2 * PI  * (i - shadowgraphy::params::y_n / 2.0) / shadowgraphy::params::y_n / shadowgraphy::params::y_res / SI::CELL_HEIGHT_SI;
+                }
+
+                HINLINE float frequency_filter(int o){
+                    /**
+                      * o is integer for omega coordinate from 0 to n_omega
+                      */
+                    float max_freq = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / min_lambda;
+                    float min_freq = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / max_lambda;
+                    
+                    if( pmacc::math::abs2(omega(o)) < max_freq * max_freq
+                        &&  pmacc::math::abs2(omega(o)) > min_freq * min_freq){
+                        return 1.0;
+                    } else {
+                        return 0.0;
+                    }
+                }
+
+                HINLINE float mask(int i, int j, int o){
+                    /** 
+                      * i is integer for x coordinate from 0 to n_x
+                      * j is integer for j coordinate from 0 to n_y
+                      * o is integer for omega coordinate from 0 to n_omega
+                      */
+                    return 1.0; //frequency_filter(o);// * numerical_aperture(i, j, o);
+                }
+            }
+            // The amount of cells to remove from each (!) side of the simulation box
+            // This is necessary to remove the boundary artifacts from the PIConGPU simulation
+            // constexpr unsigned int x_gap = 16;
+            // constexpr unsigned int y_gap = 16;
+
+        }
+    }
+}
