@@ -66,12 +66,14 @@ namespace picongpu
                 // Constructor of the shadowgraphy helper class
                 // To be called at the first time step when the shadowgraphy time integration starts
                 Helper(pmacc::math::Size_t<simDim> globalGridSize):
-                    n_x(globalGridSize.x()),
-                    n_y(globalGridSize.y())
+                    n_x(globalGridSize.x() / params::x_res),
+                    n_y(globalGridSize.y() / params::y_res)
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
                     n_omegas = params::t_n / params::t_res ;
+
+                    std::cout << "initialized with "<< n_x << ", " << n_y << std::endl;
 
                     // Initialization of storage arrays
                     edge_Ex = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
@@ -80,6 +82,11 @@ namespace picongpu
                     edge_By = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
                     energydensity_ExBy = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
                     energydensity_EyBx = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+
+                    tmp_Ex = vec2r(n_x, vec1r(n_y));
+                    tmp_Ey = vec2r(n_x, vec1r(n_y));
+                    tmp_Bx = vec2r(n_x, vec1r(n_y));
+                    tmp_By = vec2r(n_x, vec1r(n_y));
 
                     init_fftw();
                 }
@@ -100,10 +107,15 @@ namespace picongpu
 
                 // Store fields in helper class with proper resolution
                 template<typename F>
-                void store_field(container::HostBuffer<float3_64, 2>* fieldBuffer)
+                void store_field(pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer)
                 {
+
+                    std::cout << "loop with "<< n_x << ", " << n_y << std::endl;
+                    std::cout << "loop" << std::endl;
                     for(int i = 0; i < n_x; ++i){
+                        std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
+                            std::cout << "j: " << j << ",";
                             if(F::getName() == "E"){
                                 tmp_Ex[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).x(); //fieldBuffer[i * params::x_res][j * param::y_res][];
                                 tmp_Ey[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).y();
@@ -116,7 +128,6 @@ namespace picongpu
                 }
                 
                 // Energy flux calculation loop
-                template<typename T>
                 void calculate_energy_flux(int t, bool is_exby)
                 /**
                 sim_E: E from simulation, real 2d array
@@ -252,7 +263,7 @@ namespace picongpu
                 }
 
                 // Calculate the shadowgram after the independent energy fluxes have been calculated for all time steps
-                vec2r calculate_shadowgram()
+                vec2r get_shadowgram() // @TODO: make this return a pointer
                 {
                     vec2r shadowgram(n_x, vec1r(n_y));
 
@@ -270,10 +281,19 @@ namespace picongpu
                     return shadowgram;
                 }
 
+                int get_n_x(){
+                    return n_x;
+                }
+
+                int get_n_y(){
+                    return n_y;
+                }
+
             private:
                 // Initialize fftw memory things, supposed to be called once per plugin loop
                 void init_fftw()
                 {
+                    std::cout << "init fftw" << std::endl;
                     // Input and output arrays for the FFT transforms
                     fftw_in_f_E = fftw_alloc_complex(n_x * n_y);
                     fftw_out_f_E = fftw_alloc_complex(n_x * n_y);

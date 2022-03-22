@@ -38,6 +38,8 @@
 #include <pmacc/math/vector/Float.hpp>
 #include <pmacc/math/vector/Int.hpp>
 #include <pmacc/math/vector/Size_t.hpp>
+#include <pmacc/mpi/MPIReduce.hpp>
+#include <pmacc/mpi/reduceMethods/Reduce.hpp>
 
 #include <sstream>
 #include <iostream>
@@ -109,7 +111,10 @@ namespace picongpu
                 bool isIntegrating;
                 int startTime;
 
+                bool isMaster = false;
+
                 shadowgraphy::Helper* helper = nullptr;
+                pmacc::mpi::MPIReduce reduce;
     /*
             std::string name;
             std::string prefix;
@@ -227,24 +232,30 @@ namespace picongpu
 
                     if(sliceIsOK)
                     {
+                        
+                        isMaster = reduce.hasResult(pmacc::mpi::reduceMethods::Reduce());
+
                         // First time the plugin is called:
                         if(isIntegrating == false)
                         {
-                            // Get grid size
-                            namespace vec = pmacc::math;
-                            typedef SuperCellSize BlockDim;
-                            DataConnector& dc = Environment<>::get().DataConnector();
-                            auto field = dc.get<FieldE>(FieldE::getName(), true)
-                                                        ->getGridBuffer()
-                                                        .getDeviceBuffer()
-                                                        .cartBuffer()
-                                                        .view(BlockDim::toRT(), -BlockDim::toRT());
+                            if (isMaster)
+                            {
+                                // Get grid size
+                                namespace vec = pmacc::math;
+                                typedef SuperCellSize BlockDim;
+                                DataConnector& dc = Environment<>::get().DataConnector();
+                                auto field = dc.get<FieldE>(FieldE::getName(), true)
+                                                            ->getGridBuffer()
+                                                            .getDeviceBuffer()
+                                                            .cartBuffer()
+                                                            .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
-                            vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
-                            vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
+                                pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
+                                vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
+                                vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
-                            helper = new Helper(globalGridSize);
+                                helper = new Helper(globalGridSize);
+                            }
 
 
                             // Create Integrator object %TODO
@@ -267,9 +278,7 @@ namespace picongpu
                                                         .cartBuffer()
                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            std::ostringstream filenameE;
-                            filenameE << this->fileName << "_E_" << currentStep << ".dat";
-                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint, filenameE.str());
+                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint);
 
                             auto field_coreBorderB = dc.get<FieldB>(FieldB::getName(), true)
                                                         ->getGridBuffer()
@@ -277,21 +286,28 @@ namespace picongpu
                                                         .cartBuffer()
                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            std::ostringstream filenameB;
-                            filenameB << this->fileName << "_B_" << currentStep << ".dat";
-                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, filenameB.str());
-                            
+                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint);
+
+                            helper->calculate_energy_flux(localStep, true);
+                            helper->calculate_energy_flux(localStep, false);
                         }
                         else
                         {
-                            //delete(Integrator) %TODO
+                            std::ostringstream filename;
+                            filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
+
+                            //data = helper->get_shadowgram();
+                            writeFile(helper->get_shadowgram(), filename.str());
+
+                            std::cout << "destructor called" << std::endl;
+                            delete(helper);
                             isIntegrating = false;
                         }
                     }
                 }
 
                 template<typename Field, typename TField>
-                void storeSlice(const TField& field, int nAxis, float slicePoint, std::string filename)
+                void storeSlice(const TField& field, int nAxis, float slicePoint)
                 {
                     namespace vec = pmacc::math;
 
@@ -338,13 +354,46 @@ namespace picongpu
                     if(!gather.root())
                         return;
 
-                    std::ofstream file(filename.c_str());
-                    file << globalBuffer;
+                    if(isMaster)
+                    {
+                        helper->store_field<Field>(&globalBuffer);
+                    }
+                    //std::ofstream file(filename.c_str());
+                    //file << globalBuffer;
 
-                    std::cout << "dbuffersize" << dBuffer_SI->size() << std::endl;
-                    std::cout << "dbufferelement1 " << (*globalBuffer.origin()(1,1)).z() << std::endl;
-                    //std::cout << "dbufferelement3 " << globalBuffer.getDataSpace(1,1,1) << std::endl;
+                }
 
+                void writeFile(std::vector< std::vector< float_X > > values, std::string name)
+                {
+                    std::ofstream outFile;
+                    outFile.open(name.c_str(), std::ofstream::out | std::ostream::trunc);
+
+                    if(!outFile)
+                    {
+                        std::cerr << "Can't open file [" << name << "] for output, disable plugin output. "
+                                  << std::endl;
+                        isMaster = false; // no Master anymore -> no process is able to write
+                    }
+                    else
+                    {
+                        for( unsigned int i = 0; i < helper->get_n_x(); ++i ) // over all x
+                        {
+                            for(unsigned int j = 0;  j < helper->get_n_y(); ++j) // over all y
+                            {
+                                outFile << values[i][j] << "\t";
+                            } // for loop over all y
+
+                            outFile << std::endl;
+                        } // for loop over all x
+
+                        outFile.flush();
+                        outFile << std::endl; // now all data are written to file
+
+                        if(outFile.fail())
+                            std::cerr << "Error on flushing file [" << name << "]. " << std::endl;
+
+                        outFile.close();
+                    }
                 }
             };
         }
