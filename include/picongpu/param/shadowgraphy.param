@@ -19,21 +19,21 @@ namespace picongpu
 
                 // Make sure that the Nyquist-Shannon theorem is fulfilled
                 //     t_res * dt * c < lambda_probe / 2
-                constexpr unsigned int t_res = 4;
+                constexpr unsigned int t_res = 2;
 
                 // Make sure that the Time-Bandwidth product is fulfilled @TODO
                 //     omega_n = t_n
                 //     domega = 2pi / (t_res * dt)
                 //     domega * omega_n * fwhm_probe[t] / 2 pi > 0.441 (for gauss)
-                constexpr unsigned int t_n = 128;
+                constexpr unsigned int t_n = 402 - 150;//128
 
 
                 constexpr unsigned int x_n = 128;
                 constexpr unsigned int y_n = 128;
 
                 // Transverse resolution of shadowgram in PIConGPU cell size units
-                constexpr unsigned int x_res = 2;
-                constexpr unsigned int y_res = 4;
+                constexpr unsigned int x_res = 1;//2
+                constexpr unsigned int y_res = 1;//4
 
                 // Propagation distance in SI
                 constexpr float delta_z = 10e-6;
@@ -83,7 +83,7 @@ namespace picongpu
                       * j is integer for j coordinate from 0 to n_y
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    return frequency_filter(o);// * numerical_aperture(i, j, o);
+                    return 1.0; //frequency_filter(o);// * numerical_aperture(i, j, o);
                 }
             }
             // The amount of cells to remove from each (!) side of the simulation box

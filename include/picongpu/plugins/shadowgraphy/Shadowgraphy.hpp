@@ -176,7 +176,7 @@ namespace picongpu
                         sliceIsOK = true;
 
                         // Time integration from param files
-                        std::cout<<"hello world"<<std::endl;
+                        std::cout<<"hello world what what what"<<std::endl;
                         std::cout<<std::stoi(this->notifyPeriod) << std::endl;
                         int startTime = std::stoi(this->notifyPeriod);
                         int endTime = std::stoi(this->notifyPeriod) + params::t_n;
