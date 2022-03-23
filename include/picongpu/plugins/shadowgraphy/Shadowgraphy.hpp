@@ -170,13 +170,13 @@ namespace picongpu
                 {
                     /* called when plugin is loaded, command line flags are available here
                     * set notification period for our plugin at the PluginConnector */
-                    if(float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0))
+                    if(false && float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0))
                     {
                         /* in case the slice point is inside of [0.0,1.0] */
                         sliceIsOK = true;
 
                         // Time integration from param files
-                        std::cout<<"hello world what what what"<<std::endl;
+                        std::cout<<"hello world what what what "<< SI::DELTA_T_SI << std::endl;
                         std::cout<<std::stoi(this->notifyPeriod) << std::endl;
                         int startTime = std::stoi(this->notifyPeriod);
                         int endTime = std::stoi(this->notifyPeriod) + params::t_n;
@@ -227,8 +227,8 @@ namespace picongpu
                 {
                     /* notification callback for simulation step currentStep
                     * called every notifyPeriod steps */
-                    std::cout << "Shadowgraphy notify period is: " << currentStep << std::endl;
-
+                    //std::cout << "Shadowgraphy notify period is: " << currentStep << std::endl;
+                    std::cout << "231 " << picongpu::SI::DELTA_T_SI << std::endl;
 
                     if(sliceIsOK)
                     {

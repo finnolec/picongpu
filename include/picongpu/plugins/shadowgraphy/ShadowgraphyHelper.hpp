@@ -110,12 +110,12 @@ namespace picongpu
                 void store_field(pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer)
                 {
 
-                    std::cout << "loop with "<< n_x << ", " << n_y << std::endl;
-                    std::cout << "loop" << std::endl;
+                    //std::cout << "loop with "<< n_x << ", " << n_y << std::endl;
+                    //std::cout << "loop" << std::endl;
                     for(int i = 0; i < n_x; ++i){
-                        std::cout << "i:" << i << std::endl;
+                        //std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
-                            std::cout << "j: " << j << ",";
+                            //std::cout << "j: " << j << ",";
                             if(F::getName() == "E"){
                                 tmp_Ex[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).x(); //fieldBuffer[i * params::x_res][j * param::y_res][];
                                 tmp_Ey[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).y();
@@ -187,7 +187,12 @@ namespace picongpu
                                 int index = i + j * n_x;
 
                                 complex_64 const phase_e = complex_64(0, -omega * (t * picongpu::SI::DELTA_T_SI - params::delta_z / SPEED_OF_LIGHT));
+                                constexpr float_X foo = picongpu::SI::DELTA_T_SI;
+                                std::cout<< "190 "<< omega << ", " << t * picongpu::SI::DELTA_T_SI << ", "<< params::delta_z / SPEED_OF_LIGHT << std::endl;
+                                std::cout<< "191 " << picongpu::SI::DELTA_T_SI << ", " << foo << std::endl;
+                                std::cout<< "192 " << picongpu::SI::CELL_WIDTH_SI << ", " << picongpu::SI::CELL_HEIGHT_SI << ", " << picongpu::SI::CELL_DEPTH_SI << std::endl;
                                 complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
+                                std::cout<< "193 "<< tmp_e.get_real()  << ", "<< tmp_e.get_imag() << std::endl;
 
                                 complex_64 const phase_b = complex_64(0, +omega * (t * picongpu::SI::DELTA_T_SI + params::delta_z / SPEED_OF_LIGHT));
                                 complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
@@ -227,6 +232,7 @@ namespace picongpu
                                         // Calculate E edge sum
                                         // Esum(x, y, zo, omega, tn) = Esum(x, y, zo, omega, tn-1) + E'(x, y, zo, omega)
                                         edge_Ex[i][j][o] += E;
+                                        std::cout << "232 " << edge_Ex[i][j][o].get_real() << ", "<< edge_Ex[i][j][o].get_imag() << std::endl;
 
                                         // Calculate B edge sum
                                         // Bsum(x, y, zo, omega, tn) = Bsum(x, y, zo, omega, tn-1) + B'(x, y, zo, omega)
@@ -242,6 +248,7 @@ namespace picongpu
                                     // + Esum(x, y, zo, omega, tn-1) * B'(x, y, zo, omega)
                                     // + EF(x, y, zo, omega, tn-1)
                                     energydensity_EyBx[i][j][o] += E * B + edge_Ey[i][j][o] * B + E * edge_Bx[i][j][o];
+                                    std::cout << "248 " << energydensity_EyBx[i][j][o].get_real() << ", "<< energydensity_EyBx[i][j][o].get_imag() << std::endl;
 
                                     // Only do this if it's not the last step of the shadowgraphy integration: 
                                     if (t < ( nt - 1 )) {
