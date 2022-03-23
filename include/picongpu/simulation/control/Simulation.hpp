@@ -538,8 +538,6 @@ namespace picongpu
         {
             using namespace simulation::stage;
 
-            std::cout << "runonestep1 " << picongpu::SI::DELTA_T_SI << std::endl;
-
             IterationStart{}(currentStep);
             MomentumBackup{}(currentStep);
             CurrentReset{}(currentStep);
@@ -559,8 +557,6 @@ namespace picongpu
             CurrentDeposition{}(currentStep);
             currentInterpolationAndAdditionToEMF(currentStep);
             myFieldSolver->update_afterCurrent(currentStep);
-
-            std::cout << "runonestep2 " << picongpu::SI::DELTA_T_SI << std::endl;
         }
 
         void movingWindowCheck(uint32_t currentStep) override

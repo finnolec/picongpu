@@ -5,6 +5,8 @@
 #include "picongpu/simulation_defines.hpp"
 #include <cmath> // what
 
+#include <stdio.h>
+
 namespace picongpu
 {
     namespace plugins
@@ -16,15 +18,15 @@ namespace picongpu
             class Helper
             {
             private:
-                using complex_X = pmacc::math::Complex<float_X>;
                 using complex_64 = pmacc::math::Complex<float_64>;
+                //using complex_64 = pmacc::math::Complex<float_64>;
 
                 typedef std::vector< std::vector< std::vector< complex_64 > > > vec3c;
                 typedef std::vector< std::vector< complex_64 > > vec2c;
                 typedef std::vector< complex_64 > vec1c;
-                typedef std::vector< std::vector< std::vector< float_X > > > vec3r;
-                typedef std::vector< std::vector< float_X > > vec2r;
-                typedef std::vector< float_X > vec1r;
+                typedef std::vector< std::vector< std::vector< float_64 > > > vec3r;
+                typedef std::vector< std::vector< float_64 > > vec2r;
+                typedef std::vector< float_64 > vec1r;
 
                 // Arrays to store Ex, Ey, Bx and Bz per time step temporarily
                 vec2r tmp_Ex, tmp_Ey;
@@ -72,6 +74,8 @@ namespace picongpu
                     // Same amount of omegas as ts 
                     // @TODO int division
                     n_omegas = params::t_n / params::t_res ;
+                    dt = params::t_res * SI::DELTA_T_SI;
+                    nt = params::t_n / params::t_res;
 
                     std::cout << "initialized with "<< n_x << ", " << n_y << std::endl;
 
@@ -178,7 +182,9 @@ namespace picongpu
                     // E(kx, ky, zs, tn), B(kx, ky, zs, tn) -> E(kx, ky, zs, omega), B(kx, ky, zs, omega)
                     for(int o = 0; o < n_omegas; o++){
                         // Omega for time domain Fourier trafo
-                        float_X omega = 2 * pmacc::math::Pi<float_X>::value  * (o - nt / 2.0) / nt / dt;
+                        float_64 omega = 2.0 * pmacc::math::Pi<float_64>::value  * (o - nt / 2.0) / nt / dt;
+
+                        //printf("185 %e - %e - %e - %e \n", pmacc::math::Pi<float_64>::value, o, nt, dt);
 
                         // Apply masks and propagate
                         // E(kx, ky, zs, omega), B(kx, ky, zs, omega) -> M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky omega)*B(kx, ky, zo, omega)
@@ -186,13 +192,18 @@ namespace picongpu
                             for(int j = 0; j < n_y; j++){
                                 int index = i + j * n_x;
 
-                                complex_64 const phase_e = complex_64(0, -omega * (t * picongpu::SI::DELTA_T_SI - params::delta_z / SPEED_OF_LIGHT));
-                                constexpr float_X foo = picongpu::SI::DELTA_T_SI;
-                                std::cout<< "190 "<< omega << ", " << t * picongpu::SI::DELTA_T_SI << ", "<< params::delta_z / SPEED_OF_LIGHT << std::endl;
-                                std::cout<< "191 " << picongpu::SI::DELTA_T_SI << ", " << foo << std::endl;
-                                std::cout<< "192 " << picongpu::SI::CELL_WIDTH_SI << ", " << picongpu::SI::CELL_HEIGHT_SI << ", " << picongpu::SI::CELL_DEPTH_SI << std::endl;
+                                complex_64 const phase_e = complex_64(0, -omega * (t * float_64(picongpu::SI::DELTA_T_SI) - float_64(params::delta_z) / float_64(SPEED_OF_LIGHT)));
+                                //constexpr float_64 foo = picongpu::SI::DELTA_T_SI;
+                                //printf("189 %e - %e - %e\n", float(picongpu::SI::DELTA_T_SI), t * float_64(picongpu::SI::DELTA_T_SI), float_64(params::delta_z) / float_64(SPEED_OF_LIGHT));
+                                //printf("190 %e - %e\n", -omega * (t * float_64(picongpu::SI::DELTA_T_SI)), float_64(params::delta_z) / float_64(SPEED_OF_LIGHT));
+                                //printf("191 %e - %e - %e \n", omega, t, float_64(picongpu::SI::DELTA_T_SI));
+                                //std::cout<< "190 "<< omega << ", " << t * picongpu::SI::DELTA_T_SI << ", "<< params::delta_z / SPEED_OF_LIGHT << std::endl;
+                                //std::cout<< "191 " << picongpu::SI::DELTA_T_SI << ", " << foo << std::endl;
+                                //std::cout<< "192 " << picongpu::SI::CELL_WIDTH_SI << ", " << picongpu::SI::CELL_HEIGHT_SI << ", " << picongpu::SI::CELL_DEPTH_SI << std::endl;
                                 complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
-                                std::cout<< "193 "<< tmp_e.get_real()  << ", "<< tmp_e.get_imag() << std::endl;
+                                //std::cout<< "193 "<< tmp_e.get_real()  << ", "<< tmp_e.get_imag() << std::endl;
+                                
+                                //printf("200 %e - %e | %e - %e \n", tmp_e.get_real(), tmp_e.get_imag(), phase_e.get_real(), phase_e.get_imag());
 
                                 complex_64 const phase_b = complex_64(0, +omega * (t * picongpu::SI::DELTA_T_SI + params::delta_z / SPEED_OF_LIGHT));
                                 complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
@@ -232,7 +243,7 @@ namespace picongpu
                                         // Calculate E edge sum
                                         // Esum(x, y, zo, omega, tn) = Esum(x, y, zo, omega, tn-1) + E'(x, y, zo, omega)
                                         edge_Ex[i][j][o] += E;
-                                        std::cout << "232 " << edge_Ex[i][j][o].get_real() << ", "<< edge_Ex[i][j][o].get_imag() << std::endl;
+                                        //std::cout << "232 " << edge_Ex[i][j][o].get_real() << ", "<< edge_Ex[i][j][o].get_imag() << std::endl;
 
                                         // Calculate B edge sum
                                         // Bsum(x, y, zo, omega, tn) = Bsum(x, y, zo, omega, tn-1) + B'(x, y, zo, omega)
@@ -248,7 +259,7 @@ namespace picongpu
                                     // + Esum(x, y, zo, omega, tn-1) * B'(x, y, zo, omega)
                                     // + EF(x, y, zo, omega, tn-1)
                                     energydensity_EyBx[i][j][o] += E * B + edge_Ey[i][j][o] * B + E * edge_Bx[i][j][o];
-                                    std::cout << "248 " << energydensity_EyBx[i][j][o].get_real() << ", "<< energydensity_EyBx[i][j][o].get_imag() << std::endl;
+                                    //std::cout << "248 " << energydensity_EyBx[i][j][o].get_real() << ", "<< energydensity_EyBx[i][j][o].get_imag() << std::endl;
 
                                     // Only do this if it's not the last step of the shadowgraphy integration: 
                                     if (t < ( nt - 1 )) {

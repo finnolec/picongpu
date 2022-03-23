@@ -45,6 +45,8 @@
 #include <iostream>
 #include <string>
 
+#include <stdio.h>
+
 #include "picongpu/fields/FieldB.hpp"
 #include "picongpu/fields/FieldE.hpp"
 
@@ -170,7 +172,7 @@ namespace picongpu
                 {
                     /* called when plugin is loaded, command line flags are available here
                     * set notification period for our plugin at the PluginConnector */
-                    if(false && float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0))
+                    if(float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0))
                     {
                         /* in case the slice point is inside of [0.0,1.0] */
                         sliceIsOK = true;
@@ -228,7 +230,8 @@ namespace picongpu
                     /* notification callback for simulation step currentStep
                     * called every notifyPeriod steps */
                     //std::cout << "Shadowgraphy notify period is: " << currentStep << std::endl;
-                    std::cout << "231 " << picongpu::SI::DELTA_T_SI << std::endl;
+                    //std::cout << "231 " << picongpu::SI::DELTA_T_SI << std::endl;
+                    //printf("231 %e\n", float(picongpu::SI::DELTA_T_SI));
 
                     if(sliceIsOK)
                     {
@@ -363,7 +366,7 @@ namespace picongpu
 
                 }
 
-                void writeFile(std::vector< std::vector< float_X > > values, std::string name)
+                void writeFile(std::vector< std::vector< float_64 > > values, std::string name)
                 {
                     std::ofstream outFile;
                     outFile.open(name.c_str(), std::ofstream::out | std::ostream::trunc);
