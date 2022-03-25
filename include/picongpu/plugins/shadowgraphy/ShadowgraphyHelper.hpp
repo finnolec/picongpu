@@ -73,7 +73,8 @@ namespace picongpu
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
-                    n_omegas = params::t_n / params::t_res ;
+                    n_omegas = params::omega_n;
+                    
                     dt = params::t_res * SI::DELTA_T_SI;
                     nt = params::t_n / params::t_res;
 
@@ -113,7 +114,6 @@ namespace picongpu
                 template<typename F>
                 void store_field(pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer)
                 {
-
                     //std::cout << "loop with "<< n_x << ", " << n_y << std::endl;
                     //std::cout << "loop" << std::endl;
                     for(int i = 0; i < n_x; ++i){
@@ -140,7 +140,6 @@ namespace picongpu
                 is_exby: bool, true if first part of poynting vector, false if second part of poynting vector
                 **/
                 {
-                    
                     // Transversal FFT of E and B fields to get k_x and k_y components
                     // Use fftw plan for fft
                     // E(x, y, zs, tn), B(x, y, zs, tn) -> E(kx, ky, zs, tn), B(kx, ky, zs, tn)
@@ -182,7 +181,8 @@ namespace picongpu
                     // E(kx, ky, zs, tn), B(kx, ky, zs, tn) -> E(kx, ky, zs, omega), B(kx, ky, zs, omega)
                     for(int o = 0; o < n_omegas; o++){
                         // Omega for time domain Fourier trafo
-                        float_64 omega = 2.0 * pmacc::math::Pi<float_64>::value  * (o - nt / 2.0) / nt / dt;
+                        //float_64 omega = 2.0 * pmacc::math::Pi<float_64>::value  * (o - nt / 2.0) / nt / dt;
+                        float_64 const omega_SI = fourierhelper::omega(o);
 
                         //printf("185 %e - %e - %e - %e \n", pmacc::math::Pi<float_64>::value, o, nt, dt);
 
@@ -190,22 +190,15 @@ namespace picongpu
                         // E(kx, ky, zs, omega), B(kx, ky, zs, omega) -> M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky omega)*B(kx, ky, zo, omega)
                         for(int i = 0; i < n_x; i++){
                             for(int j = 0; j < n_y; j++){
-                                int index = i + j * n_x;
+                                int const index = i + j * n_x;
 
-                                complex_64 const phase_e = complex_64(0, -omega * (t * float_64(picongpu::SI::DELTA_T_SI) - float_64(params::delta_z) / float_64(SPEED_OF_LIGHT)));
-                                //constexpr float_64 foo = picongpu::SI::DELTA_T_SI;
-                                //printf("189 %e - %e - %e\n", float(picongpu::SI::DELTA_T_SI), t * float_64(picongpu::SI::DELTA_T_SI), float_64(params::delta_z) / float_64(SPEED_OF_LIGHT));
-                                //printf("190 %e - %e\n", -omega * (t * float_64(picongpu::SI::DELTA_T_SI)), float_64(params::delta_z) / float_64(SPEED_OF_LIGHT));
-                                //printf("191 %e - %e - %e \n", omega, t, float_64(picongpu::SI::DELTA_T_SI));
-                                //std::cout<< "190 "<< omega << ", " << t * picongpu::SI::DELTA_T_SI << ", "<< params::delta_z / SPEED_OF_LIGHT << std::endl;
-                                //std::cout<< "191 " << picongpu::SI::DELTA_T_SI << ", " << foo << std::endl;
-                                //std::cout<< "192 " << picongpu::SI::CELL_WIDTH_SI << ", " << picongpu::SI::CELL_HEIGHT_SI << ", " << picongpu::SI::CELL_DEPTH_SI << std::endl;
+                                float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
+                                float_64 const propagator = float_64(params::delta_z) / float_64(SPEED_OF_LIGHT);
+
+                                complex_64 const phase_e = complex_64(0, -omega_SI * (t_SI - propagator));
                                 complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
-                                //std::cout<< "193 "<< tmp_e.get_real()  << ", "<< tmp_e.get_imag() << std::endl;
-                                
-                                //printf("200 %e - %e | %e - %e \n", tmp_e.get_real(), tmp_e.get_imag(), phase_e.get_real(), phase_e.get_imag());
 
-                                complex_64 const phase_b = complex_64(0, +omega * (t * picongpu::SI::DELTA_T_SI + params::delta_z / SPEED_OF_LIGHT));
+                                complex_64 const phase_b = complex_64(0, +omega_SI * (t_SI + propagator));
                                 complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
 
                                 fftw_in_b_E[index][0] = tmp_e.get_real();

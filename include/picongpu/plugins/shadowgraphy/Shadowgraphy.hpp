@@ -266,11 +266,11 @@ namespace picongpu
                             isIntegrating = true;
                         }
 
-                        int localStep = currentStep - startTime;
+                        int localStep = (currentStep - startTime) / params::t_res;
 
                         std::cout << "localStep: " << localStep << std::endl;
 
-                        if(localStep != params::t_n)
+                        if(localStep != int(params::t_n / params::t_res))
                         {
                             namespace vec = ::pmacc::math;
                             typedef SuperCellSize BlockDim;
@@ -318,7 +318,7 @@ namespace picongpu
                     vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                     vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
-                    std::cout << "global grid size: " << globalGridSize.z() << std::endl;
+                    //std::cout << "global grid size: " << globalGridSize.z() << std::endl;
                     int globalPlane = globalGridSize[nAxis] * slicePoint;
                     int localPlane = globalPlane % field.size()[nAxis];
                     int gpuPlane = globalPlane / field.size()[nAxis];

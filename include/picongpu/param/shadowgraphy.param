@@ -27,6 +27,7 @@ namespace picongpu
                 //     domega * omega_n * fwhm_probe[t] / 2 pi > 0.441 (for gauss)
                 constexpr unsigned int t_n = 460 - 100;//128
 
+                constexpr unsigned int omega_n = t_n / t_res;
 
                 constexpr unsigned int x_n = 128;
                 constexpr unsigned int y_n = 128;
@@ -37,8 +38,26 @@ namespace picongpu
 
                 // Propagation distance in SI
                 constexpr float delta_z = 10e-6;
-                
             }
+
+
+            namespace fourierhelper
+            {   
+                HINLINE float_64 omega(int i){
+                    return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
+                }
+
+                // kx so that it is the proper kx for FFTs
+                HINLINE float_64 kx(int i){ // @TODO x_n
+                    return 2 * PI  * (i - shadowgraphy::params::x_n / 2.0) / shadowgraphy::params::x_n / shadowgraphy::params::x_res / SI::CELL_WIDTH_SI;
+                }
+
+                // ky so that it is the proper ky for FFTs
+                HINLINE float_64 ky(int i){ // @TODO y_n
+                    return 2 * PI  * (i - shadowgraphy::params::y_n / 2.0) / shadowgraphy::params::y_n / shadowgraphy::params::y_res / SI::CELL_HEIGHT_SI;
+                }
+            }
+
 
             namespace masks
             {
@@ -47,20 +66,9 @@ namespace picongpu
 
                 // Values for frequency filter to extract probe laser better in m
                 // Make sure to respect the time bandwidth limit
-                constexpr float_64 min_lambda = 750e-9;
-                constexpr float_64 max_lambda = 850e-9;
+                constexpr float_64 min_lambda = 700e-9;
+                constexpr float_64 max_lambda = 800e-9;
 
-                HINLINE float_64 omega(int i){
-                    return 2 * PI  * (i - shadowgraphy::params::t_n / 2.0) / shadowgraphy::params::t_n / shadowgraphy::params::t_res / SI::DELTA_T_SI;
-                }
-
-                HINLINE float_64 kx(int i){
-                    return 2 * PI  * (i - shadowgraphy::params::x_n / 2.0) / shadowgraphy::params::x_n / shadowgraphy::params::x_res / SI::CELL_WIDTH_SI;
-                }
-
-                HINLINE float_64 ky(int i){
-                    return 2 * PI  * (i - shadowgraphy::params::y_n / 2.0) / shadowgraphy::params::y_n / shadowgraphy::params::y_res / SI::CELL_HEIGHT_SI;
-                }
 
                 HINLINE float_64 frequency_filter(int o){
                     /**
@@ -69,8 +77,8 @@ namespace picongpu
                     float_64 max_freq = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / min_lambda;
                     float_64 min_freq = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / max_lambda;
                     
-                    if( pmacc::math::abs2(omega(o)) < max_freq * max_freq
-                        &&  pmacc::math::abs2(omega(o)) > min_freq * min_freq){
+                    if( math::abs(fourierhelper::omega(o)) < max_freq
+                        &&  math::abs(fourierhelper::omega(o)) > min_freq){
                         return 1.0;
                     } else {
                         return 0.0;
@@ -83,7 +91,7 @@ namespace picongpu
                       * j is integer for j coordinate from 0 to n_y
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    return 1.0; //frequency_filter(o);// * numerical_aperture(i, j, o);
+                    return frequency_filter(o);// * numerical_aperture(i, j, o);
                 }
             }
             // The amount of cells to remove from each (!) side of the simulation box
