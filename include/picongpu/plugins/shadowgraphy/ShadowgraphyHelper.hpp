@@ -134,8 +134,6 @@ namespace picongpu
                 // Energy flux calculation loop
                 void calculate_energy_flux(int t, bool is_exby)
                 /**
-                sim_E: E from simulation, real 2d array
-                sim_B: B from simulation, real 2d array
                 t: current time step, from 0 to (nt-1)
                 is_exby: bool, true if first part of poynting vector, false if second part of poynting vector
                 **/
@@ -169,11 +167,15 @@ namespace picongpu
                     vec2c B_k(n_x, vec1c(n_y));
 
                     for(int i = 0; i < n_x; i++){
+                        int const i_fh = (i + n_x/2) % n_x;
+
                         for(int j = 0; j < n_y; j++){
+                            int const j_fh = (j + n_y / 2) % n_y;
+
                             int index = i + j * n_x;
                             // @TODO write this in nice
-                            E_k[i][j] = complex_64(fftw_out_f_E[index][0], fftw_out_f_E[index][1]);
-                            B_k[i][j] = complex_64(fftw_out_f_B[index][0], fftw_out_f_B[index][1]);
+                            E_k[i_fh][j_fh] = complex_64(fftw_out_f_E[index][0], fftw_out_f_E[index][1]);
+                            B_k[i_fh][j_fh] = complex_64(fftw_out_f_B[index][0], fftw_out_f_B[index][1]);
                         }
                     }
 
@@ -193,18 +195,42 @@ namespace picongpu
                                 int const index = i + j * n_x;
 
                                 float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
-                                float_64 const propagator = float_64(params::delta_z) / float_64(SPEED_OF_LIGHT);
+                                //float_64 const propagator = float_64(params::delta_z) / float_64(SPEED_OF_LIGHT);
+                                float_64 const sqrt1 = 1 / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
+                                //printf("c %e \n", SPEED_OF_LIGHT_SI)
+                                //printf("1 %e \n", sqrt1);
+                                float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(j) / (omega_SI * omega_SI);
+                                //printf("2 %e \n", sqrt2);
+                                float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j) / (omega_SI * omega_SI);
+                                //printf("3 %e \n", sqrt3);
+                                
+                                // für 3 und 4
+                                //float_64 const propagator = float_64(params::delta_z) * (picongpu::math::sqrt(sqrt1 - sqrt2 - sqrt3) - omega_SI / float_64(picongpu::SI::DELTA_T_SI));
+                                // für 5 und 6 und 7
 
-                                complex_64 const phase_e = complex_64(0, -omega_SI * (t_SI - propagator));
-                                complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
+                                // sqrtContent equal to kz^2 / omega^2
+                                float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
 
-                                complex_64 const phase_b = complex_64(0, +omega_SI * (t_SI + propagator));
-                                complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
+                                if (sqrtContent >= 0.0){
+                                    //float_64 const propagator = float_64(params::delta_z) * (picongpu::math::sqrt(sqrtContent) + 0*omega_SI / float_64(SI::SPEED_OF_LIGHT_SI));
+                                    float_64 const propagator = 0 * float_64(params::delta_z) / SI::SPEED_OF_LIGHT_SI;
 
-                                fftw_in_b_E[index][0] = tmp_e.get_real();
-                                fftw_in_b_E[index][1] = tmp_e.get_imag();
-                                fftw_in_b_B[index][0] = tmp_b.get_real();
-                                fftw_in_b_B[index][1] = tmp_b.get_imag();
+                                    complex_64 const phase_e = complex_64(0, +omega_SI * (propagator - t_SI));
+                                    complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
+
+                                    complex_64 const phase_b = complex_64(0, +omega_SI * (propagator + t_SI));
+                                    complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
+
+                                    fftw_in_b_E[index][0] = tmp_e.get_real();
+                                    fftw_in_b_E[index][1] = tmp_e.get_imag();
+                                    fftw_in_b_B[index][0] = tmp_b.get_real();
+                                    fftw_in_b_B[index][1] = tmp_b.get_imag();
+                                } else {
+                                    fftw_in_b_E[index][0] = 0.0;
+                                    fftw_in_b_E[index][1] = 0.0;
+                                    fftw_in_b_B[index][0] = 0.0;
+                                    fftw_in_b_B[index][1] = 0.0;
+                                }
                             }
                         }
 
@@ -284,7 +310,7 @@ namespace picongpu
                             for(int o = 0; o < n_omegas; ++o)
                             {
                                 // shadowgram(x, y) += real(EF1(x, y, zo, omega, tmax)) - real(EF2(x, y, zo, omega, tmax))
-                                shadowgram[i][j] += (energydensity_ExBy[i][j][o] - energydensity_EyBx[i][j][o]).get_real();
+                                shadowgram[i][j] += (energydensity_ExBy[i][j][o] - energydensity_EyBx[i][j][o]).get_real() / (nt * nt);
                             }
                         }
                     }
@@ -320,11 +346,13 @@ namespace picongpu
                     // Many ffts will be performed -> use FFTW_MEASURE as flag
                     plan_forward_E = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_E, fftw_out_f_E, FFTW_FORWARD, FFTW_MEASURE);
                     plan_forward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_B, fftw_out_f_B, FFTW_BACKWARD, FFTW_MEASURE);
+                    //plan_forward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_B, fftw_out_f_B, FFTW_FORWARD, FFTW_MEASURE);
 
                     // Create fftw plan for transverse ifft for complex to complex
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag
                     plan_backward_E = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_E, fftw_out_b_E, FFTW_BACKWARD, FFTW_MEASURE);
                     plan_backward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_B, fftw_out_b_B, FFTW_FORWARD, FFTW_MEASURE);
+                    //plan_backward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_B, fftw_out_b_B, FFTW_BACKWARD, FFTW_MEASURE);
                 }
 
             }; // class Helper

@@ -25,9 +25,10 @@ namespace picongpu
                 //     omega_n = t_n
                 //     domega = 2pi / (t_res * dt)
                 //     domega * omega_n * fwhm_probe[t] / 2 pi > 0.441 (for gauss)
-                constexpr unsigned int t_n = 460 - 100;//128
+                constexpr unsigned int t_n = 560 - 100;//128
 
-                constexpr unsigned int omega_n = t_n / t_res;
+                //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
+                constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
 
                 constexpr unsigned int x_n = 128;
                 constexpr unsigned int y_n = 128;
@@ -38,13 +39,50 @@ namespace picongpu
 
                 // Propagation distance in SI
                 constexpr float delta_z = 10e-6;
+
+                // Values for frequency filter to extract probe laser better in m
+                // Make sure to respect the time bandwidth limit
+                constexpr float_64 min_lambda = 660e-9;
+                constexpr float_64 max_lambda = 840e-9;
             }
 
 
             namespace fourierhelper
             {   
                 HINLINE float_64 omega(int i){
-                    return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
+                    //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
+                    //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
+                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    
+                    // -1 if you want to include omega_max
+                    float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
+                    
+                    //return omega_min + i * omega_step;
+                    /**if(i < params::omega_n / 2){
+                        return -omega_max + i * omega_step;
+                    } else {
+                        return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
+                    }**/
+                    return omega_min + i * omega_step;
+                }
+
+                HINLINE float_64 omega1(int i){
+                    //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
+                    //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
+                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    
+                    // -1 if you want to include omega_max
+                    // float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
+                    
+                    //return omega_min + i * omega_step;
+                    /**if(i < params::omega_n / 2){
+                        return -omega_max + i * omega_step;
+                    } else {
+                        return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
+                    }**/
+                    return 2 * PI * float_64(i - omega_n) / float_64(omega_n) / (params::t_res * SI::DELTA_T_SI);
                 }
 
                 // kx so that it is the proper kx for FFTs
@@ -64,23 +102,24 @@ namespace picongpu
                 // Numerical aperture to remove e.g. side scattered light from probe laser and drive laser from shadowgraphy simulations
                 constexpr float_64 numerical_aperture = 0.23;
 
-                // Values for frequency filter to extract probe laser better in m
-                // Make sure to respect the time bandwidth limit
-                constexpr float_64 min_lambda = 700e-9;
-                constexpr float_64 max_lambda = 800e-9;
 
 
                 HINLINE float_64 frequency_filter(int o){
                     /**
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    float_64 max_freq = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / min_lambda;
-                    float_64 min_freq = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / max_lambda;
+                    float_64 const max_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                    float_64 const min_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+
+                    //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
+                    //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
                     
-                    if( math::abs(fourierhelper::omega(o)) < max_freq
-                        &&  math::abs(fourierhelper::omega(o)) > min_freq){
+                    if( math::abs(fourierhelper::omega(o)) <= max_omega
+                        &&  math::abs(fourierhelper::omega(o)) >= min_omega){
+                        //std::cout << "a";
                         return 1.0;
                     } else {
+                        std::cout << "b";
                         return 0.0;
                     }
                 }
