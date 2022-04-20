@@ -167,15 +167,17 @@ namespace picongpu
                     vec2c B_k(n_x, vec1c(n_y));
 
                     for(int i = 0; i < n_x; i++){
-                        int const i_fh = (i + n_x/2) % n_x;
+                        // Put origin into center of array with this, necessary due to FFT
+                        int const i_ffs = (i + n_x/2) % n_x;
 
                         for(int j = 0; j < n_y; j++){
-                            int const j_fh = (j + n_y / 2) % n_y;
+                            // Put origin into center of array with this, necessary due to FFT
+                            int const j_ffs = (j + n_y / 2) % n_y;
 
-                            int index = i + j * n_x;
+                            int const index = i + j * n_x;
                             // @TODO write this in nice
-                            E_k[i_fh][j_fh] = complex_64(fftw_out_f_E[index][0], fftw_out_f_E[index][1]);
-                            B_k[i_fh][j_fh] = complex_64(fftw_out_f_B[index][0], fftw_out_f_B[index][1]);
+                            E_k[i_ffs][j_ffs] = complex_64(fftw_out_f_E[index][0], fftw_out_f_E[index][1]);
+                            B_k[i_ffs][j_ffs] = complex_64(fftw_out_f_B[index][0], fftw_out_f_B[index][1]);
                         }
                     }
 
@@ -212,13 +214,13 @@ namespace picongpu
                                 float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
 
                                 if (sqrtContent >= 0.0){
-                                    //float_64 const propagator = float_64(params::delta_z) * (picongpu::math::sqrt(sqrtContent) + 0*omega_SI / float_64(SI::SPEED_OF_LIGHT_SI));
-                                    float_64 const propagator = 0 * float_64(params::delta_z) / SI::SPEED_OF_LIGHT_SI;
+                                    float_64 const propagator = float_64(params::delta_z) * (0.0 * picongpu::math::sqrt(sqrtContent) - 1.0 / float_64(SI::SPEED_OF_LIGHT_SI));
+                                    //float_64 const propagator = 0 * float_64(params::delta_z) / SI::SPEED_OF_LIGHT_SI;
 
                                     complex_64 const phase_e = complex_64(0, +omega_SI * (propagator - t_SI));
                                     complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
 
-                                    complex_64 const phase_b = complex_64(0, +omega_SI * (propagator + t_SI));
+                                    complex_64 const phase_b = complex_64(0, +omega_SI * (- propagator + t_SI));
                                     complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
 
                                     fftw_in_b_E[index][0] = tmp_e.get_real();
@@ -310,7 +312,7 @@ namespace picongpu
                             for(int o = 0; o < n_omegas; ++o)
                             {
                                 // shadowgram(x, y) += real(EF1(x, y, zo, omega, tmax)) - real(EF2(x, y, zo, omega, tmax))
-                                shadowgram[i][j] += (energydensity_ExBy[i][j][o] - energydensity_EyBx[i][j][o]).get_real() / (nt * nt);
+                                shadowgram[i][j] += (energydensity_ExBy[i][j][o] - energydensity_EyBx[i][j][o]).get_real() * fourierhelper::get_omega_step() / (nt * nt);
                             }
                         }
                     }

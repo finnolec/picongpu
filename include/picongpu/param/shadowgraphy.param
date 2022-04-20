@@ -28,7 +28,8 @@ namespace picongpu
                 constexpr unsigned int t_n = 560 - 100;//128
 
                 //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
-                constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
+                //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
+                constexpr unsigned int omega_n = 256;
 
                 constexpr unsigned int x_n = 128;
                 constexpr unsigned int y_n = 128;
@@ -42,8 +43,11 @@ namespace picongpu
 
                 // Values for frequency filter to extract probe laser better in m
                 // Make sure to respect the time bandwidth limit
-                constexpr float_64 min_lambda = 660e-9;
-                constexpr float_64 max_lambda = 840e-9;
+                constexpr float_64 min_lambda = 660e-9 - 0.0*100e-9;
+                constexpr float_64 max_lambda = 840e-9 + 0.0*100e-9;
+
+                // There is a sinusoidal slope from min_lambda - d_lambda_wf to min_lambda and from max_lambda to max_lambda + d_lambda_wf
+                constexpr float_64 d_lambda_wf = 100e-9;
             }
 
 
@@ -52,8 +56,8 @@ namespace picongpu
                 HINLINE float_64 omega(int i){
                     //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
                     //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
-                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
+                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
                     
                     // -1 if you want to include omega_max
                     float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
@@ -67,6 +71,16 @@ namespace picongpu
                     return omega_min + i * omega_step;
                 }
 
+                HINLINE float_64 get_omega_step(){
+                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
+                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
+                    
+                    // -1 if you want to include omega_max
+                    return (omega_max - omega_min) / (float_64(params::omega_n - 1));
+
+                }
+
+                /*
                 HINLINE float_64 omega1(int i){
                     //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
                     //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
@@ -77,13 +91,13 @@ namespace picongpu
                     // float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
                     
                     //return omega_min + i * omega_step;
-                    /**if(i < params::omega_n / 2){
-                        return -omega_max + i * omega_step;
-                    } else {
-                        return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
-                    }**/
-                    return 2 * PI * float_64(i - omega_n) / float_64(omega_n) / (params::t_res * SI::DELTA_T_SI);
-                }
+                    //if(i < params::omega_n / 2){
+                    //    return -omega_max + i * omega_step;
+                    //} else {
+                    //    return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
+                    //}
+                    return 2 * PI * float_64(i - params::omega_n) / float_64(params::omega_n) / (params::t_res * SI::DELTA_T_SI);
+                }*/
 
                 // kx so that it is the proper kx for FFTs
                 HINLINE float_64 kx(int i){ // @TODO x_n
@@ -108,19 +122,45 @@ namespace picongpu
                     /**
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    float_64 const max_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                    float_64 const min_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    //float_64 const max_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                    //float_64 const min_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    float_64 const omega = math::abs(fourierhelper::omega(o));
 
-                    //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
-                    //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
-                    
-                    if( math::abs(fourierhelper::omega(o)) <= max_omega
-                        &&  math::abs(fourierhelper::omega(o)) >= min_omega){
-                        //std::cout << "a";
-                        return 1.0;
+                    if(params::d_lambda_wf == 0.0)
+                    {
+                        float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                        float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+
+                        //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
+                        //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
+                        
+                        if( omega >= omega_min && omega <= omega_max ){
+                            //std::cout << "a";
+                            return 1.0;
+                        } else {
+                            return 0.0;
+                        }
+
                     } else {
-                        std::cout << "b";
-                        return 0.0;
+                        float_64 const omega_max_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
+                        float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                        float_64 const d_omega_max = omega_max_wf - omega_max;
+
+                        float_64 const omega_min_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
+                        float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                        float_64 const d_omega_min = omega_min - omega_min_wf;
+                        //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
+                        //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
+                        
+                        if( omega >= omega_min_wf && omega < omega_min ){
+                            return 1.0 - math::cos(PI * (omega - omega_min + d_omega_min) / d_omega_min) / 2.0;
+                        } else if ( omega >= omega_min && omega < omega_max ) {
+                            return 1.0;
+                        } else if ( omega >= omega_max && omega <= omega_max_wf ) {
+                            return math::cos(PI * (omega - omega_max) / d_omega_max) / 2.0 + 0.5;
+                        } else {
+                            return 0.0;
+                        }
                     }
                 }
 
