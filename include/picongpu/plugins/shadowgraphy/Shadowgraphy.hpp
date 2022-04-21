@@ -108,7 +108,8 @@ namespace picongpu
                 std::string fileName;
                 float_X slicePoint;
 
-                std::unique_ptr<container::DeviceBuffer<float3_64, 2>> dBuffer_SI;
+                std::unique_ptr<container::DeviceBuffer<float3_64, 2>> dBuffer_SI1;
+                std::unique_ptr<container::DeviceBuffer<float3_64, 2>> dBuffer_SI2;
 
                 bool isIntegrating;
                 int startTime;
@@ -195,7 +196,9 @@ namespace picongpu
                         vec::Size_t<simDim> size = vec::Size_t<simDim>(this->cellDescription->getGridSuperCells())
                                 * precisionCast<size_t>(BlockDim::toRT())
                             - precisionCast<size_t>(2 * BlockDim::toRT());
-                        this->dBuffer_SI = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
+                        this->dBuffer_SI1 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
+                            size.shrink<simDim - 1>((this->plane + 1) % simDim));
+                        this->dBuffer_SI2 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
                             size.shrink<simDim - 1>((this->plane + 1) % simDim));
                         //this->dBBuffer_SI = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
                         //    size.shrink<simDim - 1>((this->plane + 1) % simDim));
@@ -318,48 +321,89 @@ namespace picongpu
                     vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                     vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
-                    //std::cout << "global grid size: " << globalGridSize.z() << std::endl;
-                    int globalPlane = globalGridSize[nAxis] * slicePoint;
-                    int localPlane = globalPlane % field.size()[nAxis];
-                    int gpuPlane = globalPlane / field.size()[nAxis];
+                    // FIRST SLICE OF FIELD FOR YEE OFFSET
+                    int globalPlane1 = globalGridSize[nAxis] * slicePoint;
+                    int localPlane1 = globalPlane1 % field.size()[nAxis];
+                    int gpuPlane1 = globalPlane1 / field.size()[nAxis];
 
-                    vec::Int<simDim> nVector(vec::Int<simDim>::create(0));
-                    nVector[nAxis] = 1;
+                    vec::Int<simDim> nVector1(vec::Int<simDim>::create(0));
+                    nVector1[nAxis] = 1;
 
-                    zone::SphericZone<simDim> gpuGatheringZone(gpuDim, nVector * gpuPlane);
-                    gpuGatheringZone.size[nAxis] = 1;
+                    zone::SphericZone<simDim> gpuGatheringZone1(gpuDim, nVector1 * gpuPlane1);
+                    gpuGatheringZone1.size[nAxis] = 1;
 
-                    algorithm::mpi::Gather<simDim> gather(gpuGatheringZone);
+                    algorithm::mpi::Gather<simDim> gather(gpuGatheringZone1);
 
                     if(!gather.participate())
                         return;
 
-                    vec::UInt32<3> twistedAxesVec((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
+                    vec::UInt32<3> twistedAxesVec1((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
 
-                    /* convert data to higher precision and to SI units */
-                    ShadowgraphyHelper::ConversionFunctor<Field> cf;
+                    // convert data to higher precision and to SI units
+                    ShadowgraphyHelper::ConversionFunctor<Field> cf1;
                     algorithm::kernel::RT::Foreach()(
-                        dBuffer_SI->zone(),
-                        dBuffer_SI->origin(),
-                        cursor::tools::slice(field.originCustomAxes(twistedAxesVec)(0, 0, localPlane)),
-                        cf);
+                        dBuffer_SI1->zone(),
+                        dBuffer_SI1->origin(),
+                        cursor::tools::slice(field.originCustomAxes(twistedAxesVec1)(0, 0, localPlane1)),
+                        cf1);
             
 
-                    /* copy selected plane from device to host */
-                    container::HostBuffer<float3_64, simDim - 1> hBuffer(dBuffer_SI->size());
-                    hBuffer = *dBuffer_SI;
+                    // copy selected plane from device to host
+                    container::HostBuffer<float3_64, simDim - 1> hBuffer1(dBuffer_SI1->size());
+                    hBuffer1 = *dBuffer_SI1;
 
-                    /* collect data from all nodes/GPUs */
-                    vec::Size_t<simDim> globalDomainSize = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
-                    vec::Size_t<simDim - 1> globalSliceSize = globalDomainSize.shrink<simDim - 1>((nAxis + 1) % simDim);
-                    container::HostBuffer<float3_64, simDim - 1> globalBuffer(globalSliceSize);
-                    gather(globalBuffer, hBuffer, nAxis);
+                    // collect data from all nodes/GPUs
+                    vec::Size_t<simDim> globalDomainSize1 = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
+                    vec::Size_t<simDim - 1> globalSliceSize1 = globalDomainSize1.shrink<simDim - 1>((nAxis + 1) % simDim);
+                    container::HostBuffer<float3_64, simDim - 1> globalBuffer1(globalSliceSize1);
+                    gather(globalBuffer1, hBuffer1, nAxis);
                     if(!gather.root())
                         return;
 
+                    /*
+                    // SECOND SLICE OF FIELD FOR YEE OFFSET
+                    int globalPlane2 = globalGridSize[nAxis] * slicePoint + 1;
+                    int localPlane2 = globalPlane2 % field.size()[nAxis];
+                    int gpuPlane2 = globalPlane2 / field.size()[nAxis];
+
+                    vec::Int<simDim> nVector2(vec::Int<simDim>::create(0));
+                    nVector2[nAxis] = 1;
+
+                    zone::SphericZone<simDim> gpuGatheringZone2(gpuDim, nVector2 * gpuPlane2);
+                    gpuGatheringZone2.size[nAxis] = 1;
+
+                    //algorithm::mpi::Gather<simDim> gather(gpuGatheringZone2);
+
+                    if(!gather.participate())
+                        return;
+
+                    vec::UInt32<3> twistedAxesVec2((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
+
+                    // convert data to higher precision and to SI units 
+                    ShadowgraphyHelper::ConversionFunctor<Field> cf2;
+                    algorithm::kernel::RT::Foreach()(
+                        dBuffer_SI2->zone(),
+                        dBuffer_SI2->origin(),
+                        cursor::tools::slice(field.originCustomAxes(twistedAxesVec2)(0, 0, localPlane2)),
+                        cf2);
+            
+
+                    // copy selected plane from device to host 
+                    container::HostBuffer<float3_64, simDim - 1> hBuffer2(dBuffer_SI2->size());
+                    hBuffer2 = *dBuffer_SI2;
+
+                    /// collect data from all nodes/GPUs 
+                    vec::Size_t<simDim> globalDomainSize2 = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
+                    vec::Size_t<simDim - 1> globalSliceSize2 = globalDomainSize2.shrink<simDim - 1>((nAxis + 1) % simDim);
+                    container::HostBuffer<float3_64, simDim - 1> globalBuffer2(globalSliceSize2);
+                    gather(globalBuffer2, hBuffer2, nAxis);
+                    if(!gather.root())
+                        return;
+                    */
+
                     if(isMaster)
                     {
-                        helper->store_field<Field>(&globalBuffer);
+                        helper->store_field<Field>(&globalBuffer1, &globalBuffer1);
                     }
                     //std::ofstream file(filename.c_str());
                     //file << globalBuffer;

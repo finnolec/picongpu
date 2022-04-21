@@ -68,8 +68,8 @@ namespace picongpu
                 // Constructor of the shadowgraphy helper class
                 // To be called at the first time step when the shadowgraphy time integration starts
                 Helper(pmacc::math::Size_t<simDim> globalGridSize):
-                    n_x(globalGridSize.x() / params::x_res),
-                    n_y(globalGridSize.y() / params::y_res)
+                    n_x(globalGridSize.x() / params::x_res - 2),
+                    n_y(globalGridSize.y() / params::y_res - 2)
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
@@ -112,7 +112,7 @@ namespace picongpu
 
                 // Store fields in helper class with proper resolution
                 template<typename F>
-                void store_field(pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer)
+                void store_field(pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
                 {
                     //std::cout << "loop with "<< n_x << ", " << n_y << std::endl;
                     //std::cout << "loop" << std::endl;
@@ -120,12 +120,23 @@ namespace picongpu
                         //std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
                             //std::cout << "j: " << j << ",";
+                            int const grid_i = i * params::x_res;
+                            int const grid_j = j * params::y_res;
+
                             if(F::getName() == "E"){
-                                tmp_Ex[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).x(); //fieldBuffer[i * params::x_res][j * param::y_res][];
-                                tmp_Ey[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).y();
+                                //tmp_Ex[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
+                                //printf("%e \n", tmp_Ex);
+                                //tmp_Ey[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
+                                tmp_Ex[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).x(); 
+                                //printf("%e \n", tmp_Ex);
+                                tmp_Ey[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
                             } else {
-                                tmp_Bx[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).x(); //fieldBuffer[i * params::x_res][j * param::y_res][];
-                                tmp_By[i][j] = (*(fieldBuffer->origin()(i * params::x_res,j * params::y_res))).y();
+                                //tmp_Bx[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
+                                //                + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
+                                //tmp_By[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
+                                //                + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
+                                tmp_Bx[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                tmp_By[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
                             }
                         }
                     }
@@ -220,7 +231,7 @@ namespace picongpu
                                     complex_64 const phase_e = complex_64(0, +omega_SI * (propagator - t_SI));
                                     complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
 
-                                    complex_64 const phase_b = complex_64(0, +omega_SI * (- propagator + t_SI));
+                                    complex_64 const phase_b = complex_64(0, +omega_SI * (propagator + t_SI));
                                     complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
 
                                     fftw_in_b_E[index][0] = tmp_e.get_real();
@@ -249,8 +260,9 @@ namespace picongpu
                                 complex_64 const E = complex_64(fftw_out_b_E[index][0], fftw_out_b_E[index][1]);
                                 complex_64 const B = complex_64(fftw_out_b_B[index][0], fftw_out_b_B[index][1]);
 
+
                                 if (is_exby)
-                                {
+                                { 
                                     // Sum energy fluxes
                                     // EF(x, y, zo, omega, tn)
                                     // = E'(x, y, zo, omega) * B'(x, y, zo, omega)

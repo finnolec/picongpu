@@ -41,6 +41,8 @@ namespace picongpu
                 // Propagation distance in SI
                 constexpr float delta_z = 10e-6;
 
+                constexpr float NA = 0.23;
+
                 // Values for frequency filter to extract probe laser better in m
                 // Make sure to respect the time bandwidth limit
                 constexpr float_64 min_lambda = 660e-9 - 0.0*100e-9;
@@ -114,7 +116,7 @@ namespace picongpu
             namespace masks
             {
                 // Numerical aperture to remove e.g. side scattered light from probe laser and drive laser from shadowgraphy simulations
-                constexpr float_64 numerical_aperture = 0.23;
+                //constexpr float_64 numerical_aperture = 0.23;
 
 
 
@@ -153,7 +155,7 @@ namespace picongpu
                         //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
                         
                         if( omega >= omega_min_wf && omega < omega_min ){
-                            return 1.0 - math::cos(PI * (omega - omega_min + d_omega_min) / d_omega_min) / 2.0;
+                            return ( 1.0 - math::cos(PI * (omega - omega_min + d_omega_min) / d_omega_min) ) / 2.0;
                         } else if ( omega >= omega_min && omega < omega_max ) {
                             return 1.0;
                         } else if ( omega >= omega_max && omega <= omega_max_wf ) {
@@ -161,6 +163,21 @@ namespace picongpu
                         } else {
                             return 0.0;
                         }
+                    }
+                }
+
+                HINLINE float_64 numerical_aperture(int i, int j, int o){
+                    float_64 const omega = math::abs(fourierhelper::omega(o));
+                    float_64 const kx = fourierhelper::kx(i);
+                    float_64 const ky = fourierhelper::ky(i);
+
+                    float_64 const kperpsq = kx * kx + ky * ky;
+                    float_64 const k = omega / SI::SPEED_OF_LIGHT_SI;
+
+                    if(kperpsq <= (params::NA * params::NA * k * k) ){
+                        return 1.0;
+                    } else {
+                        return 0.0;
                     }
                 }
 
