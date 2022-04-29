@@ -294,11 +294,15 @@ namespace picongpu
 
                             storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, localStep);
 
-                            helper->calculate_energy_flux(localStep, true);
-                            helper->calculate_energy_flux(localStep, false);
+                            helper->calculate_dft(localStep);
                         }
                         else
                         {
+                            helper->propagate_fields();
+                            printf("Fields propagated");
+                            helper->calculate_shadowgram();
+                            printf("Shadowgram calculated");
+
                             std::ostringstream filename;
                             filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
 

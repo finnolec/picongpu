@@ -33,29 +33,27 @@ namespace picongpu
                 vec2r tmp_Bx, tmp_By;
 
                 // Arrays for FFTW
-                fftw_complex *fftw_in_f_E; // @TODO: Can this be real? Issue is forward / backward FFT
-                fftw_complex *fftw_out_f_E;
-                fftw_complex *fftw_in_f_B;
-                fftw_complex *fftw_out_f_B;
-                fftw_complex *fftw_in_b_E;
-                fftw_complex *fftw_out_b_E;
-                fftw_complex *fftw_in_b_B;
-                fftw_complex *fftw_out_b_B;
+                fftw_complex *fftw_in_f; // @TODO: Can this be real? Issue is forward / backward FFT
+                fftw_complex *fftw_out_f;
+                fftw_complex *fftw_in_b;
+                fftw_complex *fftw_out_b;
 
-                fftw_plan plan_forward_E;
-                fftw_plan plan_forward_B;
-                fftw_plan plan_backward_E;
-                fftw_plan plan_backward_B;
+                fftw_plan plan_forward;
+                fftw_plan plan_backward;
 
-                // Arrays for edge sums of 4 field components
-                vec3c edge_Ex;
-                vec3c edge_Ey;
-                vec3c edge_Bx;
-                vec3c edge_By;
+                // Arrays for DFT sum
+                vec3c Ex_omega;
+                vec3c Ey_omega;
+                vec3c Bx_omega;
+                vec3c By_omega;
 
-                // Arrays for the energy densities E_x * B_y and E_y * B_x
-                vec3c energydensity_ExBy;
-                vec3c energydensity_EyBx;
+                // Arrays for propagated fields
+                vec3c Ex_omega_propagated;
+                vec3c Ey_omega_propagated;
+                vec3c Bx_omega_propagated;
+                vec3c By_omega_propagated;
+
+                vec2r shadowgram;
 
                 // Size of arrays
                 int n_x, n_y, n_omegas;
@@ -99,17 +97,22 @@ namespace picongpu
                     n_y = n_y % 2 == 0 ? n_y : n_y - 1;
 
                     // Initialization of storage arrays
-                    edge_Ex = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
-                    edge_Ey = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
-                    edge_Bx = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
-                    edge_By = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
-                    energydensity_ExBy = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
-                    energydensity_EyBx = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    Ex_omega = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    Ey_omega = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    Bx_omega = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    By_omega = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+
+                    Ex_omega_propagated = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    Ey_omega_propagated = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    Bx_omega_propagated = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
+                    By_omega_propagated = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
 
                     tmp_Ex = vec2r(n_x, vec1r(n_y));
                     tmp_Ey = vec2r(n_x, vec1r(n_y));
                     tmp_Bx = vec2r(n_x, vec1r(n_y));
                     tmp_By = vec2r(n_x, vec1r(n_y));
+
+                    shadowgram = vec2r(n_x, vec1r(n_y));
 
                     init_fftw();
                 }
@@ -118,14 +121,10 @@ namespace picongpu
                 // To be called at the last time step when the shadowgraphy time integration ends
                 ~Helper()
                 {
-                    fftw_free(fftw_in_f_E);
-                    fftw_free(fftw_out_f_E);
-                    fftw_free(fftw_in_f_B);
-                    fftw_free(fftw_out_f_B);
-                    fftw_free(fftw_in_b_E);
-                    fftw_free(fftw_out_b_E);
-                    fftw_free(fftw_in_b_B);
-                    fftw_free(fftw_out_b_B);
+                    fftw_free(fftw_in_f);
+                    fftw_free(fftw_out_f);
+                    fftw_free(fftw_in_b);
+                    fftw_free(fftw_out_b);
                 }
 
                 // Store fields in helper class with proper resolution
@@ -185,196 +184,153 @@ namespace picongpu
                         }
                     }
                 }
-                
-                // Energy flux calculation loop
-                void calculate_energy_flux(int t, bool is_exby)
-                /**
-                t: current time step, from 0 to (nt-1)
-                is_exby: bool, true if first part of poynting vector, false if second part of poynting vector
-                **/
+
+                void calculate_dft(int t)
                 {
-                    // Transversal FFT of E and B fields to get k_x and k_y components
-                    // Use fftw plan for fft
-                    // E(x, y, zs, tn), B(x, y, zs, tn) -> E(kx, ky, zs, tn), B(kx, ky, zs, tn)
+                    float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
+
                     for(int i = 0; i < n_x; i++){
                         for(int j = 0; j < n_y; j++){
-                            int index = i + j * n_x;
+                            for(int o = 0; o < n_omegas; o++){
+                                float_64 const omega_SI = fourierhelper::omega(o);
 
-                            // Real values
-                            if(is_exby){
-                                fftw_in_f_E[index][0] = tmp_Ex[i][j];
-                                fftw_in_f_B[index][0] = tmp_By[i][j];
-                            } else {
-                                fftw_in_f_E[index][0] = tmp_Ey[i][j];
-                                fftw_in_f_B[index][0] = tmp_Bx[i][j];
+                                complex_64 const phase = complex_64(0, -omega_SI * t_SI);
+                                complex_64 const exponential = math::exp(phase);
+
+                                Ex_omega[i][j][o] += tmp_Ex[i][j] * exponential;
+                                Ey_omega[i][j][o] += tmp_Ey[i][j] * exponential;
+                                Bx_omega[i][j][o] += tmp_Bx[i][j] * exponential;
+                                By_omega[i][j][o] += tmp_By[i][j] * exponential;
                             }
-
-                            // Imaginary values
-                            fftw_in_f_E[index][1] = 0.0;
-                            fftw_in_f_B[index][1] = 0.0;
                         }
                     }
+                }
 
-                    fftw_execute(plan_forward_E);
-                    fftw_execute(plan_forward_B);
+                void propagate_fields()
+                {
+                    for(int fieldindex = 0; fieldindex < 4; fieldindex++){
+                        for(int o = 0; o < n_omegas; o++){
+                            
+                            float_64 const omega_SI = fourierhelper::omega(o);
 
-                    vec2c E_k(n_x, vec1c(n_y));
-                    vec2c B_k(n_x, vec1c(n_y));
-
-                    for(int i = 0; i < n_x; i++){
-                        // Put origin into center of array with this, necessary due to FFT
-                        int const i_ffs = (i + n_x/2) % n_x;
-
-                        for(int j = 0; j < n_y; j++){
-                            // Put origin into center of array with this, necessary due to FFT
-                            int const j_ffs = (j + n_y / 2) % n_y;
-
-                            int const index = i + j * n_x;
-                            // @TODO write this in nice
-                            E_k[i_ffs][j_ffs] = complex_64(fftw_out_f_E[index][0], fftw_out_f_E[index][1]);
-                            B_k[i_ffs][j_ffs] = complex_64(fftw_out_f_B[index][0], fftw_out_f_B[index][1]);
-                        }
-                    }
-
-                    // Loop through all omega
-                    // E(kx, ky, zs, tn), B(kx, ky, zs, tn) -> E(kx, ky, zs, omega), B(kx, ky, zs, omega)
-                    for(int o = 0; o < n_omegas; o++){
-                        // Omega for time domain Fourier trafo
-                        //float_64 omega = 2.0 * pmacc::math::Pi<float_64>::value  * (o - nt / 2.0) / nt / dt;
-                        float_64 const omega_SI = fourierhelper::omega(o);
-
-                        //printf("185 %e - %e - %e - %e \n", pmacc::math::Pi<float_64>::value, o, nt, dt);
-
-                        // Apply masks and propagate
-                        // E(kx, ky, zs, omega), B(kx, ky, zs, omega) -> M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky omega)*B(kx, ky, zo, omega)
-                        for(int i = 0; i < n_x; i++){
-                            for(int j = 0; j < n_y; j++){
+                            // put field into fftw array
+                            for(int i = 0; i < n_x; i++){
+                                for(int j = 0; j < n_y; j++){
                                 int const index = i + j * n_x;
 
-                                float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
-                                //float_64 const propagator = float_64(params::delta_z) / float_64(SPEED_OF_LIGHT);
-                                float_64 const sqrt1 = 1 / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
-                                //printf("c %e \n", SPEED_OF_LIGHT_SI)
-                                //printf("1 %e \n", sqrt1);
-                                float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(j) / (omega_SI * omega_SI);
-                                //printf("2 %e \n", sqrt2);
-                                float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j) / (omega_SI * omega_SI);
-                                //printf("3 %e \n", sqrt3);
-                                
-                                // für 3 und 4
-                                //float_64 const propagator = float_64(params::delta_z) * (picongpu::math::sqrt(sqrt1 - sqrt2 - sqrt3) - omega_SI / float_64(picongpu::SI::DELTA_T_SI));
-                                // für 5 und 6 und 7
+                                if(fieldindex == 0){
+                                    fftw_in_f[index][0] = Ex_omega[i][j][o].get_real();
+                                    fftw_in_f[index][1] = Ex_omega[i][j][o].get_imag();
+                                } else if(fieldindex == 1){
+                                    fftw_in_f[index][0] = Ey_omega[i][j][o].get_real();
+                                    fftw_in_f[index][1] = Ey_omega[i][j][o].get_imag();
+                                } else if(fieldindex == 2){
+                                    fftw_in_f[index][0] = Bx_omega[i][j][o].get_real();
+                                    fftw_in_f[index][1] = Bx_omega[i][j][o].get_imag();
+                                } else if(fieldindex == 3){
+                                    fftw_in_f[index][0] = By_omega[i][j][o].get_real();
+                                    fftw_in_f[index][1] = By_omega[i][j][o].get_imag();
+                                }
 
-                                // sqrtContent equal to kz^2 / omega^2
-                                float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
-
-                                if (sqrtContent >= 0.0){
-                                    float_64 const propagator = float_64(params::delta_z) * (0.0 * picongpu::math::sqrt(sqrtContent) - 1.0 / float_64(SI::SPEED_OF_LIGHT_SI));
-                                    //float_64 const propagator = 0 * float_64(params::delta_z) / SI::SPEED_OF_LIGHT_SI;
-
-                                    complex_64 const phase_e = complex_64(0, +omega_SI * (propagator - t_SI));
-                                    complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
-
-                                    complex_64 const phase_b = complex_64(0, +omega_SI * (-propagator + t_SI));
-                                    complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
-
-                                    fftw_in_b_E[index][0] = tmp_e.get_real();
-                                    fftw_in_b_E[index][1] = tmp_e.get_imag();
-                                    fftw_in_b_B[index][0] = tmp_b.get_real();
-                                    fftw_in_b_B[index][1] = tmp_b.get_imag();
-                                } else {
-                                    fftw_in_b_E[index][0] = 0.0;
-                                    fftw_in_b_E[index][1] = 0.0;
-                                    fftw_in_b_B[index][0] = 0.0;
-                                    fftw_in_b_B[index][1] = 0.0;
                                 }
                             }
-                        }
 
-                        // iFFT back into position space
-                        // Use fftw plan ifft
-                        // M(kx, ky, omega)*E(kx, ky, zo, omega), M(kx, ky, omega)*B(kx, ky, zo, omega) -> E'(x, y, zo, omega), B'(x, y, zo, omega) 
-                        fftw_execute(plan_backward_E);
-                        fftw_execute(plan_backward_B);
+                            fftw_execute(plan_forward);
 
-                        for(int i = 0; i < n_x; i++){
-                            for(int j = 0; j < n_y; j++){
-                                int index = i + j * n_x;
+                            // put field into fftw array
+                            for(int i = 0; i < n_x; i++){
+                                // Put origin into center of array with this, necessary due to FFT
+                                int const i_ffs = (i + n_x/2) % n_x;
 
-                                complex_64 const E = complex_64(fftw_out_b_E[index][0], fftw_out_b_E[index][1]);
-                                complex_64 const B = complex_64(fftw_out_b_B[index][0], fftw_out_b_B[index][1]);
+                                for(int j = 0; j < n_y; j++){
+                                    int const index = i + j * n_x;
+                                    
+                                    float_64 const sqrt1 = (omega_SI * omega_SI) / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
+                                    float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(j);
+                                    float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
+                                    float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
 
+                                    if(sqrtContent >= 0.0)
+                                    {
+                                        // Put origin into center of array with this, necessary due to FFT
+                                        int const j_ffs = (j + n_y / 2) % n_y;
+                                        int const index_ffs = i_ffs + j_ffs * n_x;
 
-                                if (is_exby)
-                                { 
-                                    // Sum energy fluxes
-                                    // EF(x, y, zo, omega, tn)
-                                    // = E'(x, y, zo, omega) * B'(x, y, zo, omega)
-                                    // + E'(x, y, zo, omega) * Bsum(x, y, zo, omega, tn-1)
-                                    // + Esum(x, y, zo, omega, tn-1) * B'(x, y, zo, omega)
-                                    // + EF(x, y, zo, omega, tn-1)
-                                    energydensity_ExBy[i][j][o] += E * B + edge_Ex[i][j][o] * B + E * edge_By[i][j][o];
+                                        complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
-                                    // Only do this if it's not the last step of the shadowgraphy integration:
-                                    if (t < ( nt - 1 )) {
-                                        // Calculate E edge sum
-                                        // Esum(x, y, zo, omega, tn) = Esum(x, y, zo, omega, tn-1) + E'(x, y, zo, omega)
-                                        edge_Ex[i][j][o] += E;
-                                        //std::cout << "232 " << edge_Ex[i][j][o].get_real() << ", "<< edge_Ex[i][j][o].get_imag() << std::endl;
+                                        float_64 const phase = - 0.0 * float_64(params::delta_z) * (math::sqrt(sqrtContent) - omega_SI / float_64(SI::SPEED_OF_LIGHT_SI));
+                                        complex_64 const propagator = math::exp(complex_64(0, phase));
+                                        complex_64 const propagated_field = field * propagator;
 
-                                        // Calculate B edge sum
-                                        // Bsum(x, y, zo, omega, tn) = Bsum(x, y, zo, omega, tn-1) + B'(x, y, zo, omega)
-                                        edge_By[i][j][o] += B;
+                                        fftw_in_b[index][0] = propagated_field.get_real();
+                                        fftw_in_b[index][1] = propagated_field.get_imag();
+                                    } else {
+                                        fftw_in_b[index][0] = 0.0;
+                                        fftw_in_b[index][1] = 0.0;
                                     }
-                                    // else if this is the last step of the loop: @TODO
-                                        // Free Esum and Bsum from memory ?
-                                } else {
-                                    // Sum energy fluxes
-                                    // EF(x, y, zo, omega, tn)
-                                    // = E'(x, y, zo, omega) * B'(x, y, zo, omega)
-                                    // + E'(x, y, zo, omega) * Bsum(x, y, zo, omega, tn-1)
-                                    // + Esum(x, y, zo, omega, tn-1) * B'(x, y, zo, omega)
-                                    // + EF(x, y, zo, omega, tn-1)
-                                    energydensity_EyBx[i][j][o] += E * B + edge_Ey[i][j][o] * B + E * edge_Bx[i][j][o];
-                                    //std::cout << "248 " << energydensity_EyBx[i][j][o].get_real() << ", "<< energydensity_EyBx[i][j][o].get_imag() << std::endl;
+                                }
+                            }
 
-                                    // Only do this if it's not the last step of the shadowgraphy integration: 
-                                    if (t < ( nt - 1 )) {
-                                        // Calculate E edge sum
-                                        // Esum(x, y, zo, omega, tn) = Esum(x, y, zo, omega, tn-1) + E'(x, y, zo, omega)
-                                        edge_Ey[i][j][o] += E;
+                            fftw_execute(plan_backward);
 
-                                        // Calculate B edge sum
-                                        // Bsum(x, y, zo, omega, tn) = Bsum(x, y, zo, omega, tn-1) + B'(x, y, zo, omega)
-                                        edge_Bx[i][j][o] += B;
-                                    }
-                                    // else if this is the last step of the loop: @TODO
-                                        // Free Esum and Bsum from memory ?
+                            // yoink fields from fftw array
+                            for(int i = 0; i < n_x; i++){
+                            // Put origin into center of array with this, necessary due to FFT
+                            int const i_ffs = (i + n_x/2) % n_x;
 
+                                for(int j = 0; j < n_y; j++){
+                                // Put origin into center of array with this, necessary due to FFT
+                                int const j_ffs = (j + n_y / 2) % n_y;
+                                //int const index_ffs = i_ffs + j_ffs * n_x;
+                                int const index_ffs = i + j * n_x; //@TODO
+
+                                if(fieldindex == 0){
+                                    Ex_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                } else if(fieldindex == 1){
+                                    Ey_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                } else if(fieldindex == 2){
+                                    Bx_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                } else if(fieldindex == 3){
+                                    By_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                }
                                 }
                             }
                         }
                     }
                 }
 
-                // Calculate the shadowgram after the independent energy fluxes have been calculated for all time steps
-                vec2r get_shadowgram() // @TODO: make this return a pointer
+                void calculate_shadowgram()
                 {
-                    vec2r shadowgram(n_x, vec1r(n_y));
-
                     // Loop through all omega
-                    for(int i = 0; i < n_x; i++){
-                        for(int j = 0; j < n_y; j++){
-                            for(int o = 0; o < n_omegas; ++o)
-                            {
-                                // shadowgram(x, y) += real(EF1(x, y, zo, omega, tmax)) - real(EF2(x, y, zo, omega, tmax))
-                                shadowgram[i][j] += (energydensity_ExBy[i][j][o] - energydensity_EyBx[i][j][o]).get_real() * fourierhelper::get_omega_step() / (nt * nt);
+                    for(int t = 0; t < nt; ++t){
+                        float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
+
+                        for(int o1 = 0; o1 < n_omegas; ++o1){
+                            float_64 const omega1_SI = fourierhelper::omega(o1);
+
+                            for(int o2 = 0; o2 < n_omegas; ++o2){
+                                float_64 const omega2_SI = fourierhelper::omega(o2);
+                                
+                                complex_64 const phase = complex_64(0, t_SI * (omega1_SI + omega2_SI));
+                                complex_64 const exponential = math::exp(phase);
+                                for(int i = 0; i < n_x; i++){
+                                    for(int j = 0; j < n_y; j++){
+                                        complex_64 const pv = Ex_omega_propagated[i][j][o1] * By_omega_propagated[i][j][o2] 
+                                                              -  Ey_omega_propagated[i][j][o1] * Bx_omega_propagated[i][j][o2];
+                                        
+                                        shadowgram[i][j] += (pv * exponential).get_real();
+                                    } 
+                                }
                             }
                         }
                     }
+                }
 
+                vec2r get_shadowgram()
+                {
                     return shadowgram;
                 }
+
 
                 int get_n_x(){
                     return n_x;
@@ -390,27 +346,19 @@ namespace picongpu
                 {
                     std::cout << "init fftw" << std::endl;
                     // Input and output arrays for the FFT transforms
-                    fftw_in_f_E = fftw_alloc_complex(n_x * n_y);
-                    fftw_out_f_E = fftw_alloc_complex(n_x * n_y);
-                    fftw_in_f_B = fftw_alloc_complex(n_x * n_y);
-                    fftw_out_f_B = fftw_alloc_complex(n_x * n_y);
+                    fftw_in_f = fftw_alloc_complex(n_x * n_y);
+                    fftw_out_f = fftw_alloc_complex(n_x * n_y);
 
-                    fftw_in_b_E = fftw_alloc_complex(n_x * n_y);
-                    fftw_out_b_E = fftw_alloc_complex(n_x * n_y);
-                    fftw_in_b_B = fftw_alloc_complex(n_x * n_y);
-                    fftw_out_b_B = fftw_alloc_complex(n_x * n_y);
+                    fftw_in_b = fftw_alloc_complex(n_x * n_y);
+                    fftw_out_b = fftw_alloc_complex(n_x * n_y);
 
                     // Create fftw plan for transverse fft for real to complex
                     // Many ffts will be performed -> use FFTW_MEASURE as flag
-                    plan_forward_E = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_E, fftw_out_f_E, FFTW_FORWARD, FFTW_MEASURE);
-                    plan_forward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_B, fftw_out_f_B, FFTW_BACKWARD, FFTW_MEASURE);
-                    //plan_forward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_f_B, fftw_out_f_B, FFTW_FORWARD, FFTW_MEASURE);
+                    plan_forward = fftw_plan_dft_2d(n_y, n_x, fftw_in_f, fftw_out_f, FFTW_FORWARD, FFTW_MEASURE);
 
                     // Create fftw plan for transverse ifft for complex to complex
-                    // Even more iffts will be performed -> use FFTW_MEASURE as flag
-                    plan_backward_E = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_E, fftw_out_b_E, FFTW_BACKWARD, FFTW_MEASURE);
-                    plan_backward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_B, fftw_out_b_B, FFTW_FORWARD, FFTW_MEASURE);
-                    //plan_backward_B = fftw_plan_dft_2d(n_y, n_x, fftw_in_b_B, fftw_out_b_B, FFTW_BACKWARD, FFTW_MEASURE);
+                    // Even more iffts will be performed -> use FFTW_MEASURE as flag (this is a lie)
+                    plan_backward = fftw_plan_dft_2d(n_y, n_x, fftw_in_b, fftw_out_b, FFTW_BACKWARD, FFTW_MEASURE);
                 }
 
             }; // class Helper
