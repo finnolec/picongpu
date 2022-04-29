@@ -4,7 +4,7 @@
 #include <pmacc/algorithms/math/defines/pi.hpp>
 #include "picongpu/simulation_defines.hpp"
 #include <cmath> // what
-
+#include "pmacc/assert.hpp"
 #include <stdio.h>
 
 namespace picongpu
@@ -64,12 +64,13 @@ namespace picongpu
                 float dt;
                 int nt;
 
+                bool isSlidingWindowEnabled;
+
             public:
                 // Constructor of the shadowgraphy helper class
                 // To be called at the first time step when the shadowgraphy time integration starts
                 Helper(pmacc::math::Size_t<simDim> globalGridSize):
-                    n_x(globalGridSize.x() / params::x_res - 2),
-                    n_y(globalGridSize.y() / params::y_res - 2)
+                    n_x(globalGridSize.x() / params::x_res - 2)
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
@@ -79,6 +80,23 @@ namespace picongpu
                     nt = params::t_n / params::t_res;
 
                     std::cout << "initialized with "<< n_x << ", " << n_y << std::endl;
+
+                    // This is currently not allowed to change during plugin run!
+                    isSlidingWindowEnabled = MovingWindow::getInstance().isEnabled();
+
+                    if(isSlidingWindowEnabled){
+                        // movingWindowCorrection makes the resulting shadowgram smaller if the moving Window is enabled
+                        // The resulting loss in the size of the shadowgram comes from the duration of the time integration
+                        float const movingWindowCorrection = nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
+                        n_y = (globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / params::y_res - 2;
+                        PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr");
+                    } else {
+                        n_y = globalGridSize.y() / params::y_res - 2;
+                    }
+
+                    // Make sure spacial grid is even
+                    n_x = n_x % 2 == 0 ? n_x : n_x - 1;
+                    n_y = n_y % 2 == 0 ? n_y : n_y - 1;
 
                     // Initialization of storage arrays
                     edge_Ex = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
@@ -112,31 +130,57 @@ namespace picongpu
 
                 // Store fields in helper class with proper resolution
                 template<typename F>
-                void store_field(pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
+                void store_field(int t, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
                 {
-                    //std::cout << "loop with "<< n_x << ", " << n_y << std::endl;
-                    //std::cout << "loop" << std::endl;
                     for(int i = 0; i < n_x; ++i){
+                        int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
-                            //std::cout << "j: " << j << ",";
-                            int const grid_i = i * params::x_res;
-                            int const grid_j = j * params::y_res;
+                            if(isSlidingWindowEnabled){
+                                //int const grid_j = j * params::y_res;
+                                float const gridPos = float(j * params::y_res) + SI::SPEED_OF_LIGHT_SI * (nt - t - 1) * dt / (SI::CELL_HEIGHT_SI);
+                                float const wr = math::fmod(gridPos, 1.0);
+                                float const wl = 1.0 - wr;
+                                int const grid_j = math::floor(gridPos);
 
-                            if(F::getName() == "E"){
-                                //tmp_Ex[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
-                                //printf("%e \n", tmp_Ex);
-                                //tmp_Ey[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
-                                tmp_Ex[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).x(); 
-                                //printf("%e \n", tmp_Ex);
-                                tmp_Ey[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                if(F::getName() == "E"){
+                                    float_64 const Ex0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Ex1 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
+                                    float_64 const Ex2 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
+                                    tmp_Ex[i][j] = ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
+                                    float_64 const Ey0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const Ey1 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
+                                    float_64 const Ey2 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
+                                    tmp_Ey[i][j] = ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
+                                } else {
+                                    float_64 const Bx10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx11 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx12 = (*(fieldBuffer1->origin()(grid_i, grid_j+2))).x();
+                                    float_64 const Bx20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx21 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx22 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
+                                    tmp_Bx[i][j] = ( wl * (Bx10 + Bx20) + Bx11 + Bx21 + wr * (Bx12 + Bx22) ) / 4.0;
+                                    float_64 const By10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
+                                    float_64 const By11 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).x();
+                                    float_64 const By12 = (*(fieldBuffer1->origin()(grid_i+2, grid_j))).x();
+                                    float_64 const By20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const By21 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
+                                    float_64 const By22 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
+                                    tmp_By[i][j] = ( wl * (By10 + By20) + By11 + By21 + wr * (By12 + By22) ) / 4.0;
+                                }
                             } else {
-                                //tmp_Bx[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
-                                //                + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
-                                //tmp_By[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
-                                //                + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
-                                tmp_Bx[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                tmp_By[i][j] = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                int const grid_j = j * params::y_res;
+
+                                // fix yee offset
+                                if(F::getName() == "E"){
+                                    tmp_Ex[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
+                                    tmp_Ey[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
+                                } else {
+                                    tmp_Bx[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
+                                                    + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
+                                    tmp_By[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
+                                                    + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
+                                }
                             }
                         }
                     }
@@ -231,7 +275,7 @@ namespace picongpu
                                     complex_64 const phase_e = complex_64(0, +omega_SI * (propagator - t_SI));
                                     complex_64 const tmp_e = complex_64(masks::mask(i, j, o)) * E_k[i][j] * math::exp(phase_e);
 
-                                    complex_64 const phase_b = complex_64(0, +omega_SI * (propagator + t_SI));
+                                    complex_64 const phase_b = complex_64(0, +omega_SI * (-propagator + t_SI));
                                     complex_64 const tmp_b = complex_64(masks::mask(i, j, o)) * B_k[i][j] * math::exp(phase_b);
 
                                     fftw_in_b_E[index][0] = tmp_e.get_real();

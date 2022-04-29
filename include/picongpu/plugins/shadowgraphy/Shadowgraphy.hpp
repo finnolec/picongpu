@@ -284,7 +284,7 @@ namespace picongpu
                                                         .cartBuffer()
                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint);
+                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint, localStep);
 
                             auto field_coreBorderB = dc.get<FieldB>(FieldB::getName(), true)
                                                         ->getGridBuffer()
@@ -292,7 +292,7 @@ namespace picongpu
                                                         .cartBuffer()
                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint);
+                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, localStep);
 
                             helper->calculate_energy_flux(localStep, true);
                             helper->calculate_energy_flux(localStep, false);
@@ -313,7 +313,7 @@ namespace picongpu
                 }
 
                 template<typename Field, typename TField>
-                void storeSlice(const TField& field, int nAxis, float slicePoint)
+                void storeSlice(const TField& field, int nAxis, float slicePoint, int localStep)
                 {
                     namespace vec = pmacc::math;
 
@@ -360,7 +360,7 @@ namespace picongpu
                     if(!gather.root())
                         return;
 
-                    /*
+                    
                     // SECOND SLICE OF FIELD FOR YEE OFFSET
                     int globalPlane2 = globalGridSize[nAxis] * slicePoint + 1;
                     int localPlane2 = globalPlane2 % field.size()[nAxis];
@@ -399,11 +399,11 @@ namespace picongpu
                     gather(globalBuffer2, hBuffer2, nAxis);
                     if(!gather.root())
                         return;
-                    */
+                    
 
                     if(isMaster)
                     {
-                        helper->store_field<Field>(&globalBuffer1, &globalBuffer1);
+                        helper->store_field<Field>(localStep, &globalBuffer1, &globalBuffer2);
                     }
                     //std::ofstream file(filename.c_str());
                     //file << globalBuffer;
