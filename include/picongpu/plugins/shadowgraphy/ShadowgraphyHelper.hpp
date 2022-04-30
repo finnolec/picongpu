@@ -56,7 +56,8 @@ namespace picongpu
                 vec2r shadowgram;
 
                 // Size of arrays
-                int n_x, n_y, n_omegas;
+                int n_x, n_y;
+                int omega_min_index, omega_max_index, n_omegas;
 
                 // Variables for omega calculations @TODO some initializations and bla
                 float dt;
@@ -72,12 +73,13 @@ namespace picongpu
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
-                    n_omegas = params::omega_n;
+                    // n_omegas = params::omega_n;
+                    omega_min_index = fourierhelper::get_omega_min_index();
+                    omega_max_index = fourierhelper::get_omega_max_index();
+                    n_omegas = omega_max_index - omega_min_index + 1;
                     
                     dt = params::t_res * SI::DELTA_T_SI;
                     nt = params::t_n / params::t_res;
-
-                    std::cout << "initialized with "<< n_x << ", " << n_y << std::endl;
 
                     // This is currently not allowed to change during plugin run!
                     isSlidingWindowEnabled = MovingWindow::getInstance().isEnabled();
@@ -88,6 +90,7 @@ namespace picongpu
                         float const movingWindowCorrection = nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
                         n_y = (globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / params::y_res - 2;
                         PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr");
+                        printf("moving window enabled");
                     } else {
                         n_y = globalGridSize.y() / params::y_res - 2;
                     }
@@ -95,6 +98,8 @@ namespace picongpu
                     // Make sure spacial grid is even
                     n_x = n_x % 2 == 0 ? n_x : n_x - 1;
                     n_y = n_y % 2 == 0 ? n_y : n_y - 1;
+
+                    std::cout << "initialized with "<< n_x << ", " << n_y << std::endl;
 
                     // Initialization of storage arrays
                     Ex_omega = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
@@ -114,6 +119,8 @@ namespace picongpu
 
                     shadowgram = vec2r(n_x, vec1r(n_y));
 
+                    printf("min lambda= %e, max lambda = %e \n", params::min_lambda, params::max_lambda);
+
                     init_fftw();
                 }
 
@@ -131,6 +138,7 @@ namespace picongpu
                 template<typename F>
                 void store_field(int t, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
                 {
+                    
                     for(int i = 0; i < n_x; ++i){
                         int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
@@ -183,20 +191,21 @@ namespace picongpu
                             }
                         }
                     }
+                    
                 }
 
                 void calculate_dft(int t)
                 {
                     float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
-                    for(int i = 0; i < n_x; i++){
-                        for(int j = 0; j < n_y; j++){
-                            for(int o = 0; o < n_omegas; o++){
-                                float_64 const omega_SI = fourierhelper::omega(o);
+                    for(int o = 0; o < n_omegas; ++o){
+                        float_64 const omega_SI = fourierhelper::omega(o);
 
-                                complex_64 const phase = complex_64(0, -omega_SI * t_SI);
-                                complex_64 const exponential = math::exp(phase);
+                        complex_64 const phase = complex_64(0, -omega_SI * t_SI);
+                        complex_64 const exponential = math::exp(phase);
 
+                        for(int i = 0; i < n_x; ++i){
+                            for(int j = 0; j < n_y; ++j){
                                 Ex_omega[i][j][o] += tmp_Ex[i][j] * exponential;
                                 Ey_omega[i][j][o] += tmp_Ey[i][j] * exponential;
                                 Bx_omega[i][j][o] += tmp_Bx[i][j] * exponential;
@@ -209,13 +218,13 @@ namespace picongpu
                 void propagate_fields()
                 {
                     for(int fieldindex = 0; fieldindex < 4; fieldindex++){
-                        for(int o = 0; o < n_omegas; o++){
+                        for(int o = 0; o < n_omegas; ++o){
                             
                             float_64 const omega_SI = fourierhelper::omega(o);
 
                             // put field into fftw array
-                            for(int i = 0; i < n_x; i++){
-                                for(int j = 0; j < n_y; j++){
+                            for(int i = 0; i < n_x; ++i){
+                                for(int j = 0; j < n_y; ++j){
                                 int const index = i + j * n_x;
 
                                 if(fieldindex == 0){
@@ -238,60 +247,67 @@ namespace picongpu
                             fftw_execute(plan_forward);
 
                             // put field into fftw array
-                            for(int i = 0; i < n_x; i++){
+                            for(int i = 0; i < n_x; ++i){
                                 // Put origin into center of array with this, necessary due to FFT
                                 int const i_ffs = (i + n_x/2) % n_x;
 
-                                for(int j = 0; j < n_y; j++){
+                                for(int j = 0; j < n_y; ++j){
                                     int const index = i + j * n_x;
+                                    int const j_ffs = (j + n_y / 2) % n_y;
+                                    
                                     
                                     float_64 const sqrt1 = (omega_SI * omega_SI) / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
-                                    float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(j);
+                                    float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(i);
                                     float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
                                     float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
-
                                     if(sqrtContent >= 0.0)
+                                    //if(true)
                                     {
                                         // Put origin into center of array with this, necessary due to FFT
-                                        int const j_ffs = (j + n_y / 2) % n_y;
+                                        //int const j_ffs = (j + n_y / 2) % n_y;
                                         int const index_ffs = i_ffs + j_ffs * n_x;
 
                                         complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
-                                        float_64 const phase = - 0.0 * float_64(params::delta_z) * (math::sqrt(sqrtContent) - omega_SI / float_64(SI::SPEED_OF_LIGHT_SI));
+                                        float_64 const phase = - 0.0 * float_64(params::delta_z) * 
+                                                ( math::sqrt(sqrtContent) - omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
-                                        complex_64 const propagated_field = field * propagator;
+                                        //complex_64 const propagated_field = field * propagator;
+                                        complex_64 const propagated_field = field;
 
                                         fftw_in_b[index][0] = propagated_field.get_real();
                                         fftw_in_b[index][1] = propagated_field.get_imag();
                                     } else {
                                         fftw_in_b[index][0] = 0.0;
                                         fftw_in_b[index][1] = 0.0;
-                                    }
+                                    } 
+                                    //int const index_ffs = i_ffs + j_ffs * n_x;
+                                    //fftw_in_b[index][0] = fftw_out_f[index_ffs][0];
+                                    //fftw_in_b[index][1] = fftw_out_f[index_ffs][1];
                                 }
                             }
 
                             fftw_execute(plan_backward);
 
                             // yoink fields from fftw array
-                            for(int i = 0; i < n_x; i++){
-                            // Put origin into center of array with this, necessary due to FFT
-                            int const i_ffs = (i + n_x/2) % n_x;
+                            for(int i = 0; i < n_x; ++i){
+                                // Put origin into center of array with this, necessary due to FFT
+                                int const i_ffs = (i + n_x/2) % n_x;
 
-                                for(int j = 0; j < n_y; j++){
+                                for(int j = 0; j < n_y; ++j){
                                 // Put origin into center of array with this, necessary due to FFT
                                 int const j_ffs = (j + n_y / 2) % n_y;
                                 //int const index_ffs = i_ffs + j_ffs * n_x;
-                                int const index_ffs = i + j * n_x; //@TODO
+                                int const index = i + j * n_x; //@TODO
 
                                 if(fieldindex == 0){
-                                    Ex_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                    Ex_omega_propagated[i][j][o] = complex_64(fftw_out_b[index][0], fftw_out_b[index][1]);
                                 } else if(fieldindex == 1){
-                                    Ey_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                    Ey_omega_propagated[i][j][o] = complex_64(fftw_out_b[index][0], fftw_out_b[index][1]);
                                 } else if(fieldindex == 2){
-                                    Bx_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                    Bx_omega_propagated[i][j][o] = complex_64(fftw_out_b[index][0], fftw_out_b[index][1]);
                                 } else if(fieldindex == 3){
-                                    By_omega_propagated[i][j][o] = complex_64(fftw_out_b[index_ffs][0], fftw_out_b[index_ffs][1]);
+                                    By_omega_propagated[i][j][o] = complex_64(fftw_out_b[index][0], fftw_out_b[index][1]);
                                 }
                                 }
                             }
@@ -313,8 +329,8 @@ namespace picongpu
                                 
                                 complex_64 const phase = complex_64(0, t_SI * (omega1_SI + omega2_SI));
                                 complex_64 const exponential = math::exp(phase);
-                                for(int i = 0; i < n_x; i++){
-                                    for(int j = 0; j < n_y; j++){
+                                for(int i = 0; i < n_x; ++i){
+                                    for(int j = 0; j < n_y; ++j){
                                         complex_64 const pv = Ex_omega_propagated[i][j][o1] * By_omega_propagated[i][j][o2] 
                                                               -  Ey_omega_propagated[i][j][o1] * Bx_omega_propagated[i][j][o2];
                                         

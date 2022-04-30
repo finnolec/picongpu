@@ -45,16 +45,31 @@ namespace picongpu
 
                 // Values for frequency filter to extract probe laser better in m
                 // Make sure to respect the time bandwidth limit
-                constexpr float_64 min_lambda = 660e-9 - 0.0*100e-9;
-                constexpr float_64 max_lambda = 840e-9 + 0.0*100e-9;
+                //constexpr float_64 min_lambda = 660e-9 - 0.0*100e-9;
+                //constexpr float_64 max_lambda = 840e-9 + 0.0*100e-9;
 
                 // There is a sinusoidal slope from min_lambda - d_lambda_wf to min_lambda and from max_lambda to max_lambda + d_lambda_wf
-                constexpr float_64 d_lambda_wf = 100e-9;
+                //constexpr float_64 d_lambda_wf = 100e-9;
+
+                constexpr float_64 probe_wavelength = 750e-9;
+                constexpr float_64 pulse_duration = 12e-15 / 2.0; //FWHM
+                constexpr float_64 timebandwidthproduct = 0.441; //0.441 for Gauss, 0.315 for sech2
+
+                constexpr float_64 delta_lambda = (probe_wavelength * probe_wavelength / SI::SPEED_OF_LIGHT_SI) * timebandwidthproduct / pulse_duration;
+
+                constexpr float_64 ndl = 3.0; // You can use ndl = 1 if you are certain that there is no redshift etc
+
+                constexpr float_64 min_lambda = probe_wavelength - ndl * delta_lambda;
+                constexpr float_64 max_lambda = probe_wavelength + ndl * delta_lambda;
+                
+                constexpr float_64 ndl_wf = 1.0;
+                constexpr float_64 d_lambda_wf = ndl_wf * delta_lambda;
             }
 
 
             namespace fourierhelper
             {   
+                /*
                 HINLINE float_64 omega(int i){
                     //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
                     //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
@@ -65,11 +80,11 @@ namespace picongpu
                     float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
                     
                     //return omega_min + i * omega_step;
-                    /**if(i < params::omega_n / 2){
-                        return -omega_max + i * omega_step;
-                    } else {
-                        return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
-                    }**/
+                    //if(i < params::omega_n / 2){
+                    //    return -omega_max + i * omega_step;
+                    //} else {
+                    //    return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
+                    //}
                     return omega_min + i * omega_step;
                 }
 
@@ -81,13 +96,31 @@ namespace picongpu
                     return (omega_max - omega_min) / (float_64(params::omega_n - 1));
 
                 }
+                */        
 
-                /*
-                HINLINE float_64 omega1(int i){
+                
+                HINLINE int get_omega_min_index(){
+                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+
+                    float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
+                    int const actual_n = params::t_n / params::t_res;
+                    return math::floor((actual_step * omega_min) / (2 * math::PI) + actual_n / 2.0);
+                }
+
+                HINLINE int get_omega_max_index(){
+                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+
+                    float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
+                    int const actual_n = params::t_n / params::t_res;
+                    return math::ceil((actual_step * omega_max) / (2 * math::PI) + actual_n / 2.0);
+                }        
+
+                
+                HINLINE float_64 omega(int i){
                     //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
                     //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
-                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    //float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                    //float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
                     
                     // -1 if you want to include omega_max
                     // float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
@@ -98,17 +131,24 @@ namespace picongpu
                     //} else {
                     //    return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
                     //}
-                    return 2 * PI * float_64(i - params::omega_n) / float_64(params::omega_n) / (params::t_res * SI::DELTA_T_SI);
-                }*/
+                    int const actual_n = params::t_n / params::t_res;
+                    float const actual_step = params::t_res * SI::DELTA_T_SI;
+                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
+                }
+                
 
                 // kx so that it is the proper kx for FFTs
                 HINLINE float_64 kx(int i){ // @TODO x_n
-                    return 2 * PI  * (i - shadowgraphy::params::x_n / 2.0) / shadowgraphy::params::x_n / shadowgraphy::params::x_res / SI::CELL_WIDTH_SI;
+                    int const actual_n = params::x_n / params::x_res;
+                    float const actual_step = params::x_res * SI::CELL_WIDTH_SI;
+                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
                 }
 
                 // ky so that it is the proper ky for FFTs
                 HINLINE float_64 ky(int i){ // @TODO y_n
-                    return 2 * PI  * (i - shadowgraphy::params::y_n / 2.0) / shadowgraphy::params::y_n / shadowgraphy::params::y_res / SI::CELL_HEIGHT_SI;
+                    int const actual_n = params::y_n / params::y_res;
+                    float const actual_step = params::y_res * SI::CELL_HEIGHT_SI;
+                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
                 }
             }
 
@@ -187,7 +227,7 @@ namespace picongpu
                       * j is integer for j coordinate from 0 to n_y
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    return frequency_filter(o);// * numerical_aperture(i, j, o);
+                    return 1.0;//frequency_filter(o);// * numerical_aperture(i, j, o);
                 }
             }
             // The amount of cells to remove from each (!) side of the simulation box
