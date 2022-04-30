@@ -29,7 +29,6 @@ namespace picongpu
 
                 //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
                 //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
-                constexpr unsigned int omega_n = 256;
 
                 constexpr unsigned int x_n = 128;
                 constexpr unsigned int y_n = 128;
@@ -57,10 +56,10 @@ namespace picongpu
 
                 constexpr float_64 delta_lambda = (probe_wavelength * probe_wavelength / SI::SPEED_OF_LIGHT_SI) * timebandwidthproduct / pulse_duration;
 
-                constexpr float_64 ndl = 3.0; // You can use ndl = 1 if you are certain that there is no redshift etc
+                constexpr float_64 ndl = 1.0; // You can use ndl = 1 if you are certain that there is no redshift etc
 
-                constexpr float_64 min_lambda = probe_wavelength - ndl * delta_lambda;
-                constexpr float_64 max_lambda = probe_wavelength + ndl * delta_lambda;
+                constexpr float_64 min_lambda = probe_wavelength - ndl * delta_lambda / 2.0;
+                constexpr float_64 max_lambda = probe_wavelength + ndl * delta_lambda / 2.0;
                 
                 constexpr float_64 ndl_wf = 1.0;
                 constexpr float_64 d_lambda_wf = ndl_wf * delta_lambda;
@@ -95,8 +94,7 @@ namespace picongpu
                     // -1 if you want to include omega_max
                     return (omega_max - omega_min) / (float_64(params::omega_n - 1));
 
-                }
-                */        
+                }  */ 
 
                 
                 HINLINE int get_omega_min_index(){
@@ -104,7 +102,13 @@ namespace picongpu
 
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = params::t_n / params::t_res;
-                    return math::floor((actual_step * omega_min) / (2 * math::PI) + actual_n / 2.0);
+                    int tmpindex = math::floor(actual_n * ((actual_step * omega_min) / (2.0 * PI) + 0.5));
+                    int retindex = tmpindex > actual_n / 2 + 1 ? tmpindex : actual_n / 2 + 1;
+                    printf("retindex %d \n", retindex);
+                    printf("tmpindex %d \n", tmpindex);
+                    printf("actual n thing %d \n", actual_n / 2 + 1);
+                    return retindex;
+                    //return 0;
                 }
 
                 HINLINE int get_omega_max_index(){
@@ -112,25 +116,14 @@ namespace picongpu
 
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = params::t_n / params::t_res;
-                    return math::ceil((actual_step * omega_max) / (2 * math::PI) + actual_n / 2.0);
+                    int tmpindex = math::ceil(actual_n * ((actual_step * omega_max) / (2.0 * PI) + 0.5));
+                    int retindex =  tmpindex <= actual_n ? tmpindex : actual_n;
+                    return retindex;
+                    //return params::omega_n-1;
                 }        
 
                 
                 HINLINE float_64 omega(int i){
-                    //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
-                    //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
-                    //float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                    //float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
-                    
-                    // -1 if you want to include omega_max
-                    // float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
-                    
-                    //return omega_min + i * omega_step;
-                    //if(i < params::omega_n / 2){
-                    //    return -omega_max + i * omega_step;
-                    //} else {
-                    //    return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
-                    //}
                     int const actual_n = params::t_n / params::t_res;
                     float const actual_step = params::t_res * SI::DELTA_T_SI;
                     return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;

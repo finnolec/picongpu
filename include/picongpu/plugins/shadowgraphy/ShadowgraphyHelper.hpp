@@ -78,6 +78,8 @@ namespace picongpu
                     omega_max_index = fourierhelper::get_omega_max_index();
                     n_omegas = omega_max_index - omega_min_index + 1;
                     
+                    printf("minindex: %d, maxindex: %d, n: %d \n", omega_min_index, omega_max_index, n_omegas);
+
                     dt = params::t_res * SI::DELTA_T_SI;
                     nt = params::t_n / params::t_res;
 
@@ -199,7 +201,7 @@ namespace picongpu
                     float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
                     for(int o = 0; o < n_omegas; ++o){
-                        float_64 const omega_SI = fourierhelper::omega(o);
+                        float_64 const omega_SI = fourierhelper::omega(o + omega_min_index);
 
                         complex_64 const phase = complex_64(0, -omega_SI * t_SI);
                         complex_64 const exponential = math::exp(phase);
@@ -220,7 +222,7 @@ namespace picongpu
                     for(int fieldindex = 0; fieldindex < 4; fieldindex++){
                         for(int o = 0; o < n_omegas; ++o){
                             
-                            float_64 const omega_SI = fourierhelper::omega(o);
+                            float_64 const omega_SI = fourierhelper::omega(o + omega_min_index);
 
                             // put field into fftw array
                             for(int i = 0; i < n_x; ++i){
@@ -260,8 +262,8 @@ namespace picongpu
                                     float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(i);
                                     float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
                                     float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
-                                    if(sqrtContent >= 0.0)
-                                    //if(true)
+                                    //if(sqrtContent >= 0.0)
+                                    if(true)
                                     {
                                         // Put origin into center of array with this, necessary due to FFT
                                         //int const j_ffs = (j + n_y / 2) % n_y;
@@ -322,10 +324,10 @@ namespace picongpu
                         float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
                         for(int o1 = 0; o1 < n_omegas; ++o1){
-                            float_64 const omega1_SI = fourierhelper::omega(o1);
+                            float_64 const omega1_SI = fourierhelper::omega(o1 + omega_min_index);
 
                             for(int o2 = 0; o2 < n_omegas; ++o2){
-                                float_64 const omega2_SI = fourierhelper::omega(o2);
+                                float_64 const omega2_SI = fourierhelper::omega(o2  + omega_min_index);
                                 
                                 complex_64 const phase = complex_64(0, t_SI * (omega1_SI + omega2_SI));
                                 complex_64 const exponential = math::exp(phase);
