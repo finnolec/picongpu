@@ -30,7 +30,7 @@ namespace picongpu
                 //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
                 //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
 
-                constexpr unsigned int x_n = 128;
+                constexpr unsigned int x_n = 64;
                 constexpr unsigned int y_n = 128;
 
                 // Transverse resolution of shadowgram in PIConGPU cell size units
@@ -98,7 +98,7 @@ namespace picongpu
 
                 
                 HINLINE int get_omega_min_index(){
-                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
 
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = params::t_n / params::t_res;
@@ -112,7 +112,7 @@ namespace picongpu
                 }
 
                 HINLINE int get_omega_max_index(){
-                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
 
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = params::t_n / params::t_res;
@@ -202,7 +202,7 @@ namespace picongpu
                 HINLINE float_64 numerical_aperture(int i, int j, int o){
                     float_64 const omega = math::abs(fourierhelper::omega(o));
                     float_64 const kx = fourierhelper::kx(i);
-                    float_64 const ky = fourierhelper::ky(i);
+                    float_64 const ky = fourierhelper::ky(j);
 
                     float_64 const kperpsq = kx * kx + ky * ky;
                     float_64 const k = omega / SI::SPEED_OF_LIGHT_SI;
@@ -220,7 +220,7 @@ namespace picongpu
                       * j is integer for j coordinate from 0 to n_y
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    return 1.0;//frequency_filter(o);// * numerical_aperture(i, j, o);
+                    return frequency_filter(o);// * numerical_aperture(i, j, o);
                 }
             }
             // The amount of cells to remove from each (!) side of the simulation box

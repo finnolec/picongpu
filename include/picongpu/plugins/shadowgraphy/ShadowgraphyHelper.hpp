@@ -262,8 +262,7 @@ namespace picongpu
                                     float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(i);
                                     float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
                                     float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
-                                    //if(sqrtContent >= 0.0)
-                                    if(true)
+                                    if(sqrtContent >= 0.0)
                                     {
                                         // Put origin into center of array with this, necessary due to FFT
                                         //int const j_ffs = (j + n_y / 2) % n_y;
@@ -271,11 +270,11 @@ namespace picongpu
 
                                         complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
-                                        float_64 const phase = - 0.0 * float_64(params::delta_z) * 
-                                                ( math::sqrt(sqrtContent) - omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
+                                        float_64 const phase = - float_64(params::delta_z) * 
+                                                ( 0 * math::sqrt(sqrtContent) + omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
-                                        //complex_64 const propagated_field = field * propagator;
-                                        complex_64 const propagated_field = field;
+                                        complex_64 const propagated_field = masks::mask(i, j, o) * field * propagator;
+                                        //complex_64 const propagated_field = field;
 
                                         fftw_in_b[index][0] = propagated_field.get_real();
                                         fftw_in_b[index][1] = propagated_field.get_imag();
