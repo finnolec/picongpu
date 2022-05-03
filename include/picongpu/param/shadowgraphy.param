@@ -121,9 +121,9 @@ namespace picongpu
                     int const actual_n = params::t_n / params::t_res;
                     int tmpindex = math::floor(actual_n * ((actual_step * params::omega_min_wf) / (2.0 * PI) + 0.5));
                     int retindex = tmpindex > actual_n / 2 + 1 ? tmpindex : actual_n / 2 + 1;
-                    printf("retindex %d \n", retindex);
-                    printf("tmpindex %d \n", tmpindex);
-                    printf("actual n thing %d \n", actual_n / 2 + 1);
+                    //printf("retindex %d \n", retindex);
+                    //printf("tmpindex %d \n", tmpindex);
+                    //printf("actual n thing %d \n", actual_n / 2 + 1);
                     return retindex;
                     //return 0;
                 }
@@ -138,14 +138,15 @@ namespace picongpu
                 }
 
                 HINLINE int get_n_omegas(){
-                    return 2 * (get_omega_max_index - get_omega_min_index);
+                    return 2 * (get_omega_max_index() - get_omega_min_index());
                 }
 
                 HINLINE int get_omega_index(int i){
-                    if (i < get_n_omegas()){
-                        return - get_omega_min_index() + i;
+                    int const n_omegas = get_n_omegas() / 2;
+                    if (i < n_omegas){
+                        return params::t_n / params::t_res - get_omega_min_index() - n_omegas + i + 1;//(get_omega_min_index() % n_omegas) + i + 1;
                     } else {
-                        return i + get_omega_min_index();
+                        return (i % n_omegas) + get_omega_min_index();
                     }
                 }
 

@@ -76,7 +76,7 @@ namespace picongpu
                     // n_omegas = params::omega_n;
                     omega_min_index = fourierhelper::get_omega_min_index();
                     omega_max_index = fourierhelper::get_omega_max_index();
-                    n_omegas = omega_max_index - omega_min_index;
+                    n_omegas = fourierhelper::get_n_omegas(); //omega_max_index - omega_min_index;
                     
                     printf("minindex: %d, maxindex: %d, n: %d \n", omega_min_index, omega_max_index, n_omegas);
 
@@ -207,8 +207,8 @@ namespace picongpu
                     float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
                     for(int o = 0; o < n_omegas; ++o){
-                        //int const omegaIndex = fourierhelper::get_omega_index(o);
-                        float_64 const omega_SI = fourierhelper::omega(o + omega_min_index);
+                        int const omegaIndex = fourierhelper::get_omega_index(o);
+                        float_64 const omega_SI = fourierhelper::omega(omegaIndex);
 
                         complex_64 const phase = complex_64(0, -omega_SI * t_SI);
                         complex_64 const exponential = math::exp(phase);
@@ -229,9 +229,11 @@ namespace picongpu
                     for(int fieldindex = 0; fieldindex < 4; fieldindex++){
                         for(int o = 0; o < n_omegas; ++o){
                             
-                            float_64 const omega_SI = fourierhelper::omega(o + omega_min_index);
-                            printf("omega: %e \n", fourierhelper::omega(o + omega_min_index));
-                            printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter(o + omega_min_index));
+                            int const omegaIndex = fourierhelper::get_omega_index(o);
+                            float_64 const omega_SI = fourierhelper::omega(omegaIndex);
+                            printf("omegaIndex: %d \n", omegaIndex);
+                            printf("omega: %e \n", fourierhelper::omega(omegaIndex));
+                            printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter(omegaIndex));
 
                             // put field into fftw array
                             for(int i = 0; i < n_x; ++i){
@@ -272,7 +274,7 @@ namespace picongpu
                                     float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(i);
                                     float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
                                     float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
-                                    /*
+                                    
                                     if(sqrtContent >= 0.0)
                                     {
                                         // Put origin into center of array with this, necessary due to FFT
@@ -284,7 +286,7 @@ namespace picongpu
                                         float_64 const phase = - float_64(params::delta_z) * 
                                                 ( 0 * math::sqrt(sqrtContent) + 0 * omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
-                                        complex_64 const propagated_field = masks::mask(i, j, o + omega_min_index) * field * propagator;
+                                        complex_64 const propagated_field = masks::mask(i, j,omegaIndex) * field * propagator;
                                         //complex_64 const propagated_field = field;
 
                                         fftw_in_b[index][0] = propagated_field.get_real();
@@ -293,10 +295,10 @@ namespace picongpu
                                         fftw_in_b[index][0] = 0.0;
                                         fftw_in_b[index][1] = 0.0;
                                     }
-                                    */
-                                    int const index_ffs = i_ffs + j_ffs * n_x;
-                                    fftw_in_b[index][0] = fftw_out_f[index_ffs][0];
-                                    fftw_in_b[index][1] = fftw_out_f[index_ffs][1];
+                                    
+                                    //int const index_ffs = i_ffs + j_ffs * n_x;
+                                    //fftw_in_b[index][0] = fftw_out_f[index_ffs][0];
+                                    //fftw_in_b[index][1] = fftw_out_f[index_ffs][1];
                                 }
                             }
 
@@ -336,10 +338,12 @@ namespace picongpu
                         float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
                         for(int o1 = 0; o1 < n_omegas; ++o1){
-                            float_64 const omega1_SI = fourierhelper::omega(o1 + omega_min_index);
+                            int const omegaIndex = fourierhelper::get_omega_index(o1);
+                            float_64 const omega1_SI = fourierhelper::omega(omegaIndex);
 
                             for(int o2 = 0; o2 < n_omegas; ++o2){
-                                float_64 const omega2_SI = fourierhelper::omega(o2  + omega_min_index);
+                                int const omegaIndex = fourierhelper::get_omega_index(o2);
+                                float_64 const omega2_SI = fourierhelper::omega(omegaIndex);
                                 
                                 complex_64 const phase = complex_64(0, t_SI * (omega1_SI + omega2_SI));
                                 complex_64 const exponential = math::exp(phase);
