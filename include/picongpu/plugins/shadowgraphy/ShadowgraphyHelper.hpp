@@ -76,7 +76,7 @@ namespace picongpu
                     // n_omegas = params::omega_n;
                     omega_min_index = fourierhelper::get_omega_min_index();
                     omega_max_index = fourierhelper::get_omega_max_index();
-                    n_omegas = omega_max_index - omega_min_index + 1;
+                    n_omegas = omega_max_index - omega_min_index;
                     
                     printf("minindex: %d, maxindex: %d, n: %d \n", omega_min_index, omega_max_index, n_omegas);
 
@@ -91,8 +91,8 @@ namespace picongpu
                         // The resulting loss in the size of the shadowgram comes from the duration of the time integration
                         float const movingWindowCorrection = nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
                         n_y = (globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / params::y_res - 2;
-                        PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr");
-                        printf("moving window enabled");
+                        PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr \n");
+                        printf("moving window enabled \n");
                     } else {
                         n_y = globalGridSize.y() / params::y_res - 2;
                     }
@@ -121,7 +121,11 @@ namespace picongpu
 
                     shadowgram = vec2r(n_x, vec1r(n_y));
 
-                    printf("min lambda= %e, max lambda = %e \n", params::min_lambda, params::max_lambda);
+                    //printf("min lambda= %e, max lambda = %e \n", params::min_lambda, params::max_lambda);
+                    printf("probe omega = %e \n", params::probe_omega);
+                    printf("tbp omega = %e \n", params::delta_omega);
+                    printf("min omega wf = %e, max omega wf = %e \n", params::omega_min_wf, params::omega_max_wf);
+                    printf("min omega = %e, max omega = %e \n", params::omega_min, params::omega_max);
 
                     init_fftw();
                 }
@@ -180,14 +184,16 @@ namespace picongpu
                             } else {
                                 int const grid_j = j * params::y_res;
 
+                                float_64 const wf = masks::position_wf(i, j) * masks::t_wf(t);
+
                                 // fix yee offset
                                 if(F::getName() == "E"){
-                                    tmp_Ex[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
-                                    tmp_Ey[i][j] = ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
+                                    tmp_Ex[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
+                                    tmp_Ey[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
                                 } else {
-                                    tmp_Bx[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
+                                    tmp_Bx[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
                                                     + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
-                                    tmp_By[i][j] = ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
+                                    tmp_By[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
                                                     + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
                                 }
                             }
@@ -201,6 +207,7 @@ namespace picongpu
                     float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
                     for(int o = 0; o < n_omegas; ++o){
+                        //int const omegaIndex = fourierhelper::get_omega_index(o);
                         float_64 const omega_SI = fourierhelper::omega(o + omega_min_index);
 
                         complex_64 const phase = complex_64(0, -omega_SI * t_SI);
@@ -223,6 +230,8 @@ namespace picongpu
                         for(int o = 0; o < n_omegas; ++o){
                             
                             float_64 const omega_SI = fourierhelper::omega(o + omega_min_index);
+                            printf("omega: %e \n", fourierhelper::omega(o + omega_min_index));
+                            printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter(o + omega_min_index));
 
                             // put field into fftw array
                             for(int i = 0; i < n_x; ++i){
@@ -247,6 +256,7 @@ namespace picongpu
                             }
 
                             fftw_execute(plan_forward);
+                            writeFourierFile(o, fieldindex, false);
 
                             // put field into fftw array
                             for(int i = 0; i < n_x; ++i){
@@ -255,13 +265,14 @@ namespace picongpu
 
                                 for(int j = 0; j < n_y; ++j){
                                     int const index = i + j * n_x;
-                                    int const j_ffs = (j + n_y / 2) % n_y;
+                                    int const j_ffs = (j  + n_y / 2) % n_y;
                                     
                                     
                                     float_64 const sqrt1 = (omega_SI * omega_SI) / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
                                     float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(i);
                                     float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
                                     float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
+                                    /*
                                     if(sqrtContent >= 0.0)
                                     {
                                         // Put origin into center of array with this, necessary due to FFT
@@ -271,9 +282,9 @@ namespace picongpu
                                         complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
                                         float_64 const phase = - float_64(params::delta_z) * 
-                                                ( 0 * math::sqrt(sqrtContent) + omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
+                                                ( 0 * math::sqrt(sqrtContent) + 0 * omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
-                                        complex_64 const propagated_field = masks::mask(i, j, o) * field * propagator;
+                                        complex_64 const propagated_field = masks::mask(i, j, o + omega_min_index) * field * propagator;
                                         //complex_64 const propagated_field = field;
 
                                         fftw_in_b[index][0] = propagated_field.get_real();
@@ -281,23 +292,25 @@ namespace picongpu
                                     } else {
                                         fftw_in_b[index][0] = 0.0;
                                         fftw_in_b[index][1] = 0.0;
-                                    } 
-                                    //int const index_ffs = i_ffs + j_ffs * n_x;
-                                    //fftw_in_b[index][0] = fftw_out_f[index_ffs][0];
-                                    //fftw_in_b[index][1] = fftw_out_f[index_ffs][1];
+                                    }
+                                    */
+                                    int const index_ffs = i_ffs + j_ffs * n_x;
+                                    fftw_in_b[index][0] = fftw_out_f[index_ffs][0];
+                                    fftw_in_b[index][1] = fftw_out_f[index_ffs][1];
                                 }
                             }
 
+                            writeFourierFile(o, fieldindex, true);
                             fftw_execute(plan_backward);
 
                             // yoink fields from fftw array
                             for(int i = 0; i < n_x; ++i){
                                 // Put origin into center of array with this, necessary due to FFT
-                                int const i_ffs = (i + n_x/2) % n_x;
+                                int const i_ffs = (i  + n_x/2) % n_x;
 
                                 for(int j = 0; j < n_y; ++j){
                                 // Put origin into center of array with this, necessary due to FFT
-                                int const j_ffs = (j + n_y / 2) % n_y;
+                                int const j_ffs = (j  + n_y / 2) % n_y;
                                 //int const index_ffs = i_ffs + j_ffs * n_x;
                                 int const index = i + j * n_x; //@TODO
 
@@ -376,6 +389,70 @@ namespace picongpu
                     // Create fftw plan for transverse ifft for complex to complex
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag (this is a lie)
                     plan_backward = fftw_plan_dft_2d(n_y, n_x, fftw_in_b, fftw_out_b, FFTW_BACKWARD, FFTW_MEASURE);
+                }
+
+
+                void writeFourierFile(int o, int fieldindex, bool masksapplied)
+                {
+                    std::ofstream outFile;
+                    std::ostringstream filename;
+
+                    if(fieldindex == 0){
+                        filename <<"Ex";
+                    } else if(fieldindex == 1){
+                        filename <<"Ey";
+                    } else if(fieldindex == 2){
+                        filename <<"Bx";
+                    } else if(fieldindex == 3){
+                        filename <<"By";
+                    }
+
+                    filename << "_fourierspace";// << ".dat";
+
+                    if(masksapplied){
+                        filename << "_with_masks";
+                    }
+                    
+                    //for(int o = 0; o < n_omegas; ++o){
+                    filename << "_" << o << ".dat";
+
+                    outFile.open(filename.str(), std::ofstream::out | std::ostream::trunc);
+
+                    if(!outFile)
+                    {
+                        std::cerr << "Can't open file [" << filename.str() << "] for output, disable plugin output. Chuchu"
+                                << std::endl;
+                    }
+                    else
+                    {
+                        for( unsigned int i = 0; i < get_n_x(); ++i ) // over all x
+                        {
+                            int const i_ffs = (i + n_x/2) % n_x;
+                            for(unsigned int j = 0;  j < get_n_y(); ++j) // over all y
+                            {
+                                int const index = i + j * n_x;
+                                int const j_ffs = (j + n_y / 2) % n_y;
+                                int const index_ffs = i_ffs + j_ffs * n_x;
+                                if(!masksapplied){
+                                    outFile << fftw_out_f[index_ffs][0] << "+" << fftw_out_f[index_ffs][1] << "j" << "\t";
+                                }
+                                else {
+                                    outFile << fftw_in_b[index][0] << "+" << fftw_in_b[index][1] << "j" << "\t";
+                                }
+                            } // for loop over all y
+
+                            outFile << std::endl;
+                        } // for loop over all x
+
+                        outFile.flush();
+                        outFile << std::endl; // now all data are written to file
+
+                        if(outFile.fail())
+                            std::cerr << "Error on flushing file [" << filename.str() << "]. " << std::endl;
+
+                        outFile.close();
+                    }
+                    //}
                 }
 
             }; // class Helper

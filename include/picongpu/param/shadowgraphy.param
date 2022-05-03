@@ -27,15 +27,19 @@ namespace picongpu
                 //     domega * omega_n * fwhm_probe[t] / 2 pi > 0.441 (for gauss)
                 constexpr unsigned int t_n = 560 - 100;//128
 
+                constexpr unsigned int t_wf_buffer = 32;
+
                 //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
                 //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
 
-                constexpr unsigned int x_n = 64;
-                constexpr unsigned int y_n = 128;
+                constexpr unsigned int x_n = 64 - 2;
+                constexpr unsigned int y_n = 128 - 2;
 
                 // Transverse resolution of shadowgram in PIConGPU cell size units
                 constexpr unsigned int x_res = 1;//2
                 constexpr unsigned int y_res = 1;//4
+
+                constexpr unsigned int pos_wf_buffer = 12;
 
                 // Propagation distance in SI
                 constexpr float delta_z = 10e-6;
@@ -54,15 +58,30 @@ namespace picongpu
                 constexpr float_64 pulse_duration = 12e-15 / 2.0; //FWHM
                 constexpr float_64 timebandwidthproduct = 0.441; //0.441 for Gauss, 0.315 for sech2
 
-                constexpr float_64 delta_lambda = (probe_wavelength * probe_wavelength / SI::SPEED_OF_LIGHT_SI) * timebandwidthproduct / pulse_duration;
+                constexpr float_64 probe_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / probe_wavelength;
 
-                constexpr float_64 ndl = 1.0; // You can use ndl = 1 if you are certain that there is no redshift etc
+                constexpr float_64 delta_omega = 2.0 * PI * timebandwidthproduct / pulse_duration;
 
-                constexpr float_64 min_lambda = probe_wavelength - ndl * delta_lambda / 2.0;
-                constexpr float_64 max_lambda = probe_wavelength + ndl * delta_lambda / 2.0;
+                constexpr float ndo = 3.0;
+
+                constexpr float_64 omega_min = probe_omega - ndo * delta_omega / 2.0;
+                constexpr float_64 omega_max = probe_omega + ndo * delta_omega / 2.0;
+
+                constexpr float ndo_wf = 2.0;
+
+                constexpr float_64 omega_min_wf = omega_min - ndo_wf * delta_omega / 2.0;
+                constexpr float_64 omega_max_wf = omega_max + ndo_wf * delta_omega / 2.0;
+
+
+                //constexpr float_64 delta_lambda = (probe_wavelength * probe_wavelength / SI::SPEED_OF_LIGHT_SI) * timebandwidthproduct / pulse_duration;
+
+                //constexpr float_64 ndl = 1.0; // You can use ndl = 1 if you are certain that there is no redshift etc
+
+                //constexpr float_64 min_lambda = probe_wavelength - ndl * delta_lambda / 2.0;
+                //constexpr float_64 max_lambda = probe_wavelength + ndl * delta_lambda / 2.0;
                 
-                constexpr float_64 ndl_wf = 1.0;
-                constexpr float_64 d_lambda_wf = ndl_wf * delta_lambda;
+                //constexpr float_64 ndl_wf = 1.0;
+                //constexpr float_64 d_lambda_wf = ndl_wf * delta_lambda / ndl;
             }
 
 
@@ -98,11 +117,9 @@ namespace picongpu
 
                 
                 HINLINE int get_omega_min_index(){
-                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
-
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = params::t_n / params::t_res;
-                    int tmpindex = math::floor(actual_n * ((actual_step * omega_min) / (2.0 * PI) + 0.5));
+                    int tmpindex = math::floor(actual_n * ((actual_step * params::omega_min_wf) / (2.0 * PI) + 0.5));
                     int retindex = tmpindex > actual_n / 2 + 1 ? tmpindex : actual_n / 2 + 1;
                     printf("retindex %d \n", retindex);
                     printf("tmpindex %d \n", tmpindex);
@@ -112,15 +129,25 @@ namespace picongpu
                 }
 
                 HINLINE int get_omega_max_index(){
-                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
-
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = params::t_n / params::t_res;
-                    int tmpindex = math::ceil(actual_n * ((actual_step * omega_max) / (2.0 * PI) + 0.5));
+                    int tmpindex = math::ceil(actual_n * ((actual_step * params::omega_max_wf) / (2.0 * PI) + 0.5));
                     int retindex =  tmpindex <= actual_n ? tmpindex : actual_n;
-                    return retindex;
+                    return retindex + 1;
                     //return params::omega_n-1;
-                }        
+                }
+
+                HINLINE int get_n_omegas(){
+                    return 2 * (get_omega_max_index - get_omega_min_index);
+                }
+
+                HINLINE int get_omega_index(int i){
+                    if (i < get_n_omegas()){
+                        return - get_omega_min_index() + i;
+                    } else {
+                        return i + get_omega_min_index();
+                    }
+                }
 
                 
                 HINLINE float_64 omega(int i){
@@ -129,17 +156,16 @@ namespace picongpu
                     return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
                 }
                 
-
                 // kx so that it is the proper kx for FFTs
                 HINLINE float_64 kx(int i){ // @TODO x_n
-                    int const actual_n = params::x_n / params::x_res;
+                    int const actual_n = (params::x_n / params::x_res) - 2;
                     float const actual_step = params::x_res * SI::CELL_WIDTH_SI;
                     return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
                 }
 
                 // ky so that it is the proper ky for FFTs
                 HINLINE float_64 ky(int i){ // @TODO y_n
-                    int const actual_n = params::y_n / params::y_res;
+                    int const actual_n = (params::y_n / params::y_res) - 2;
                     float const actual_step = params::y_res * SI::CELL_HEIGHT_SI;
                     return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
                 }
@@ -150,6 +176,39 @@ namespace picongpu
             {
                 // Numerical aperture to remove e.g. side scattered light from probe laser and drive laser from shadowgraphy simulations
                 //constexpr float_64 numerical_aperture = 0.23;
+                HINLINE float_64 position_wf(int i, int j){
+                    float_64 x_factor = 1.0;
+
+                    if (i <= params::pos_wf_buffer){
+                        x_factor = ( 1.0 - math::cos(PI * i / float_64(params::pos_wf_buffer)) ) / 2.0;
+                    }  else if ((i > (params::x_n - params::pos_wf_buffer))){
+                        x_factor =  math::cos(PI * (i - (params::x_n - params::pos_wf_buffer)) / float_64(params::pos_wf_buffer)) / 2.0 + 0.5;
+                    }
+
+                    float_64 y_factor = 1.0;
+
+                    if (j <= params::pos_wf_buffer){
+                        y_factor = ( 1.0 - math::cos(PI * j / float_64(params::pos_wf_buffer)) ) / 2.0;
+                    }  else if ((j > (params::y_n - params::pos_wf_buffer))){
+                        y_factor =  math::cos(PI * (j - (params::y_n - params::pos_wf_buffer)) / float_64(params::pos_wf_buffer)) / 2.0 + 0.5;
+                    }
+
+                    return x_factor * y_factor;
+                }
+
+                HINLINE float_64 t_wf(int t){
+                    float_64 t_factor = 1.0;
+
+                    int t_max = params::t_n / params::t_res;
+
+                    if (t <= params::t_wf_buffer){
+                        t_factor = ( 1.0 - math::cos(PI * t / float_64(params::t_wf_buffer)) ) / 2.0;
+                    }  else if ((t > (t_max - params::t_wf_buffer))){
+                        t_factor =  math::cos(PI * (t - (t_max - params::t_wf_buffer)) / float_64(params::t_wf_buffer)) / 2.0 + 0.5;
+                    }
+
+                    return t_factor;
+                }
 
 
 
@@ -161,15 +220,15 @@ namespace picongpu
                     //float_64 const min_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
                     float_64 const omega = math::abs(fourierhelper::omega(o));
 
-                    if(params::d_lambda_wf == 0.0)
+                    if(params::ndo_wf == 0.0)
                     {
-                        float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                        float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                        //float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                        //float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
 
                         //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
                         //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
                         
-                        if( omega >= omega_min && omega <= omega_max ){
+                        if( omega >= params::omega_min && omega <= params::omega_max ){
                             //std::cout << "a";
                             return 1.0;
                         } else {
@@ -177,22 +236,24 @@ namespace picongpu
                         }
 
                     } else {
-                        float_64 const omega_max_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
-                        float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                        float_64 const d_omega_max = omega_max_wf - omega_max;
+                        //float_64 const omega_max_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
+                        //float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
+                        //float_64 const d_omega_max = omega_max_wf - omega_max;
 
-                        float_64 const omega_min_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
-                        float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
-                        float_64 const d_omega_min = omega_min - omega_min_wf;
+                        //float_64 const omega_min_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
+                        //float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
+                        //float_64 const d_omega_min = omega_min - omega_min_wf;
                         //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
                         //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
+
+                        float_64 const d_omega = params::ndo_wf * params::delta_omega / 2.0;
                         
-                        if( omega >= omega_min_wf && omega < omega_min ){
-                            return ( 1.0 - math::cos(PI * (omega - omega_min + d_omega_min) / d_omega_min) ) / 2.0;
-                        } else if ( omega >= omega_min && omega < omega_max ) {
+                        if( (omega >= params::omega_min_wf) && (omega < params::omega_min) ){
+                            return ( 1.0 - math::cos(PI * (omega - params::omega_min + d_omega) / d_omega) ) / 2.0;
+                        } else if ( (omega >= params::omega_min) && (omega < params::omega_max) ) {
                             return 1.0;
-                        } else if ( omega >= omega_max && omega <= omega_max_wf ) {
-                            return math::cos(PI * (omega - omega_max) / d_omega_max) / 2.0 + 0.5;
+                        } else if ( (omega >= params::omega_max) && (omega <= params::omega_max_wf) ) {
+                            return math::cos(PI * (omega - params::omega_max) / d_omega) / 2.0 + 0.5;
                         } else {
                             return 0.0;
                         }
