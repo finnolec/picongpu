@@ -32,8 +32,8 @@ namespace picongpu
                 //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
                 //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
 
-                constexpr unsigned int x_n = 64 - 2;
-                constexpr unsigned int y_n = 128 - 2;
+                constexpr unsigned int x_n = 64;
+                constexpr unsigned int y_n = 128;
 
                 // Transverse resolution of shadowgram in PIConGPU cell size units
                 constexpr unsigned int x_res = 1;//2
@@ -41,10 +41,16 @@ namespace picongpu
 
                 constexpr unsigned int pos_wf_buffer = 12;
 
+                constexpr unsigned int plugin_wf_buffer_x = pos_wf_buffer / x_res;
+                constexpr unsigned int plugin_wf_buffer_y = pos_wf_buffer / y_res;
+
                 // Propagation distance in SI
                 constexpr float delta_z = 10e-6;
 
                 constexpr float NA = 0.23;
+
+                // Windowfunction drop off over (thingy * k_probe) kperps
+                constexpr float NA_wf_thingy = 0.5;
 
                 // Values for frequency filter to extract probe laser better in m
                 // Make sure to respect the time bandwidth limit
@@ -179,19 +185,21 @@ namespace picongpu
                 //constexpr float_64 numerical_aperture = 0.23;
                 HINLINE float_64 position_wf(int i, int j){
                     float_64 x_factor = 1.0;
+                    int const plugin_x_n = params::x_n / params::x_res - 2;
 
-                    if (i <= params::pos_wf_buffer){
-                        x_factor = ( 1.0 - math::cos(PI * i / float_64(params::pos_wf_buffer)) ) / 2.0;
-                    }  else if ((i > (params::x_n - params::pos_wf_buffer))){
-                        x_factor =  math::cos(PI * (i - (params::x_n - params::pos_wf_buffer)) / float_64(params::pos_wf_buffer)) / 2.0 + 0.5;
+                    if (i <= params::plugin_wf_buffer_x ){
+                        x_factor = ( 1.0 - math::cos(PI * i / float_64(params::plugin_wf_buffer_x)) ) / 2.0;
+                    }  else if ((i > (plugin_x_n - params::plugin_wf_buffer_x))){
+                        x_factor =  math::cos(PI * (i - (plugin_x_n - params::plugin_wf_buffer_x)) / float_64(params::plugin_wf_buffer_x)) / 2.0 + 0.5;
                     }
 
                     float_64 y_factor = 1.0;
+                    int const plugin_y_n = params::y_n / params::y_res - 2;
 
-                    if (j <= params::pos_wf_buffer){
-                        y_factor = ( 1.0 - math::cos(PI * j / float_64(params::pos_wf_buffer)) ) / 2.0;
-                    }  else if ((j > (params::y_n - params::pos_wf_buffer))){
-                        y_factor =  math::cos(PI * (j - (params::y_n - params::pos_wf_buffer)) / float_64(params::pos_wf_buffer)) / 2.0 + 0.5;
+                    if (j <= params::plugin_wf_buffer_y){
+                        y_factor = ( 1.0 - math::cos(PI * j / float_64(params::plugin_wf_buffer_y)) ) / 2.0;
+                    }  else if ((j > (plugin_y_n - params::plugin_wf_buffer_y))){
+                        y_factor =  math::cos(PI * (j - (plugin_y_n - params::plugin_wf_buffer_y)) / float_64(params::plugin_wf_buffer_y)) / 2.0 + 0.5;
                     }
 
                     return x_factor * y_factor;
@@ -266,11 +274,17 @@ namespace picongpu
                     float_64 const kx = fourierhelper::kx(i);
                     float_64 const ky = fourierhelper::ky(j);
 
-                    float_64 const kperpsq = kx * kx + ky * ky;
-                    float_64 const k = omega / SI::SPEED_OF_LIGHT_SI;
+                    float_64 const kperp = math::sqrt(kx * kx + ky * ky);
+                    float_64 const k = math::abs(omega / SI::SPEED_OF_LIGHT_SI);
 
-                    if(kperpsq <= (params::NA * params::NA * k * k) ){
+                    float_64 const wf_offset = params::probe_omega * params::NA_wf_thingy / SI::SPEED_OF_LIGHT_SI;
+
+                    float_64 const NAk = params::NA * k;
+
+                    if(kperp <= NAk ){
                         return 1.0;
+                    } else if(kperp <= (NAk + wf_offset)) {
+                        return ( 1.0 - math::cos(PI * (kperp - NAk - wf_offset) / wf_offset) ) / 2.0;
                     } else {
                         return 0.0;
                     }
@@ -282,7 +296,7 @@ namespace picongpu
                       * j is integer for j coordinate from 0 to n_y
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    return frequency_filter(o);// * numerical_aperture(i, j, o);
+                    return frequency_filter(o) * numerical_aperture(i, j, o);
                 }
             }
             // The amount of cells to remove from each (!) side of the simulation box
