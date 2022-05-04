@@ -342,25 +342,43 @@ namespace picongpu
 
                         printf("step %d (from %d) of backwards integration \n", t, nt);
 
-                        for(int o1 = 0; o1 < n_omegas; ++o1){
-                            int const omegaIndex1 = fourierhelper::get_omega_index(o1);
-                            float_64 const omega1_SI = fourierhelper::omega(omegaIndex1);
+                        // Initialization of storage arrays
+                        vec2c Ex_tmpsum = vec2c(n_x, vec1c(n_y));
+                        vec2c Ey_tmpsum = vec2c(n_x, vec1c(n_y));
+                        vec2c Bx_tmpsum = vec2c(n_x, vec1c(n_y));
+                        vec2c By_tmpsum = vec2c(n_x, vec1c(n_y));
 
-                            for(int o2 = 0; o2 < n_omegas; ++o2){
-                                int const omegaIndex2 = fourierhelper::get_omega_index(o2);
-                                float_64 const omega2_SI = fourierhelper::omega(omegaIndex2);
+                        for(int o = 0; o < n_omegas; ++o){
+                            int const omegaIndex = fourierhelper::get_omega_index(o);
+                            float_64 const omega_SI = fourierhelper::omega(omegaIndex);
                                 
-                                complex_64 const phase = complex_64(0, t_SI * (omega1_SI + omega2_SI));
-                                complex_64 const exponential = math::exp(phase);
-                                for(int i = 0; i < n_x; ++i){
-                                    for(int j = 0; j < n_y; ++j){
-                                        complex_64 const pv = Ex_omega_propagated[i][j][o1] * By_omega_propagated[i][j][o2] 
-                                                              -  Ey_omega_propagated[i][j][o1] * Bx_omega_propagated[i][j][o2];
-                                        
-                                        shadowgram[i][j] += (pv * exponential).get_real();
-                                    } 
-                                }
+                            complex_64 const phase = complex_64(0, t_SI * omega_SI);
+                            complex_64 const exponential = math::exp(phase);
+
+                            for(int i = 0; i < n_x; ++i){
+                                for(int j = 0; j < n_y; ++j){
+                                    complex_64 const Ex = Ex_omega_propagated[i][j][o] * exponential;
+                                    complex_64 const Ey = Ey_omega_propagated[i][j][o] * exponential;
+                                    complex_64 const Bx = Bx_omega_propagated[i][j][o] * exponential;
+                                    complex_64 const By = By_omega_propagated[i][j][o] * exponential;
+
+                                    //complex_64 const pv = Ex_omega_propagated[i][j][o1] * By_omega_propagated[i][j][o2] 
+                                    //                        -  Ey_omega_propagated[i][j][o1] * Bx_omega_propagated[i][j][o2];
+                                    
+                                    //shadowgram[i][j] += (pv * exponential).get_real();
+                                    shadowgram[i][j] += (Ex * By - Ey * Bx 
+                                                        + Ex_tmpsum[i][j] * By + Ex * By_tmpsum[i][j]
+                                                        - Ey_tmpsum[i][j] * Bx - Ey * Bx_tmpsum[i][j]).get_real();
+
+                                    if(o < (n_omegas - 1)){
+                                        Ex_tmpsum[i][j] += Ex;
+                                        Ey_tmpsum[i][j] += Ey; 
+                                        Bx_tmpsum[i][j] += Bx;
+                                        By_tmpsum[i][j] += By;
+                                    }
+                                } 
                             }
+                            
                         }
                     }
                 }

@@ -413,7 +413,9 @@ namespace picongpu
                         return;
                     }
 
-                    printf("line 401\n");
+                    if(debugoutput){
+                        printf("line 401\n");
+                    }
 
                     vec::UInt32<3> twistedAxesVec2((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
 
