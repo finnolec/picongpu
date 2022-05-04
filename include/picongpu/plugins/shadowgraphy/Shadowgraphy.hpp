@@ -115,6 +115,7 @@ namespace picongpu
                 int startTime;
 
                 bool isMaster = false;
+                bool debugoutput = false;
 
                 shadowgraphy::Helper* helper = nullptr;
                 pmacc::mpi::MPIReduce reduce;
@@ -207,7 +208,7 @@ namespace picongpu
                     {
                         /* in case the slice point is outside of [0.0,1.0] */
                         sliceIsOK = false;
-                        std::cerr << "In the SliceFieldPrinter plugin a slice point"
+                        std::cerr << "In the Shadowgraphy plugin a slice point"
                                 << " (slice_point=" << slicePoint << ") is outside of [0.0, 1.0]. " << std::endl
                                 << "The request will be ignored. " << std::endl;
                     }
@@ -240,6 +241,8 @@ namespace picongpu
                     {
                         
                         isMaster = reduce.hasResult(pmacc::mpi::reduceMethods::Reduce());
+                        //if(isMaster)
+                        //{
 
                         // First time the plugin is called:
                         if(isIntegrating == false)
@@ -294,25 +297,31 @@ namespace picongpu
 
                             storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, localStep);
 
-                            helper->calculate_dft(localStep);
+                            if (isMaster){
+                                helper->calculate_dft(localStep);
+                            }
                         }
                         else
                         {
-                            helper->propagate_fields();
-                            printf("Fields propagated");
-                            helper->calculate_shadowgram();
-                            printf("Shadowgram calculated");
+                            if (isMaster){
+                                helper->propagate_fields();
+                                printf("Fields propagated");
+                                helper->calculate_shadowgram();
+                                printf("Shadowgram calculated");
 
-                            std::ostringstream filename;
-                            filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
+                                std::ostringstream filename;
+                                filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
 
-                            //data = helper->get_shadowgram();
-                            writeFile(helper->get_shadowgram(), filename.str());
+                                //data = helper->get_shadowgram();
+                                
+                                writeFile(helper->get_shadowgram(), filename.str());
 
-                            std::cout << "destructor called" << std::endl;
-                            delete(helper);
+                                std::cout << "destructor called" << std::endl;
+                                delete(helper);
+                            }
                             isIntegrating = false;
                         }
+                        //}
                     }
                 }
 
@@ -338,8 +347,21 @@ namespace picongpu
 
                     algorithm::mpi::Gather<simDim> gather(gpuGatheringZone1);
 
-                    if(!gather.participate())
+                    if(debugoutput){
+                        printf("line 349\n");
+                    }
+
+                    if(!gather.participate()){
+                        if(debugoutput){
+                            printf("p1\n");
+                        }
                         return;
+                    }
+
+
+                    if(debugoutput){
+                        printf("line 355\n");
+                    }
 
                     vec::UInt32<3> twistedAxesVec1((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
 
@@ -361,8 +383,14 @@ namespace picongpu
                     vec::Size_t<simDim - 1> globalSliceSize1 = globalDomainSize1.shrink<simDim - 1>((nAxis + 1) % simDim);
                     container::HostBuffer<float3_64, simDim - 1> globalBuffer1(globalSliceSize1);
                     gather(globalBuffer1, hBuffer1, nAxis);
-                    if(!gather.root())
-                        return;
+                    //if(!gather.root()){
+                    //    printf("r1\n");
+                    //    return;
+                    //}
+
+                    if(debugoutput){
+                        printf("line 381\n");
+                    }
 
                     
                     // SECOND SLICE OF FIELD FOR YEE OFFSET
@@ -376,10 +404,16 @@ namespace picongpu
                     zone::SphericZone<simDim> gpuGatheringZone2(gpuDim, nVector2 * gpuPlane2);
                     gpuGatheringZone2.size[nAxis] = 1;
 
-                    //algorithm::mpi::Gather<simDim> gather(gpuGatheringZone2);
+                    algorithm::mpi::Gather<simDim> gather2(gpuGatheringZone2);
 
-                    if(!gather.participate())
+                    if(!gather2.participate()){
+                        if(debugoutput){
+                            printf("p2\n");
+                        }
                         return;
+                    }
+
+                    printf("line 401\n");
 
                     vec::UInt32<3> twistedAxesVec2((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
 
@@ -400,9 +434,17 @@ namespace picongpu
                     vec::Size_t<simDim> globalDomainSize2 = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
                     vec::Size_t<simDim - 1> globalSliceSize2 = globalDomainSize2.shrink<simDim - 1>((nAxis + 1) % simDim);
                     container::HostBuffer<float3_64, simDim - 1> globalBuffer2(globalSliceSize2);
-                    gather(globalBuffer2, hBuffer2, nAxis);
-                    if(!gather.root())
+                    gather2(globalBuffer2, hBuffer2, nAxis);
+                    if(!gather2.root()){
+                        if(debugoutput){
+                            printf("r2\n");
+                        }
                         return;
+                    }
+
+                    if(debugoutput){
+                        printf("line 427\n");
+                    }
                     
 
                     if(isMaster)

@@ -59,6 +59,8 @@ namespace picongpu
                 int n_x, n_y;
                 int omega_min_index, omega_max_index, n_omegas;
 
+                float_64 movingWindowCorrection;
+
                 // Variables for omega calculations @TODO some initializations and bla
                 float dt;
                 int nt;
@@ -89,8 +91,8 @@ namespace picongpu
                     if(isSlidingWindowEnabled){
                         // movingWindowCorrection makes the resulting shadowgram smaller if the moving Window is enabled
                         // The resulting loss in the size of the shadowgram comes from the duration of the time integration
-                        float const movingWindowCorrection = nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
-                        n_y = (globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / params::y_res - 2;
+                        movingWindowCorrection =  globalGridSize.z() * SI::CELL_DEPTH_SI + nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
+                        n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res * SI::CELL_DEPTH_SI) - 2);
                         PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr \n");
                         printf("moving window enabled \n");
                     } else {
@@ -149,9 +151,10 @@ namespace picongpu
                         int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
+                            //printf("i = %d, j = %d \n", i, j);
                             if(isSlidingWindowEnabled){
                                 //int const grid_j = j * params::y_res;
-                                float const gridPos = float(j * params::y_res) + SI::SPEED_OF_LIGHT_SI * (nt - t - 1) * dt / (SI::CELL_HEIGHT_SI);
+                                float const gridPos = float(j * params::y_res) + (nt - t - 1) * ( + SI::SPEED_OF_LIGHT_SI * dt / (SI::CELL_HEIGHT_SI));
                                 float const wr = math::fmod(gridPos, 1.0);
                                 float const wl = 1.0 - wr;
                                 int const grid_j = math::floor(gridPos);
@@ -337,13 +340,15 @@ namespace picongpu
                     for(int t = 0; t < nt; ++t){
                         float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
+                        printf("step %d (from %d) of backwards integration \n", t, nt);
+
                         for(int o1 = 0; o1 < n_omegas; ++o1){
-                            int const omegaIndex = fourierhelper::get_omega_index(o1);
-                            float_64 const omega1_SI = fourierhelper::omega(omegaIndex);
+                            int const omegaIndex1 = fourierhelper::get_omega_index(o1);
+                            float_64 const omega1_SI = fourierhelper::omega(omegaIndex1);
 
                             for(int o2 = 0; o2 < n_omegas; ++o2){
-                                int const omegaIndex = fourierhelper::get_omega_index(o2);
-                                float_64 const omega2_SI = fourierhelper::omega(omegaIndex);
+                                int const omegaIndex2 = fourierhelper::get_omega_index(o2);
+                                float_64 const omega2_SI = fourierhelper::omega(omegaIndex2);
                                 
                                 complex_64 const phase = complex_64(0, t_SI * (omega1_SI + omega2_SI));
                                 complex_64 const exponential = math::exp(phase);
@@ -393,6 +398,8 @@ namespace picongpu
                     // Create fftw plan for transverse ifft for complex to complex
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag (this is a lie)
                     plan_backward = fftw_plan_dft_2d(n_y, n_x, fftw_in_b, fftw_out_b, FFTW_BACKWARD, FFTW_MEASURE);
+
+                    std::cout << "fftw inited" << std::endl;
                 }
 
 
