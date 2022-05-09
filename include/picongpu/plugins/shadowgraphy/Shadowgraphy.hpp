@@ -263,7 +263,7 @@ namespace picongpu
                                 vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                                 vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
-                                helper = new Helper(globalGridSize);
+                                helper = new Helper(globalGridSize, this->slicePoint);
                             }
 
 

@@ -59,6 +59,7 @@ namespace picongpu
                 int n_x, n_y;
                 int omega_min_index, omega_max_index, n_omegas;
 
+                float slicepoint;
                 float_64 movingWindowCorrection;
 
                 // Variables for omega calculations @TODO some initializations and bla
@@ -70,8 +71,9 @@ namespace picongpu
             public:
                 // Constructor of the shadowgraphy helper class
                 // To be called at the first time step when the shadowgraphy time integration starts
-                Helper(pmacc::math::Size_t<simDim> globalGridSize):
-                    n_x(globalGridSize.x() / params::x_res - 2)
+                Helper(pmacc::math::Size_t<simDim> globalGridSize, float slicepoint):
+                    n_x(globalGridSize.x() / params::x_res - 2),
+                    slicepoint(slicepoint)
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
@@ -91,8 +93,10 @@ namespace picongpu
                     if(isSlidingWindowEnabled){
                         // movingWindowCorrection makes the resulting shadowgram smaller if the moving Window is enabled
                         // The resulting loss in the size of the shadowgram comes from the duration of the time integration
-                        movingWindowCorrection =  globalGridSize.z() * SI::CELL_DEPTH_SI + nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
-                        n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res * SI::CELL_DEPTH_SI) - 2);
+                        movingWindowCorrection =  slicepoint * globalGridSize.z() * SI::CELL_DEPTH_SI + nt * dt * SI::DELTA_T_SI * float_64(SI::SPEED_OF_LIGHT_SI);
+                        printf("1: %e \n", slicepoint * globalGridSize.z() * SI::CELL_DEPTH_SI);
+                        printf("2: %e \n", nt * dt * float_64(SI::SPEED_OF_LIGHT_SI));
+                        n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
                         PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr \n");
                         printf("moving window enabled \n");
                     } else {
@@ -287,7 +291,7 @@ namespace picongpu
                                         complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
                                         float_64 const phase = - float_64(params::delta_z) * 
-                                                ( 0 * math::sqrt(sqrtContent) + 0 * omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
+                                                (  0 * math::sqrt(sqrtContent) -  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
                                         complex_64 const propagated_field = masks::mask(i, j,omegaIndex) * field * propagator;
                                         //complex_64 const propagated_field = field;
@@ -482,6 +486,26 @@ namespace picongpu
                         outFile.close();
                     }
                     //}
+                }
+
+                float_64 omega(int i){
+                    int const actual_n = nt;
+                    float const actual_step = dt;
+                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
+                }
+                
+                // kx so that it is the proper kx for FFTs
+                float_64 kx(int i){ // @TODO x_n
+                    int const actual_n = n_x;
+                    float const actual_step = params::x_res * SI::CELL_WIDTH_SI;
+                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
+                }
+
+                // ky so that it is the proper ky for FFTs
+                float_64 ky(int i){ // @TODO y_n
+                    int const actual_n = n_y;
+                    float const actual_step = params::y_res * SI::CELL_HEIGHT_SI;
+                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
                 }
 
             }; // class Helper

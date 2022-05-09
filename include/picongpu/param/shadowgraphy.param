@@ -157,25 +157,7 @@ namespace picongpu
                 }
 
                 
-                HINLINE float_64 omega(int i){
-                    int const actual_n = params::t_n / params::t_res;
-                    float const actual_step = params::t_res * SI::DELTA_T_SI;
-                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
-                }
                 
-                // kx so that it is the proper kx for FFTs
-                HINLINE float_64 kx(int i){ // @TODO x_n
-                    int const actual_n = (params::x_n / params::x_res) - 2;
-                    float const actual_step = params::x_res * SI::CELL_WIDTH_SI;
-                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
-                }
-
-                // ky so that it is the proper ky for FFTs
-                HINLINE float_64 ky(int i){ // @TODO y_n
-                    int const actual_n = (params::y_n / params::y_res) - 2;
-                    float const actual_step = params::y_res * SI::CELL_HEIGHT_SI;
-                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
-                }
             }
 
 
