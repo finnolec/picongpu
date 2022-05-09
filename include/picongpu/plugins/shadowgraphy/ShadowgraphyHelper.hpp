@@ -66,6 +66,12 @@ namespace picongpu
                 float dt;
                 int nt;
 
+                int n_z;
+                int ngpus;
+                float cellspergpu;
+                float mvstart;
+
+
                 bool isSlidingWindowEnabled;
 
             public:
@@ -87,16 +93,25 @@ namespace picongpu
                     dt = params::t_res * SI::DELTA_T_SI;
                     nt = params::t_n / params::t_res;
 
+                    ngpus = 4;
+                    mvstart = 0.0;
+
+                    cellspergpu = float(globalGridSize.y()) / float(ngpus);
+
+                    n_z = slicepoint * globalGridSize.z();
+
+                    printf("gridsize y: %d \n", 3.0 * globalGridSize.y() / 4.0);
+
                     // This is currently not allowed to change during plugin run!
                     isSlidingWindowEnabled = MovingWindow::getInstance().isEnabled();
 
                     if(isSlidingWindowEnabled){
                         // movingWindowCorrection makes the resulting shadowgram smaller if the moving Window is enabled
                         // The resulting loss in the size of the shadowgram comes from the duration of the time integration
-                        movingWindowCorrection =  slicepoint * globalGridSize.z() * SI::CELL_DEPTH_SI + nt * dt * SI::DELTA_T_SI * float_64(SI::SPEED_OF_LIGHT_SI);
-                        printf("1: %e \n", slicepoint * globalGridSize.z() * SI::CELL_DEPTH_SI);
+                        movingWindowCorrection =  n_z * SI::CELL_DEPTH_SI + nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
+                        printf("1: %e \n", n_z * SI::CELL_DEPTH_SI);
                         printf("2: %e \n", nt * dt * float_64(SI::SPEED_OF_LIGHT_SI));
-                        n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
+                        n_y = math::ceil(( (float(ngpus - 1) / float(ngpus)) * globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
                         PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr \n");
                         printf("moving window enabled \n");
                     } else {
@@ -148,9 +163,14 @@ namespace picongpu
 
                 // Store fields in helper class with proper resolution
                 template<typename F>
-                void store_field(int t, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
+                void store_field(int t, int currentStep, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1, pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
                 {
-                    
+                    /*
+                        movingWindowCorrection =  slicepoint * globalGridSize.z() * SI::CELL_DEPTH_SI + nt * dt * SI::DELTA_T_SI * float_64(SI::SPEED_OF_LIGHT_SI);
+                        printf("1: %e \n", slicepoint * globalGridSize.z() * SI::CELL_DEPTH_SI);
+                        printf("2: %e \n", nt * dt * float_64(SI::SPEED_OF_LIGHT_SI));
+                        n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
+                    */
                     for(int i = 0; i < n_x; ++i){
                         int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
@@ -158,40 +178,51 @@ namespace picongpu
                             //printf("i = %d, j = %d \n", i, j);
                             if(isSlidingWindowEnabled){
                                 //int const grid_j = j * params::y_res;
-                                float const gridPos = float(j * params::y_res) + (nt - t - 1) * ( + SI::SPEED_OF_LIGHT_SI * dt / (SI::CELL_HEIGHT_SI));
+                                float const gridPos = float(j * params::y_res) 
+                                                + (math::fmod(SI::SPEED_OF_LIGHT_SI * (currentStep - mvstart) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI, cellspergpu))
+                                                + (float_64(nt - 1.0 - t) / float_64(nt - 1.0)) * (n_z * SI::CELL_DEPTH_SI + nt * dt * SI::SPEED_OF_LIGHT_SI) / (params::y_res * SI::CELL_HEIGHT_SI);
                                 float const wr = math::fmod(gridPos, 1.0);
                                 float const wl = 1.0 - wr;
                                 int const grid_j = math::floor(gridPos);
 
+                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t);
+
                                 if(F::getName() == "E"){
-                                    float_64 const Ex0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Ex1 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
-                                    float_64 const Ex2 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
+                                    if(j == 0 && i == 0){
+                                        printf("grid_j: %d, j: %d \t", grid_j, j);
+                                        printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt, (float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
+                                    } else if(j == n_y-1 && i == 0) {
+                                        printf("grid_j: %d, j: %d \t", grid_j, j);
+                                        printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e  -- end \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt,(float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
+                                    }
+                                    float_64 const Ex0 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Ex1 = wf * (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
+                                    float_64 const Ex2 = wf * (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
                                     tmp_Ex[i][j] = ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
-                                    float_64 const Ey0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
-                                    float_64 const Ey1 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
-                                    float_64 const Ey2 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
+                                    float_64 const Ey0 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const Ey1 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
+                                    float_64 const Ey2 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
                                     tmp_Ey[i][j] = ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
                                 } else {
-                                    float_64 const Bx10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx11 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx12 = (*(fieldBuffer1->origin()(grid_i, grid_j+2))).x();
-                                    float_64 const Bx20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx21 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx22 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
+                                    float_64 const Bx10 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx11 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx12 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j+2))).x();
+                                    float_64 const Bx20 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx21 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx22 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
                                     tmp_Bx[i][j] = ( wl * (Bx10 + Bx20) + Bx11 + Bx21 + wr * (Bx12 + Bx22) ) / 4.0;
-                                    float_64 const By10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
-                                    float_64 const By11 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).x();
-                                    float_64 const By12 = (*(fieldBuffer1->origin()(grid_i+2, grid_j))).x();
-                                    float_64 const By20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const By21 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
-                                    float_64 const By22 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
+                                    float_64 const By10 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j))).y();
+                                    float_64 const By11 = wf * (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y();
+                                    float_64 const By12 = wf * (*(fieldBuffer1->origin()(grid_i+2, grid_j))).y();
+                                    float_64 const By20 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const By21 = wf * (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
+                                    float_64 const By22 = wf * (*(fieldBuffer2->origin()(grid_i+2, grid_j))).y();
                                     tmp_By[i][j] = ( wl * (By10 + By20) + By11 + By21 + wr * (By12 + By22) ) / 4.0;
                                 }
                             } else {
                                 int const grid_j = j * params::y_res;
 
-                                float_64 const wf = masks::position_wf(i, j) * masks::t_wf(t);
+                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t);
 
                                 // fix yee offset
                                 if(F::getName() == "E"){
@@ -215,7 +246,7 @@ namespace picongpu
 
                     for(int o = 0; o < n_omegas; ++o){
                         int const omegaIndex = fourierhelper::get_omega_index(o);
-                        float_64 const omega_SI = fourierhelper::omega(omegaIndex);
+                        float_64 const omega_SI = omega(omegaIndex);
 
                         complex_64 const phase = complex_64(0, -omega_SI * t_SI);
                         complex_64 const exponential = math::exp(phase);
@@ -237,10 +268,10 @@ namespace picongpu
                         for(int o = 0; o < n_omegas; ++o){
                             
                             int const omegaIndex = fourierhelper::get_omega_index(o);
-                            float_64 const omega_SI = fourierhelper::omega(omegaIndex);
+                            float_64 const omega_SI = omega(omegaIndex);
                             printf("omegaIndex: %d \n", omegaIndex);
-                            printf("omega: %e \n", fourierhelper::omega(omegaIndex));
-                            printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter(omegaIndex));
+                            //printf("omega: %e \n", omega(omegaIndex));
+                            //printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter_f(omega(omegaIndex)));
 
                             // put field into fftw array
                             for(int i = 0; i < n_x; ++i){
@@ -278,8 +309,8 @@ namespace picongpu
                                     
                                     
                                     float_64 const sqrt1 = (omega_SI * omega_SI) / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
-                                    float_64 const sqrt2 = fourierhelper::kx(i) * fourierhelper::kx(i);
-                                    float_64 const sqrt3 = fourierhelper::ky(j) * fourierhelper::ky(j);
+                                    float_64 const sqrt2 = kx(i) * kx(i);
+                                    float_64 const sqrt3 = ky(j) * ky(j);
                                     float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
                                     
                                     if(sqrtContent >= 0.0)
@@ -293,7 +324,7 @@ namespace picongpu
                                         float_64 const phase = - float_64(params::delta_z) * 
                                                 (  0 * math::sqrt(sqrtContent) -  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
-                                        complex_64 const propagated_field = masks::mask(i, j,omegaIndex) * field * propagator;
+                                        complex_64 const propagated_field = masks::mask_f(kx(i), ky(j), omega(omegaIndex)) * field * propagator;
                                         //complex_64 const propagated_field = field;
 
                                         fftw_in_b[index][0] = propagated_field.get_real();
@@ -354,7 +385,7 @@ namespace picongpu
 
                         for(int o = 0; o < n_omegas; ++o){
                             int const omegaIndex = fourierhelper::get_omega_index(o);
-                            float_64 const omega_SI = fourierhelper::omega(omegaIndex);
+                            float_64 const omega_SI = omega(omegaIndex);
                                 
                             complex_64 const phase = complex_64(0, t_SI * omega_SI);
                             complex_64 const exponential = math::exp(phase);

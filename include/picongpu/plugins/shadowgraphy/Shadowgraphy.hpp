@@ -274,7 +274,9 @@ namespace picongpu
 
                         int localStep = (currentStep - startTime) / params::t_res;
 
-                        std::cout << "localStep: " << localStep << std::endl;
+                        if (isMaster){
+                            std::cout << "localStep: " << localStep << std::endl;
+                        }
 
                         if(localStep != int(params::t_n / params::t_res))
                         {
@@ -287,7 +289,7 @@ namespace picongpu
                                                         .cartBuffer()
                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint, localStep);
+                            storeSlice<FieldE>(field_coreBorderE, this->plane, this->slicePoint, localStep, currentStep);
 
                             auto field_coreBorderB = dc.get<FieldB>(FieldB::getName(), true)
                                                         ->getGridBuffer()
@@ -295,7 +297,7 @@ namespace picongpu
                                                         .cartBuffer()
                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
 
-                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, localStep);
+                            storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, localStep, currentStep);
 
                             if (isMaster){
                                 helper->calculate_dft(localStep);
@@ -326,7 +328,7 @@ namespace picongpu
                 }
 
                 template<typename Field, typename TField>
-                void storeSlice(const TField& field, int nAxis, float slicePoint, int localStep)
+                void storeSlice(const TField& field, int nAxis, float slicePoint, int localStep, int currentStep)
                 {
                     namespace vec = pmacc::math;
 
@@ -451,7 +453,7 @@ namespace picongpu
 
                     if(isMaster)
                     {
-                        helper->store_field<Field>(localStep, &globalBuffer1, &globalBuffer2);
+                        helper->store_field<Field>(localStep, currentStep, &globalBuffer1, &globalBuffer2);
                     }
                     //std::ofstream file(filename.c_str());
                     //file << globalBuffer;

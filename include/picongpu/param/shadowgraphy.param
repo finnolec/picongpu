@@ -32,8 +32,8 @@ namespace picongpu
                 //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
                 //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
 
-                constexpr unsigned int x_n = 64;
-                constexpr unsigned int y_n = 128;
+                //constexpr unsigned int x_n = 64;
+                //constexpr unsigned int y_n = 128;
 
                 // Transverse resolution of shadowgram in PIConGPU cell size units
                 constexpr unsigned int x_res = 1;//2
@@ -165,9 +165,9 @@ namespace picongpu
             {
                 // Numerical aperture to remove e.g. side scattered light from probe laser and drive laser from shadowgraphy simulations
                 //constexpr float_64 numerical_aperture = 0.23;
-                HINLINE float_64 position_wf(int i, int j){
+                HINLINE float_64 position_wf(int i, int j, int plugin_x_n, int plugin_y_n){
                     float_64 x_factor = 1.0;
-                    int const plugin_x_n = params::x_n / params::x_res - 2;
+                    //int const plugin_x_n = params::x_n / params::x_res - 2;
 
                     if (i <= params::plugin_wf_buffer_x ){
                         x_factor = ( 1.0 - math::cos(PI * i / float_64(params::plugin_wf_buffer_x)) ) / 2.0;
@@ -176,7 +176,7 @@ namespace picongpu
                     }
 
                     float_64 y_factor = 1.0;
-                    int const plugin_y_n = params::y_n / params::y_res - 2;
+                    //int const plugin_y_n = params::y_n / params::y_res - 2;
 
                     if (j <= params::plugin_wf_buffer_y){
                         y_factor = ( 1.0 - math::cos(PI * j / float_64(params::plugin_wf_buffer_y)) ) / 2.0;
@@ -203,13 +203,17 @@ namespace picongpu
 
 
 
-                HINLINE float_64 frequency_filter(int o){
+                HINLINE float_64 frequency_filter_f(float_64 omeganonabs){
                     /**
                       * o is integer for omega coordinate from 0 to n_omega
                       */
                     //float_64 const max_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
                     //float_64 const min_omega = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
-                    float_64 const omega = math::abs(fourierhelper::omega(o));
+                    //float_64 const omega = math::abs(fourierhelper::omega(o));
+
+                    float_64 const omega = math::abs(omeganonabs);
+
+                    
 
                     if(params::ndo_wf == 0.0)
                     {
@@ -251,10 +255,10 @@ namespace picongpu
                     }
                 }
 
-                HINLINE float_64 numerical_aperture(int i, int j, int o){
-                    float_64 const omega = math::abs(fourierhelper::omega(o));
-                    float_64 const kx = fourierhelper::kx(i);
-                    float_64 const ky = fourierhelper::ky(j);
+                HINLINE float_64 numerical_aperture_f(float_64 kx, float_64 ky, float_64 omega){
+                    //float_64 const omega = math::abs(fourierhelper::omega(o));
+                    //float_64 const kx = fourierhelper::kx(i);
+                    //float_64 const ky = fourierhelper::ky(j);
 
                     float_64 const kperp = math::sqrt(kx * kx + ky * ky);
                     float_64 const k = math::abs(omega / SI::SPEED_OF_LIGHT_SI);
@@ -272,13 +276,13 @@ namespace picongpu
                     }
                 }
 
-                HINLINE float_64 mask(int i, int j, int o){
+                HINLINE float_64 mask_f(float_64 kx, float_64 ky, float_64 omega){
                     /** 
                       * i is integer for x coordinate from 0 to n_x
                       * j is integer for j coordinate from 0 to n_y
                       * o is integer for omega coordinate from 0 to n_omega
                       */
-                    return frequency_filter(o) * numerical_aperture(i, j, o);
+                    return frequency_filter_f(omega) * numerical_aperture_f(kx, ky, omega);
                 }
             }
             // The amount of cells to remove from each (!) side of the simulation box
