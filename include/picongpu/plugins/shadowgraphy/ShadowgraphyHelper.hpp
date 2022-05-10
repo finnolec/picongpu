@@ -171,6 +171,7 @@ namespace picongpu
                         printf("2: %e \n", nt * dt * float_64(SI::SPEED_OF_LIGHT_SI));
                         n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
                     */
+                    printf("t: %d, currentStep: %d \n", t, currentStep);
                     for(int i = 0; i < n_x; ++i){
                         int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
@@ -179,8 +180,9 @@ namespace picongpu
                             if(isSlidingWindowEnabled){
                                 //int const grid_j = j * params::y_res;
                                 float const gridPos = float(j * params::y_res) 
-                                                + (math::fmod(SI::SPEED_OF_LIGHT_SI * (currentStep - mvstart) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI, cellspergpu))
-                                                + (float_64(nt - 1.0 - t) / float_64(nt - 1.0)) * (n_z * SI::CELL_DEPTH_SI + nt * dt * SI::SPEED_OF_LIGHT_SI) / (params::y_res * SI::CELL_HEIGHT_SI);
+                                                + (math::fmod((SI::SPEED_OF_LIGHT_SI * (currentStep - mvstart) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu))
+                                                //+ (float_64(nt - 1 - t) / float_64(nt - 1)) * (0 * n_z * SI::CELL_DEPTH_SI + nt * dt * SI::SPEED_OF_LIGHT_SI) / (params::y_res * SI::CELL_HEIGHT_SI);
+                                                +  (float_64(nt - t - 1) * dt * SI::SPEED_OF_LIGHT_SI) / (SI::CELL_HEIGHT_SI);
                                 float const wr = math::fmod(gridPos, 1.0);
                                 float const wl = 1.0 - wr;
                                 int const grid_j = math::floor(gridPos);
@@ -188,12 +190,18 @@ namespace picongpu
                                 float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t);
 
                                 if(F::getName() == "E"){
-                                    if(j == 0 && i == 0){
+                                    if(t == 0 && j == 0 && i == 0){
                                         printf("grid_j: %d, j: %d \t", grid_j, j);
                                         printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt, (float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
-                                    } else if(j == n_y-1 && i == 0) {
+                                    } else if( t == 0 && j == n_y-1 && i == 0) {
                                         printf("grid_j: %d, j: %d \t", grid_j, j);
                                         printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e  -- end \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt,(float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
+                                    } else if(j == 0 && i == 0){
+                                        printf("grid_j: %d, j: %d \t", grid_j, j);
+                                        printf("gridPos: %f \n", gridPos);
+                                    } else if(j == n_y-1 && i == 0) {
+                                        printf("grid_j: %d, j: %d \t", grid_j, j);
+                                        printf("gridPos: %f \n", gridPos);
                                     }
                                     float_64 const Ex0 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
                                     float_64 const Ex1 = wf * (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
