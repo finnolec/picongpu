@@ -114,6 +114,8 @@ namespace picongpu
                 bool isIntegrating;
                 int startTime;
 
+                int ngpuslong;
+
                 bool isMaster = false;
                 bool debugoutput = false;
 
@@ -168,6 +170,10 @@ namespace picongpu
                         (this->pluginPrefix + ".slicePoint").c_str(),
                         po::value<float_X>(&this->slicePoint)->multitoken(),
                         "slice point 0.0 <= x <= 1.0");
+                    desc.add_options()(
+                        (this->pluginPrefix + ".ngpuslong").c_str(),
+                        po::value<int>(&this->ngpuslong)->multitoken(),
+                        "n gpus longitudinal");
                 }
 
                 void pluginLoad() override
@@ -263,7 +269,7 @@ namespace picongpu
                                 vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                                 vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
-                                helper = new Helper(globalGridSize, this->slicePoint);
+                                helper = new Helper(globalGridSize, this->slicePoint, this->ngpuslong);
                             }
 
 

@@ -71,13 +71,15 @@ namespace picongpu
                 float cellspergpu;
                 float mvstart;
 
+                float domega;
+
 
                 bool isSlidingWindowEnabled;
 
             public:
                 // Constructor of the shadowgraphy helper class
                 // To be called at the first time step when the shadowgraphy time integration starts
-                Helper(pmacc::math::Size_t<simDim> globalGridSize, float slicepoint):
+                Helper(pmacc::math::Size_t<simDim> globalGridSize, float slicepoint, int ngpuslong):
                     n_x(globalGridSize.x() / params::x_res - 2),
                     slicepoint(slicepoint)
                 {
@@ -93,14 +95,14 @@ namespace picongpu
                     dt = params::t_res * SI::DELTA_T_SI;
                     nt = params::t_n / params::t_res;
 
-                    ngpus = 4;
+                    ngpus = ngpuslong;
                     mvstart = 0.0;
+
+                    domega = math::abs(omega(1) - omega(0));
 
                     cellspergpu = float(globalGridSize.y()) / float(ngpus);
 
                     n_z = slicepoint * globalGridSize.z();
-
-                    printf("gridsize y: %d \n", 3.0 * globalGridSize.y() / 4.0);
 
                     // This is currently not allowed to change during plugin run!
                     isSlidingWindowEnabled = MovingWindow::getInstance().isEnabled();
@@ -123,6 +125,9 @@ namespace picongpu
                     n_y = n_y % 2 == 0 ? n_y : n_y - 1;
 
                     std::cout << "initialized with "<< n_x << ", " << n_y << std::endl;
+
+                    printf("ngpus: %d, (%e) \n", ngpus, (float(ngpus - 1) / float(ngpus)) * globalGridSize.y());
+                    printf("things: %e",  movingWindowCorrection / SI::CELL_HEIGHT_SI);
 
                     // Initialization of storage arrays
                     Ex_omega = vec3c(n_x, vec2c(n_y, vec1c(n_omegas)));
@@ -409,7 +414,7 @@ namespace picongpu
                                     //                        -  Ey_omega_propagated[i][j][o1] * Bx_omega_propagated[i][j][o2];
                                     
                                     //shadowgram[i][j] += (pv * exponential).get_real();
-                                    shadowgram[i][j] += (Ex * By - Ey * Bx 
+                                    shadowgram[i][j] += (dt / (SI::MUE0_SI * nt * nt)) * (Ex * By - Ey * Bx 
                                                         + Ex_tmpsum[i][j] * By + Ex * By_tmpsum[i][j]
                                                         - Ey_tmpsum[i][j] * Bx - Ey * Bx_tmpsum[i][j]).get_real();
 
