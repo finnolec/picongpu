@@ -65,38 +65,49 @@ namespace picongpu
                 // Variables for omega calculations @TODO some initializations and bla
                 float dt;
                 int nt;
+                int duration;
 
                 int n_z;
                 int ngpus;
                 float cellspergpu;
-                float mvstart;
+                float mwstartStep;
+
+                float delta_z;
 
                 float domega;
 
-
+                int startTime;
                 bool isSlidingWindowEnabled;
+
+                int amount_of_moving_windows = -1;
 
             public:
                 // Constructor of the shadowgraphy helper class
                 // To be called at the first time step when the shadowgraphy time integration starts
-                Helper(pmacc::math::Size_t<simDim> globalGridSize, float slicepoint, int ngpuslong):
+                Helper(pmacc::math::Size_t<simDim> globalGridSize, float slicepoint, int ngpuslong, float mwstart, float focuspos, int duration, int pluginstart):
                     n_x(globalGridSize.x() / params::x_res - 2),
+                    duration(duration),
+                    startTime(pluginstart),
                     slicepoint(slicepoint)
                 {
                     // Same amount of omegas as ts 
                     // @TODO int division
                     // n_omegas = params::omega_n;
-                    omega_min_index = fourierhelper::get_omega_min_index();
-                    omega_max_index = fourierhelper::get_omega_max_index();
-                    n_omegas = fourierhelper::get_n_omegas(); //omega_max_index - omega_min_index;
+                    omega_min_index = fourierhelper::get_omega_min_index(duration);
+                    omega_max_index = fourierhelper::get_omega_max_index(duration);
+                    n_omegas = fourierhelper::get_n_omegas(duration); //omega_max_index - omega_min_index;
                     
                     printf("minindex: %d, maxindex: %d, n: %d \n", omega_min_index, omega_max_index, n_omegas);
 
                     dt = params::t_res * SI::DELTA_T_SI;
-                    nt = params::t_n / params::t_res;
+                    nt = duration / params::t_res;
+
+                    delta_z = focuspos;
 
                     ngpus = ngpuslong;
-                    mvstart = 0.0;
+
+                    //time step when moving window started:
+                    mwstartStep = (mwstart * float(globalGridSize.y()) * (ngpus - 1) / float(ngpus) / SI::SPEED_OF_LIGHT_SI) / SI::DELTA_T_SI;
 
                     domega = math::abs(omega(1) - omega(0));
 
@@ -177,75 +188,117 @@ namespace picongpu
                         n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
                     */
                     printf("t: %d, currentStep: %d \n", t, currentStep);
+                    float const lost_index_from_sw = math::fmod((SI::SPEED_OF_LIGHT_SI * duration * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu);
+
                     for(int i = 0; i < n_x; ++i){
+
                         int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
                             //printf("i = %d, j = %d \n", i, j);
                             if(isSlidingWindowEnabled){
                                 //int const grid_j = j * params::y_res;
-                                float const gridPos = float(j * params::y_res) 
-                                                + (math::fmod((SI::SPEED_OF_LIGHT_SI * (currentStep - mvstart) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu))
+                                float const jumped_gpu_cells = math::floor(SI::SPEED_OF_LIGHT_SI * (startTime + duration - currentStep) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI / cellspergpu) * cellspergpu / params::y_res;
+                                float const gridPos = float(j * params::y_res) + jumped_gpu_cells + lost_index_from_sw;
+                                                //+ (math::fmod((SI::SPEED_OF_LIGHT_SI * (currentStep - mwstartStep) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu))
                                                 //+ (float_64(nt - 1 - t) / float_64(nt - 1)) * (0 * n_z * SI::CELL_DEPTH_SI + nt * dt * SI::SPEED_OF_LIGHT_SI) / (params::y_res * SI::CELL_HEIGHT_SI);
-                                                +  (float_64(nt - t - 1) * dt * SI::SPEED_OF_LIGHT_SI) / (SI::CELL_HEIGHT_SI);
+                                                //+  (float_64(nt - t - 1) * dt * SI::SPEED_OF_LIGHT_SI) / (SI::CELL_HEIGHT_SI);
+
+                                //float const amount_of_moving_windows = math::floor();
                                 float const wr = math::fmod(gridPos, 1.0);
                                 float const wl = 1.0 - wr;
                                 int const grid_j = math::floor(gridPos);
 
-                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t);
+                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t, duration);
 
                                 if(F::getName() == "E"){
                                     if(t == 0 && j == 0 && i == 0){
                                         printf("grid_j: %d, j: %d \t", grid_j, j);
-                                        printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt, (float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
+                                        //printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt, (float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
+                                        printf("jumped gpu cells: %d, gridpos: %f \n", jumped_gpu_cells, gridPos);
+                                        printf("end time: %d", startTime + duration);
+                                        printf("lost index: %f", lost_index_from_sw);
                                     } else if( t == 0 && j == n_y-1 && i == 0) {
                                         printf("grid_j: %d, j: %d \t", grid_j, j);
-                                        printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e  -- end \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt,(float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
+                                        printf("jumped gpu cells: %d, gridpos: %f \n", jumped_gpu_cells, gridPos);
+                                        //printf("gridPos: %e, nzthing: %e, ntf: %e, nti: %e  -- end \n", gridPos, n_z * SI::CELL_DEPTH_SI, nt * SI::SPEED_OF_LIGHT_SI * dt,(float_64(nt - 1.0 - t) / float_64(nt - 1.0)));
                                     } else if(j == 0 && i == 0){
                                         printf("grid_j: %d, j: %d \t", grid_j, j);
-                                        printf("gridPos: %f \n", gridPos);
+                                        printf("jumped gpu cells: %d, gridpos: %f \n", jumped_gpu_cells, gridPos);
+                                        //printf("gridPos: %f \n", gridPos);
                                     } else if(j == n_y-1 && i == 0) {
                                         printf("grid_j: %d, j: %d \t", grid_j, j);
-                                        printf("gridPos: %f \n", gridPos);
+                                        printf("jumped gpu cells: %d, gridpos: %f \n", jumped_gpu_cells, gridPos);
+                                        //printf("gridPos: %f \n", gridPos);
                                     }
-                                    float_64 const Ex0 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Ex1 = wf * (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
-                                    float_64 const Ex2 = wf * (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
-                                    tmp_Ex[i][j] = ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
-                                    float_64 const Ey0 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
-                                    float_64 const Ey1 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
-                                    float_64 const Ey2 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
-                                    tmp_Ey[i][j] = ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
+                                    float_64 const Ex0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Ex1 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
+                                    //tmp_Ex[i][j] = wf * ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
+                                    tmp_Ex[i][j] = wf * ( wl * Ex0 + wr * Ex1 ); 
+                                    float_64 const Ey0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const Ey1 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
+                                    //tmp_Ey[i][j] = wf * ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
+                                    tmp_Ey[i][j] = wf * ( wl * Ey0 + wr * Ey1 );
+                                    /*
+                                    float_64 const Ex0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Ex1 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
+                                    float_64 const Ex2 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
+                                    //tmp_Ex[i][j] = wf * ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
+                                    tmp_Ex[i][j] = wf * ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
+                                    float_64 const Ey0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const Ey1 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
+                                    float_64 const Ey2 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
+                                    //tmp_Ey[i][j] = wf * ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
+                                    tmp_Ey[i][j] = wf * ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
+                                    */
                                 } else {
-                                    float_64 const Bx10 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx11 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx12 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j+2))).x();
-                                    float_64 const Bx20 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx21 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx22 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
-                                    tmp_Bx[i][j] = ( wl * (Bx10 + Bx20) + Bx11 + Bx21 + wr * (Bx12 + Bx22) ) / 4.0;
-                                    float_64 const By10 = wf * (*(fieldBuffer1->origin()(grid_i, grid_j))).y();
-                                    float_64 const By11 = wf * (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y();
-                                    float_64 const By12 = wf * (*(fieldBuffer1->origin()(grid_i+2, grid_j))).y();
-                                    float_64 const By20 = wf * (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
-                                    float_64 const By21 = wf * (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
-                                    float_64 const By22 = wf * (*(fieldBuffer2->origin()(grid_i+2, grid_j))).y();
-                                    tmp_By[i][j] = ( wl * (By10 + By20) + By11 + By21 + wr * (By12 + By22) ) / 4.0;
+                                    /*
+                                    float_64 const Bx10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx11 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx12 = (*(fieldBuffer1->origin()(grid_i, grid_j+2))).x();
+                                    float_64 const Bx20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx21 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx22 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
+                                    tmp_Bx[i][j] = wf * ( wl * (Bx10 + Bx20) + Bx11 + Bx21 + wr * (Bx12 + Bx22) ) / 4.0;
+                                    float_64 const By10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).y();
+                                    float_64 const By11 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y();
+                                    float_64 const By12 = (*(fieldBuffer1->origin()(grid_i+2, grid_j))).y();
+                                    float_64 const By20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const By21 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
+                                    float_64 const By22 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).y();
+                                    tmp_By[i][j] = wf * ( wl * (By10 + By20) + By11 + By21 + wr * (By12 + By22) ) / 4.0;
+                                    */
+                                    float_64 const Bx10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx11 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
+                                    float_64 const Bx20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
+                                    float_64 const Bx21 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
+                                    tmp_Bx[i][j] = wf * ( wl * (Bx10 + Bx20) + wr * (Bx11 + Bx21) ) / 2.0;
+                                    float_64 const By10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).y();
+                                    float_64 const By11 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y();
+                                    float_64 const By20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
+                                    float_64 const By21 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
+                                    tmp_By[i][j] = wf * ( wl * (By10 + By20) + wr * (By11 + By21) ) / 2.0;
                                 }
                             } else {
                                 int const grid_j = j * params::y_res;
 
-                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t);
+                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t, duration);
 
                                 // fix yee offset
                                 if(F::getName() == "E"){
-                                    tmp_Ex[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
-                                    tmp_Ey[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
+                                    tmp_Ex[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() 
+                                                       + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
+                                    tmp_Ey[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() 
+                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
                                 } else {
-                                    tmp_Bx[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
-                                                    + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
-                                    tmp_By[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
-                                                    + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
+                                    tmp_Bx[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() 
+                                                       + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
+                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() 
+                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
+                                    tmp_By[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() 
+                                                       + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
+                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() 
+                                                       + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
                                 }
                             }
                         }
@@ -258,7 +311,7 @@ namespace picongpu
                     float_64 const t_SI = t * int(params::t_res) * float_64(picongpu::SI::DELTA_T_SI);
 
                     for(int o = 0; o < n_omegas; ++o){
-                        int const omegaIndex = fourierhelper::get_omega_index(o);
+                        int const omegaIndex = fourierhelper::get_omega_index(o, duration);
                         float_64 const omega_SI = omega(omegaIndex);
 
                         complex_64 const phase = complex_64(0, -omega_SI * t_SI);
@@ -280,7 +333,7 @@ namespace picongpu
                     for(int fieldindex = 0; fieldindex < 4; fieldindex++){
                         for(int o = 0; o < n_omegas; ++o){
                             
-                            int const omegaIndex = fourierhelper::get_omega_index(o);
+                            int const omegaIndex = fourierhelper::get_omega_index(o, duration);
                             float_64 const omega_SI = omega(omegaIndex);
                             printf("omegaIndex: %d \n", omegaIndex);
                             //printf("omega: %e \n", omega(omegaIndex));
@@ -334,7 +387,7 @@ namespace picongpu
 
                                         complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
-                                        float_64 const phase = - float_64(params::delta_z) * 
+                                        float_64 const phase = - 0 * delta_z * 
                                                 (  0 * math::sqrt(sqrtContent) -  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
                                         complex_64 const propagated_field = masks::mask_f(kx(i), ky(j), omega(omegaIndex)) * field * propagator;
@@ -397,7 +450,7 @@ namespace picongpu
                         vec2c By_tmpsum = vec2c(n_x, vec1c(n_y));
 
                         for(int o = 0; o < n_omegas; ++o){
-                            int const omegaIndex = fourierhelper::get_omega_index(o);
+                            int const omegaIndex = fourierhelper::get_omega_index(o, duration);
                             float_64 const omega_SI = omega(omegaIndex);
                                 
                             complex_64 const phase = complex_64(0, t_SI * omega_SI);

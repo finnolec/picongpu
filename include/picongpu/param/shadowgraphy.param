@@ -122,9 +122,9 @@ namespace picongpu
                 }  */ 
 
                 
-                HINLINE int get_omega_min_index(){
+                HINLINE int get_omega_min_index(int duration){
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
-                    int const actual_n = params::t_n / params::t_res;
+                    int const actual_n = duration / params::t_res;
                     int tmpindex = math::floor(actual_n * ((actual_step * params::omega_min_wf) / (2.0 * PI) + 0.5));
                     int retindex = tmpindex > actual_n / 2 + 1 ? tmpindex : actual_n / 2 + 1;
                     //printf("retindex %d \n", retindex);
@@ -134,25 +134,25 @@ namespace picongpu
                     //return 0;
                 }
 
-                HINLINE int get_omega_max_index(){
+                HINLINE int get_omega_max_index(int duration){
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
-                    int const actual_n = params::t_n / params::t_res;
+                    int const actual_n = duration / params::t_res;
                     int tmpindex = math::ceil(actual_n * ((actual_step * params::omega_max_wf) / (2.0 * PI) + 0.5));
                     int retindex =  tmpindex <= actual_n ? tmpindex : actual_n;
                     return retindex + 1;
                     //return params::omega_n-1;
                 }
 
-                HINLINE int get_n_omegas(){
-                    return 2 * (get_omega_max_index() - get_omega_min_index());
+                HINLINE int get_n_omegas(int duration){
+                    return 2 * (get_omega_max_index(duration) - get_omega_min_index(duration));
                 }
 
-                HINLINE int get_omega_index(int i){
-                    int const n_omegas = get_n_omegas() / 2;
+                HINLINE int get_omega_index(int i, int t_n){
+                    int const n_omegas = get_n_omegas(t_n) / 2;
                     if (i < n_omegas){
-                        return params::t_n / params::t_res - get_omega_min_index() - n_omegas + i + 1;//(get_omega_min_index() % n_omegas) + i + 1;
+                        return t_n / params::t_res - get_omega_min_index(t_n) - n_omegas + i + 1;//(get_omega_min_index() % n_omegas) + i + 1;
                     } else {
-                        return (i % n_omegas) + get_omega_min_index();
+                        return (i % n_omegas) + get_omega_min_index(t_n);
                     }
                 }
 
@@ -187,10 +187,10 @@ namespace picongpu
                     return x_factor * y_factor;
                 }
 
-                HINLINE float_64 t_wf(int t){
+                HINLINE float_64 t_wf(int t, int t_n){
                     float_64 t_factor = 1.0;
 
-                    int t_max = params::t_n / params::t_res;
+                    int t_max = t_n / params::t_res;
 
                     if (t <= params::t_wf_buffer){
                         t_factor = ( 1.0 - math::cos(PI * t / float_64(params::t_wf_buffer)) ) / 2.0;

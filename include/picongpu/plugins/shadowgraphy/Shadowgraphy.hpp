@@ -114,7 +114,11 @@ namespace picongpu
                 bool isIntegrating;
                 int startTime;
 
+                float focuspos;
+
                 int ngpuslong;
+                float_X mwstart;
+                int duration;
 
                 bool isMaster = false;
                 bool debugoutput = false;
@@ -174,6 +178,18 @@ namespace picongpu
                         (this->pluginPrefix + ".ngpuslong").c_str(),
                         po::value<int>(&this->ngpuslong)->multitoken(),
                         "n gpus longitudinal");
+                    desc.add_options()(
+                        (this->pluginPrefix + ".mwstart").c_str(),
+                        po::value<float_X>(&this->mwstart)->multitoken(),
+                        "mwstart");
+                    desc.add_options()(
+                        (this->pluginPrefix + ".focuspos").c_str(),
+                        po::value<float_X>(&this->focuspos)->multitoken(),
+                        "focus position relative to slice point in microns");
+                    desc.add_options()(
+                        (this->pluginPrefix + ".duration").c_str(),
+                        po::value<int>(&this->duration)->multitoken(),
+                        "nt");
                 }
 
                 void pluginLoad() override
@@ -189,7 +205,7 @@ namespace picongpu
                         std::cout<<"hello world what what what "<< SI::DELTA_T_SI << std::endl;
                         std::cout<<std::stoi(this->notifyPeriod) << std::endl;
                         int startTime = std::stoi(this->notifyPeriod);
-                        int endTime = std::stoi(this->notifyPeriod) + params::t_n;
+                        int endTime = std::stoi(this->notifyPeriod) + this->duration;
 
                         std::cout<<endTime<<std::endl;
                         std::string internalNotifyPeriod = std::to_string(startTime) + ":" + std::to_string(endTime) + ":" + std::to_string(params::t_res);
@@ -253,6 +269,8 @@ namespace picongpu
                         // First time the plugin is called:
                         if(isIntegrating == false)
                         {
+                            startTime = currentStep;
+
                             if (isMaster)
                             {
                                 // Get grid size
@@ -269,12 +287,11 @@ namespace picongpu
                                 vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                                 vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
-                                helper = new Helper(globalGridSize, this->slicePoint, this->ngpuslong);
+                                helper = new Helper(globalGridSize, this->slicePoint, this->ngpuslong, this->mwstart, this->focuspos * 1e-6, this->duration, this->startTime);
                             }
 
 
                             // Create Integrator object %TODO
-                            startTime = currentStep;
                             isIntegrating = true;
                         }
 
@@ -284,7 +301,7 @@ namespace picongpu
                             std::cout << "localStep: " << localStep << std::endl;
                         }
 
-                        if(localStep != int(params::t_n / params::t_res))
+                        if(localStep != int(this->duration / params::t_res))
                         {
                             namespace vec = ::pmacc::math;
                             typedef SuperCellSize BlockDim;
