@@ -198,7 +198,8 @@ namespace picongpu
                             //printf("i = %d, j = %d \n", i, j);
                             if(isSlidingWindowEnabled){
                                 //int const grid_j = j * params::y_res;
-                                float const jumped_gpu_cells = math::floor(SI::SPEED_OF_LIGHT_SI * (startTime + duration - currentStep) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI / cellspergpu) * cellspergpu / params::y_res;
+                                float const jumped_gpu_cells = math::floor(SI::SPEED_OF_LIGHT_SI * (startTime + duration - currentStep) 
+                                                                            * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI / cellspergpu) * cellspergpu;// / params::y_res;
                                 float gridPos = float(j * params::y_res) + jumped_gpu_cells + lost_index_from_sw;
                                                 //+ (math::fmod((SI::SPEED_OF_LIGHT_SI * (currentStep - mwstartStep) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu))
                                                 //+ (float_64(nt - 1 - t) / float_64(nt - 1)) * (0 * n_z * SI::CELL_DEPTH_SI + nt * dt * SI::SPEED_OF_LIGHT_SI) / (params::y_res * SI::CELL_HEIGHT_SI);
@@ -262,19 +263,17 @@ namespace picongpu
                                         printf("jumped gpu cells: %e, gridpos: %e \n", jumped_gpu_cells, gridPos);
                                         //printf("gridPos: %f \n", gridPos);
                                     }
-                                    float_64 const Ex011 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Ex111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x();
-                                    float_64 const Ex021 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
-                                    float_64 const Ex121 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).x();
-                                    //tmp_Ex[i][j] = wf * ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
-                                    //tmp_Ex[i][j] = wf * ( wl * Ex0 + wr * Ex1 ); 
+                                    float_64 const Ex011 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x(); //
+                                    float_64 const Ex111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x(); //
+                                    float_64 const Ex021 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();  //
+                                    float_64 const Ex121 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).x(); //
                                     tmp_Ex[i][j] = wf * ( wl * (Ex011 + Ex111) + wr * (Ex021 + Ex121) ) / 2.0;
                                     
                                     if(wr < 0.5){
                                         float_64 const wrEy = wr + 0.5;
                                         float_64 const wlEy = wl - 0.5;
-                                        float_64 const Ey101 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
-                                        float_64 const Ey111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).y();
+                                        float_64 const Ey101 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y(); //
+                                        float_64 const Ey111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).y(); //
                                         tmp_Ey[i][j] = wf * (wlEy * Ey101 + wrEy * Ey111);
                                     } else {
                                         float_64 const wrEy = wr - 0.5;
@@ -283,103 +282,43 @@ namespace picongpu
                                         float_64 const Ey121 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).y();
                                         tmp_Ey[i][j] = wf * (wlEy * Ey111 + wrEy * Ey121);
                                     }
-                                    //float_64 const Ey0 = (*(fieldBuffer2->origin()(grid_i, grid_j+0))).y();
-                                    //float_64 const Ey1 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
-                                    //tmp_Ey[i][j] = wf * ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
-                                    //tmp_Ey[i][j] = wf * ( wl * Ey0 + wr * Ey1 );
-                                    /*
-                                    float_64 const Ex0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Ex1 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
-                                    float_64 const Ex2 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).x();
-                                    //tmp_Ex[i][j] = wf * ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
-                                    tmp_Ex[i][j] = wf * ( wl * Ex0 + Ex1 + wr * Ex2 ) / 2.0; 
-                                    float_64 const Ey0 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
-                                    float_64 const Ey1 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
-                                    float_64 const Ey2 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
-                                    //tmp_Ey[i][j] = wf * ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
-                                    tmp_Ey[i][j] = wf * ( wl * Ey0 + Ey1 + wr * Ey2 ) / 2.0;
-                                    */
                                 } else {
                                     if(wr < 0.5){
                                         float_64 wrBx = wr + 0.5;
                                         float_64 wlBx = wl - 0.5;
-                                        float_64 const Bx100 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x();
-                                        float_64 const Bx110 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x();
-                                        float_64 const Bx101 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).x();
-                                        float_64 const Bx111 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).x();
+                                        float_64 const Bx101 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x(); //
+                                        float_64 const Bx111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x(); //
+                                        float_64 const Bx100 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).x(); //
+                                        float_64 const Bx110 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).x(); //
 
                                         tmp_Bx[i][j] = wf * (wlBx * (Bx100 + Bx101) + wrBx * (Bx111 + Bx110)) / 2.0;
                                     } else {
                                         float_64 wrBx = wr - 0.5;
                                         float_64 wlBx = wl + 0.5;
-                                        float_64 const Bx110 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x();
-                                        float_64 const Bx120 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).x();
-                                        float_64 const Bx111 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).x();
-                                        float_64 const Bx121 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+2))).x();
+                                        float_64 const Bx111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x();
+                                        float_64 const Bx121 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).x();
+                                        float_64 const Bx110 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).x();
+                                        float_64 const Bx120 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+2))).x();
 
                                         tmp_Bx[i][j] = wf * (wlBx * (Bx110 + Bx111) + wrBx * (Bx121 + Bx120)) / 2.0;
                                     }
 
-                                    float_64 const By111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).y();
-                                    float_64 const By011 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y();
-                                    float_64 const By121 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).y();
-                                    float_64 const By021 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y();
-                                    float_64 const By110 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).y();
-                                    float_64 const By010 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).y();
-                                    float_64 const By120 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+2))).y();
-                                    float_64 const By020 = (*(fieldBuffer1->origin()(grid_i, grid_j+2))).y();
+                                    float_64 const By111 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).y(); //
+                                    float_64 const By011 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y(); //
+                                    float_64 const By121 = (*(fieldBuffer2->origin()(grid_i+1, grid_j+2))).y(); //
+                                    float_64 const By021 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).y(); //
+                                    float_64 const By110 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).y(); //
+                                    float_64 const By010 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).y(); //
+                                    float_64 const By120 = (*(fieldBuffer1->origin()(grid_i+1, grid_j+2))).y(); //
+                                    float_64 const By020 = (*(fieldBuffer1->origin()(grid_i, grid_j+2))).y(); //
 
                                     tmp_By[i][j] = wf * (wl * (By111 + By011 + By110 + By010) + wr * (By121 + By021 + By120 + By020)) / 4.0;
-                                    /*
-                                    float_64 const Bx10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx11 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx12 = (*(fieldBuffer1->origin()(grid_i, grid_j+2))).x();
-                                    float_64 const Bx20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx21 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx22 = (*(fieldBuffer2->origin()(grid_i, grid_j+2))).x();
-                                    tmp_Bx[i][j] = wf * ( wl * (Bx10 + Bx20) + Bx11 + Bx21 + wr * (Bx12 + Bx22) ) / 4.0;
-                                    float_64 const By10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).y();
-                                    float_64 const By11 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y();
-                                    float_64 const By12 = (*(fieldBuffer1->origin()(grid_i+2, grid_j))).y();
-                                    float_64 const By20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
-                                    float_64 const By21 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
-                                    float_64 const By22 = (*(fieldBuffer2->origin()(grid_i+2, grid_j))).y();
-                                    tmp_By[i][j] = wf * ( wl * (By10 + By20) + By11 + By21 + wr * (By12 + By22) ) / 4.0;
-                                    
-                                    float_64 const Bx10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx11 = (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x();
-                                    float_64 const Bx20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).x();
-                                    float_64 const Bx21 = (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x();
-                                    tmp_Bx[i][j] = wf * ( wl * (Bx10 + Bx20) + wr * (Bx11 + Bx21) ) / 2.0;
-                                    float_64 const By10 = (*(fieldBuffer1->origin()(grid_i, grid_j))).y();
-                                    float_64 const By11 = (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y();
-                                    float_64 const By20 = (*(fieldBuffer2->origin()(grid_i, grid_j))).y();
-                                    float_64 const By21 = (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y();
-                                    tmp_By[i][j] = wf * ( (By10 + By20) + (By11 + By21) ) / 4.0;
-                                    */
                                 }
                             } else {
                                 int const grid_j = j * params::y_res;
 
-                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t, duration);
-                                /*
-                                // fix yee offset
-                                if(F::getName() == "E"){
-                                    tmp_Ex[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).x() 
-                                                       + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x()) / 2.0; 
-                                    tmp_Ey[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j))).y() 
-                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y()) / 2.0;
-                                } else {
-                                    tmp_Bx[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).x() 
-                                                       + (*(fieldBuffer1->origin()(grid_i, grid_j+1))).x()
-                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j))).x() 
-                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).x()) / 4.0;
-                                    tmp_By[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j))).y() 
-                                                       + (*(fieldBuffer1->origin()(grid_i+1, grid_j))).y()
-                                                       + (*(fieldBuffer2->origin()(grid_i, grid_j))).y() 
-                                                       + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).y()) / 4.0;
-                                }*/
-                                
+                                float_64 const wf = 1.0; //masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t, duration);
+
                                 // fix yee offset
                                 if(F::getName() == "E"){
                                     tmp_Ex[i][j] = wf * ((*(fieldBuffer2->origin()(grid_i, grid_j+1))).x() 
@@ -388,11 +327,11 @@ namespace picongpu
                                                        + (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).y()) / 2.0;
                                 } else {
                                     tmp_Bx[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i+1, grid_j))).x() 
-                                                       + (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).x()
+                                                       + (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).x() 
                                                        + (*(fieldBuffer2->origin()(grid_i+1, grid_j))).x() 
-                                                       + (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x()) / 4.0;
+                                                       + (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).x()) / 4.0; 
                                     tmp_By[i][j] = wf * ((*(fieldBuffer1->origin()(grid_i, grid_j+1))).y() 
-                                                       + (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).y()
+                                                       + (*(fieldBuffer1->origin()(grid_i+1, grid_j+1))).y() 
                                                        + (*(fieldBuffer2->origin()(grid_i, grid_j+1))).y() 
                                                        + (*(fieldBuffer2->origin()(grid_i+1, grid_j+1))).y()) / 4.0;
                                 } 
@@ -563,7 +502,7 @@ namespace picongpu
                                     //                        -  Ey_omega_propagated[i][j][o1] * Bx_omega_propagated[i][j][o2];
                                     
                                     //shadowgram[i][j] += (pv * exponential).get_real();
-                                    shadowgram[i][j] += (dt / (SI::MUE0_SI * nt * nt)) * (Ex * By - Ey * Bx 
+                                    shadowgram[i][j] += (dt / (SI::MUE0_SI * nt * nt * n_x * n_x * n_y * n_y)) * (Ex * By - Ey * Bx 
                                                         + Ex_tmpsum[i][j] * By + Ex * By_tmpsum[i][j]
                                                         - Ey_tmpsum[i][j] * Bx - Ey * Bx_tmpsum[i][j]).get_real();
 
