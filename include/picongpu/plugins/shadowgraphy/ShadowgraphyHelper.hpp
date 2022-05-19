@@ -121,9 +121,10 @@ namespace picongpu
                     if(isSlidingWindowEnabled){
                         // movingWindowCorrection makes the resulting shadowgram smaller if the moving Window is enabled
                         // The resulting loss in the size of the shadowgram comes from the duration of the time integration
-                        movingWindowCorrection =  n_z * SI::CELL_DEPTH_SI + nt * dt * float_64(SI::SPEED_OF_LIGHT_SI);
+                        movingWindowCorrection =  n_z * SI::CELL_DEPTH_SI + nt * dt * float_64(SI::SPEED_OF_LIGHT_SI) / 2.0;
                         printf("1: %e \n", n_z * SI::CELL_DEPTH_SI);
                         printf("2: %e \n", nt * dt * float_64(SI::SPEED_OF_LIGHT_SI));
+                        // @TODO
                         n_y = math::ceil(( (float(ngpus - 1) / float(ngpus)) * globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
                         PMACC_ASSERT_MSG(n_y > 0, "n_y must be larger than 0, your moving window goes too fast brrrr \n");
                         printf("moving window enabled \n");
@@ -188,17 +189,23 @@ namespace picongpu
                         n_y = math::ceil((globalGridSize.y() - movingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::y_res) - 2);
                     */
                     printf("t: %d, currentStep: %d \n", t, currentStep);
-                    float const lost_index_from_sw = math::fmod((SI::SPEED_OF_LIGHT_SI * duration * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu);
+                    // @TODO
+                    printf("cpgu: %d ", cellspergpu);
+                    printf("duariotn: %d", duration);
+                    float const lost_index_from_sw = math::fmod((SI::SPEED_OF_LIGHT_SI * duration * SI::DELTA_T_SI / 2.0 / SI::CELL_HEIGHT_SI), cellspergpu);
+
+                    printf("lost index: %f\n", lost_index_from_sw);
 
                     for(int i = 0; i < n_x; ++i){
 
                         int const grid_i = i * params::x_res;
                         //std::cout << "i:" << i << std::endl;
                         for(int j = 0; j < n_y; ++j){
+                            //printf("i: %d, j: %d \n", i, j);
                             //printf("i = %d, j = %d \n", i, j);
                             if(isSlidingWindowEnabled){
                                 //int const grid_j = j * params::y_res;
-                                float const jumped_gpu_cells = math::floor(SI::SPEED_OF_LIGHT_SI * (startTime + duration - currentStep) 
+                                float const jumped_gpu_cells = math::floor(SI::SPEED_OF_LIGHT_SI * (startTime + duration - currentStep) // @TODO
                                                                             * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI / cellspergpu) * cellspergpu;// / params::y_res;
                                 float gridPos = float(j * params::y_res) + jumped_gpu_cells + lost_index_from_sw;
                                                 //+ (math::fmod((SI::SPEED_OF_LIGHT_SI * (currentStep - mwstartStep) * SI::DELTA_T_SI / SI::CELL_HEIGHT_SI), cellspergpu))
@@ -317,7 +324,7 @@ namespace picongpu
                             } else {
                                 int const grid_j = j * params::y_res;
 
-                                float_64 const wf = 1.0; //masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t, duration);
+                                float_64 const wf = masks::position_wf(i, j, n_x, n_y) * masks::t_wf(t, duration);
 
                                 // fix yee offset
                                 if(F::getName() == "E"){
@@ -422,8 +429,10 @@ namespace picongpu
 
                                         complex_64 const field = complex_64(fftw_out_f[index_ffs][0], fftw_out_f[index_ffs][1]);
 
-                                        float_64 const phase = - 0 * delta_z * 
-                                                (  0 * math::sqrt(sqrtContent) -  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
+                                        float const sign = omega_SI > 0.0 ? 1.0 : -1.0;
+
+                                        float_64 const phase = - delta_z * 
+                                                (  0 * math::sqrt(sqrtContent) +  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
                                         complex_64 const propagated_field = masks::mask_f(kx(i), ky(j), omega(omegaIndex)) * field * propagator;
                                         //complex_64 const propagated_field = field;

@@ -18,6 +18,17 @@
  * along with PIConGPU.
  * If not, see <http://www.gnu.org/licenses/>.
  */
+
+ /*
+
+ include dis to profile
+# path to own libraries
+export PIC_LIBS=$HOME/lib
+
+export FFTW3_ROOT=$PIC_LIBS/fftw-3.3.10
+export LD_LIBRARY_PATH=$FFTW3_ROOT/lib:$LD_LIBRARY_PATH
+
+ */
 #pragma once
 
 #include "picongpu/simulation_defines.hpp"
@@ -287,6 +298,8 @@ namespace picongpu
                                 vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                                 vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
+                                printf("focus: %e \n", this->focuspos * 1e-6);
+
                                 helper = new Helper(globalGridSize, this->slicePoint, this->ngpuslong, this->mwstart, this->focuspos * 1e-6, this->duration, this->startTime);
                             }
 
@@ -323,6 +336,7 @@ namespace picongpu
                             storeSlice<FieldB>(field_coreBorderB, this->plane, this->slicePoint, localStep, currentStep);
 
                             if (isMaster){
+                                printf("master1\n");
                                 helper->calculate_dft(localStep);
                             }
                         }
@@ -353,39 +367,56 @@ namespace picongpu
                 template<typename Field, typename TField>
                 void storeSlice(const TField& field, int nAxis, float slicePoint, int localStep, int currentStep)
                 {
+
                     namespace vec = pmacc::math;
 
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
                     vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
 
+                    pmacc::GridController<simDim>& con1 = pmacc::Environment<simDim>::get().GridController();
+                    vec::Size_t<simDim> gpuDim1 = (vec::Size_t<simDim>) con1.getGpuNodes();
+                    vec::Size_t<simDim> globalGridSize1 = gpuDim1 * field.size();
+
                     // FIRST SLICE OF FIELD FOR YEE OFFSET
                     int globalPlane1 = globalGridSize[nAxis] * slicePoint;
                     int localPlane1 = globalPlane1 % field.size()[nAxis];
                     int gpuPlane1 = globalPlane1 / field.size()[nAxis];
 
+                    // SECOND SLICE OF FIELD FOR YEE OFFSET
+                    int globalPlane2 = globalGridSize1[nAxis] * slicePoint + 1;
+                    int localPlane2 = globalPlane2 % field.size()[nAxis];
+                    int gpuPlane2 = globalPlane2 / field.size()[nAxis];
+
                     vec::Int<simDim> nVector1(vec::Int<simDim>::create(0));
                     nVector1[nAxis] = 1;
+
+                    vec::Int<simDim> nVector2(vec::Int<simDim>::create(0));
+                    nVector2[nAxis] = 1;
 
                     zone::SphericZone<simDim> gpuGatheringZone1(gpuDim, nVector1 * gpuPlane1);
                     gpuGatheringZone1.size[nAxis] = 1;
 
+                    zone::SphericZone<simDim> gpuGatheringZone2(gpuDim1, nVector2 * gpuPlane2);
+                    gpuGatheringZone2.size[nAxis] = 1;
+
+
                     algorithm::mpi::Gather<simDim> gather(gpuGatheringZone1);
+
+                    algorithm::mpi::Gather<simDim> gather2(gpuGatheringZone2);
 
                     if(debugoutput){
                         printf("line 349\n");
                     }
 
-                    if(!gather.participate()){
+                    if(debugoutput){
+                        printf("line 355\n");
+                    }
+                    if(!gather.participate() && !gather2.participate()){
                         if(debugoutput){
                             printf("p1\n");
                         }
                         return;
-                    }
-
-
-                    if(debugoutput){
-                        printf("line 355\n");
                     }
 
                     vec::UInt32<3> twistedAxesVec1((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
@@ -397,27 +428,71 @@ namespace picongpu
                         dBuffer_SI1->origin(),
                         cursor::tools::slice(field.originCustomAxes(twistedAxesVec1)(0, 0, localPlane1)),
                         cf1);
+
+                    
+                    vec::UInt32<3> twistedAxesVec2((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
+
+                    // convert data to higher precision and to SI units 
+                    ShadowgraphyHelper::ConversionFunctor<Field> cf2;
+                    algorithm::kernel::RT::Foreach()(
+                        dBuffer_SI2->zone(),
+                        dBuffer_SI2->origin(),
+                        cursor::tools::slice(field.originCustomAxes(twistedAxesVec2)(0, 0, localPlane2)),
+                        cf2);
             
 
                     // copy selected plane from device to host
                     container::HostBuffer<float3_64, simDim - 1> hBuffer1(dBuffer_SI1->size());
                     hBuffer1 = *dBuffer_SI1;
 
+                    // copy selected plane from device to host 
+                    container::HostBuffer<float3_64, simDim - 1> hBuffer2(dBuffer_SI2->size());
+                    hBuffer2 = *dBuffer_SI2;
+
                     // collect data from all nodes/GPUs
                     vec::Size_t<simDim> globalDomainSize1 = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
                     vec::Size_t<simDim - 1> globalSliceSize1 = globalDomainSize1.shrink<simDim - 1>((nAxis + 1) % simDim);
                     container::HostBuffer<float3_64, simDim - 1> globalBuffer1(globalSliceSize1);
+
+                    /// collect data from all nodes/GPUs 
+                    vec::Size_t<simDim> globalDomainSize2 = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
+                    vec::Size_t<simDim - 1> globalSliceSize2 = globalDomainSize2.shrink<simDim - 1>((nAxis + 1) % simDim);
+                    container::HostBuffer<float3_64, simDim - 1> globalBuffer2(globalSliceSize2);
+
+
                     gather(globalBuffer1, hBuffer1, nAxis);
                     //if(!gather.root()){
                     //    printf("r1\n");
                     //    return;
                     //}
+                    gather2(globalBuffer2, hBuffer2, nAxis);
+
+                    if(!gather2.root()){
+                        if(debugoutput){
+                            printf("r2\n");
+                        }
+                        return;
+                    }
 
                     if(debugoutput){
                         printf("line 381\n");
                     }
+                    if(!gather2.root()){
+                        if(debugoutput){
+                            printf("r3\n");
+                        }
+                        return;
+                    }
+                    if(!gather.root()){
+                        if(debugoutput){
+                            printf("r4\n");
+                        }
+                        return;
+                    }
 
+                    helper->store_field<Field>(localStep, currentStep, &globalBuffer1, &globalBuffer2);
                     
+                    /*
                     // SECOND SLICE OF FIELD FOR YEE OFFSET
                     int globalPlane2 = globalGridSize[nAxis] * slicePoint + 1;
                     int localPlane2 = globalPlane2 % field.size()[nAxis];
@@ -474,12 +549,14 @@ namespace picongpu
                     }
                     
 
-                    if(isMaster)
-                    {
-                        helper->store_field<Field>(localStep, currentStep, &globalBuffer1, &globalBuffer2);
-                    }
+                    //if(isMaster)
+                    //{
+                    printf("master2\n");
+                    helper->store_field<Field>(localStep, currentStep, &globalBuffer1, &globalBuffer2);
+                    //}
                     //std::ofstream file(filename.c_str());
                     //file << globalBuffer;
+                    */
 
                 }
 

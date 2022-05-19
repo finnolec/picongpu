@@ -15,7 +15,7 @@ namespace picongpu
             namespace params
             {
                 // The time integration part of the plugin will be called each t_res'ed step
-                // until t_res * t_n steps after the start of the integration in the .cfg file
+                // until t_n / t_res steps after the start of the integration in the .cfg file
 
                 // Make sure that the Nyquist-Shannon theorem is fulfilled
                 //     t_res * dt * c < lambda_probe / 2
@@ -25,15 +25,9 @@ namespace picongpu
                 //     omega_n = t_n
                 //     domega = 2pi / (t_res * dt)
                 //     domega * omega_n * fwhm_probe[t] / 2 pi > 0.441 (for gauss)
-                constexpr unsigned int t_n = 560 - 100;//128
 
                 constexpr unsigned int t_wf_buffer = 32;
 
-                //constexpr unsigned int omega_n = 128; //t_n / t_res; // should probably be an even number
-                //constexpr unsigned int omega_n = tn / t_res; //t_n / t_res; // should probably be an even number
-
-                //constexpr unsigned int x_n = 64;
-                //constexpr unsigned int y_n = 128;
 
                 // Transverse resolution of shadowgram in PIConGPU cell size units
                 constexpr unsigned int x_res = 1;//2
@@ -44,21 +38,11 @@ namespace picongpu
                 constexpr unsigned int plugin_wf_buffer_x = pos_wf_buffer / x_res;
                 constexpr unsigned int plugin_wf_buffer_y = pos_wf_buffer / y_res;
 
-                // Propagation distance in SI
-                constexpr float delta_z = 10e-6;
-
                 constexpr float NA = 0.23;
 
                 // Windowfunction drop off over (thingy * k_probe) kperps
                 constexpr float NA_wf_thingy = 0.5;
 
-                // Values for frequency filter to extract probe laser better in m
-                // Make sure to respect the time bandwidth limit
-                //constexpr float_64 min_lambda = 660e-9 - 0.0*100e-9;
-                //constexpr float_64 max_lambda = 840e-9 + 0.0*100e-9;
-
-                // There is a sinusoidal slope from min_lambda - d_lambda_wf to min_lambda and from max_lambda to max_lambda + d_lambda_wf
-                //constexpr float_64 d_lambda_wf = 100e-9;
 
                 constexpr float_64 probe_wavelength = 750e-9;
                 constexpr float_64 pulse_duration = 12e-15 / 2.0; //FWHM
@@ -77,61 +61,18 @@ namespace picongpu
 
                 constexpr float_64 omega_min_wf = omega_min - ndo_wf * delta_omega / 2.0;
                 constexpr float_64 omega_max_wf = omega_max + ndo_wf * delta_omega / 2.0;
-
-
-                //constexpr float_64 delta_lambda = (probe_wavelength * probe_wavelength / SI::SPEED_OF_LIGHT_SI) * timebandwidthproduct / pulse_duration;
-
-                //constexpr float_64 ndl = 1.0; // You can use ndl = 1 if you are certain that there is no redshift etc
-
-                //constexpr float_64 min_lambda = probe_wavelength - ndl * delta_lambda / 2.0;
-                //constexpr float_64 max_lambda = probe_wavelength + ndl * delta_lambda / 2.0;
-                
-                //constexpr float_64 ndl_wf = 1.0;
-                //constexpr float_64 d_lambda_wf = ndl_wf * delta_lambda / ndl;
             }
 
 
             namespace fourierhelper
             {   
-                /*
-                HINLINE float_64 omega(int i){
-                    //return 2 * PI  * (i - params::omega_n / 2.0) / params::omega_n / params::t_res / SI::DELTA_T_SI;
-                    //float_64 omega_step = 4.0 * PI * SI::SPEED_OF_LIGHT_SI * (1 / params::min_lambda - 1 / params::max_lambda);
-                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
-                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
-                    
-                    // -1 if you want to include omega_max
-                    float_64 const omega_step = (omega_max - omega_min) / (float_64(params::omega_n - 1));
-                    
-                    //return omega_min + i * omega_step;
-                    //if(i < params::omega_n / 2){
-                    //    return -omega_max + i * omega_step;
-                    //} else {
-                    //    return omega_max - (params::omega_n - i + 1) * omega_step;//-omega_min + (i - params::omega_n / 2.0) * omega_step;
-                    //}
-                    return omega_min + i * omega_step;
-                }
-
-                HINLINE float_64 get_omega_step(){
-                    float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
-                    float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
-                    
-                    // -1 if you want to include omega_max
-                    return (omega_max - omega_min) / (float_64(params::omega_n - 1));
-
-                }  */ 
-
                 
                 HINLINE int get_omega_min_index(int duration){
                     float_64 const actual_step = params::t_res * SI::DELTA_T_SI;
                     int const actual_n = duration / params::t_res;
                     int tmpindex = math::floor(actual_n * ((actual_step * params::omega_min_wf) / (2.0 * PI) + 0.5));
                     int retindex = tmpindex > actual_n / 2 + 1 ? tmpindex : actual_n / 2 + 1;
-                    //printf("retindex %d \n", retindex);
-                    //printf("tmpindex %d \n", tmpindex);
-                    //printf("actual n thing %d \n", actual_n / 2 + 1);
                     return retindex;
-                    //return 0;
                 }
 
                 HINLINE int get_omega_max_index(int duration){
@@ -140,7 +81,6 @@ namespace picongpu
                     int tmpindex = math::ceil(actual_n * ((actual_step * params::omega_max_wf) / (2.0 * PI) + 0.5));
                     int retindex =  tmpindex <= actual_n ? tmpindex : actual_n;
                     return retindex + 1;
-                    //return params::omega_n-1;
                 }
 
                 HINLINE int get_n_omegas(int duration){
@@ -191,11 +131,12 @@ namespace picongpu
                     float_64 t_factor = 1.0;
 
                     int t_max = t_n / params::t_res;
+                    float buffer_res = params::t_wf_buffer / params::t_res;
 
-                    if (t <= params::t_wf_buffer){
-                        t_factor = ( 1.0 - math::cos(PI * t / float_64(params::t_wf_buffer)) ) / 2.0;
-                    }  else if ((t > (t_max - params::t_wf_buffer))){
-                        t_factor =  math::cos(PI * (t - (t_max - params::t_wf_buffer)) / float_64(params::t_wf_buffer)) / 2.0 + 0.5;
+                    if (t <= buffer_res ){
+                        t_factor = ( 1.0 - math::cos(PI * t / float_64(buffer_res)) ) / 2.0;
+                    }  else if ((t > (t_max - buffer_res))){
+                        t_factor =  math::cos(PI * (t - (t_max - buffer_res)) / float_64(buffer_res)) / 2.0 + 0.5;
                     }
 
                     return t_factor;
@@ -216,13 +157,7 @@ namespace picongpu
                     
 
                     if(params::ndo_wf == 0.0)
-                    {
-                        //float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                        //float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
-
-                        //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
-                        //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
-                        
+                    {                        
                         if( omega >= params::omega_min && omega <= params::omega_max ){
                             //std::cout << "a";
                             return 1.0;
@@ -231,15 +166,6 @@ namespace picongpu
                         }
 
                     } else {
-                        //float_64 const omega_max_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::min_lambda - params::d_lambda_wf);
-                        //float_64 const omega_max = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::min_lambda;
-                        //float_64 const d_omega_max = omega_max_wf - omega_max;
-
-                        //float_64 const omega_min_wf = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / (params::max_lambda + params::d_lambda_wf);
-                        //float_64 const omega_min = 2.0 * PI * SI::SPEED_OF_LIGHT_SI / params::max_lambda;
-                        //float_64 const d_omega_min = omega_min - omega_min_wf;
-                        //std::cout << "1: " << math::abs(fourierhelper::omega(o)) << " -- 2: " << max_omega << std::endl;
-                        //std::cout << "3: " << math::abs(fourierhelper::omega(o)) << " -- 4: " << min_omega << std::endl;
 
                         float_64 const d_omega = params::ndo_wf * params::delta_omega / 2.0;
                         
@@ -256,9 +182,6 @@ namespace picongpu
                 }
 
                 HINLINE float_64 numerical_aperture_f(float_64 kx, float_64 ky, float_64 omega){
-                    //float_64 const omega = math::abs(fourierhelper::omega(o));
-                    //float_64 const kx = fourierhelper::kx(i);
-                    //float_64 const ky = fourierhelper::ky(j);
 
                     float_64 const kperp = math::sqrt(kx * kx + ky * ky);
                     float_64 const k = math::abs(omega / SI::SPEED_OF_LIGHT_SI);
