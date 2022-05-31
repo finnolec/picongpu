@@ -381,6 +381,7 @@ namespace picongpu
                             //printf("omega: %e \n", omega(omegaIndex));
                             //printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter_f(omega(omegaIndex)));
 
+
                             // put field into fftw array
                             for(int i = 0; i < n_x; ++i){
                                 for(int j = 0; j < n_y; ++j){
@@ -402,6 +403,7 @@ namespace picongpu
 
                                 }
                             }
+                            //writeKlausFile(o, fieldindex);
 
                             fftw_execute(plan_forward);
                             writeFourierFile(o, fieldindex, false);
@@ -568,6 +570,7 @@ namespace picongpu
 
                 void writeFourierFile(int o, int fieldindex, bool masksapplied)
                 {
+                    int const omegaIndex = fourierhelper::get_omega_index(o, duration);
                     std::ofstream outFile;
                     std::ostringstream filename;
 
@@ -588,7 +591,7 @@ namespace picongpu
                     }
                     
                     //for(int o = 0; o < n_omegas; ++o){
-                    filename << "_" << o << ".dat";
+                    filename << "_" << omegaIndex << ".dat";
 
                     outFile.open(filename.str(), std::ofstream::out | std::ostream::trunc);
 
@@ -629,24 +632,79 @@ namespace picongpu
                     //}
                 }
 
+                void writeKlausFile(int o, int fieldindex)
+                {
+                    int const omegaIndex = fourierhelper::get_omega_index(o, duration);
+                    std::ofstream outFile;
+                    std::ostringstream filename;
+
+                    if(fieldindex == 0){
+                        filename <<"Ex";
+                    } else if(fieldindex == 1){
+                        filename <<"Ey";
+                    } else if(fieldindex == 2){
+                        filename <<"Bx";
+                    } else if(fieldindex == 3){
+                        filename <<"By";
+                    }
+
+                    filename << "_omegaspace";// << ".dat";
+                    
+                    //for(int o = 0; o < n_omegas; ++o){
+                    filename << "_" << omegaIndex << ".dat";
+
+                    outFile.open(filename.str(), std::ofstream::out | std::ostream::trunc);
+
+                    if(!outFile)
+                    {
+                        std::cerr << "Can't open file [" << filename.str() << "] for output, disable plugin output. Chuchu"
+                                << std::endl;
+                    }
+                    else
+                    {
+                        for( unsigned int i = 0; i < get_n_x(); ++i ) // over all x
+                        {
+                            int const i_ffs = (i + n_x/2) % n_x;
+                            for(unsigned int j = 0;  j < get_n_y(); ++j) // over all y
+                            {
+                                int const index = i + j * n_x;
+                                int const j_ffs = (j + n_y / 2) % n_y;
+                                int const index_ffs = i_ffs + j_ffs * n_x;
+                                outFile << fftw_in_f[index][0] << "+" << fftw_in_f[index][1] << "j" << "\t";
+                            } // for loop over all y
+
+                            outFile << std::endl;
+                        } // for loop over all x
+
+                        outFile.flush();
+                        outFile << std::endl; // now all data are written to file
+
+                        if(outFile.fail())
+                            std::cerr << "Error on flushing file [" << filename.str() << "]. " << std::endl;
+
+                        outFile.close();
+                    }
+                    //}
+                }
+
                 float_64 omega(int i){
                     int const actual_n = nt;
                     float const actual_step = dt;
-                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
+                    return 2.0 * PI  * (float(i) - float(actual_n) / 2.0) / float(actual_n) / actual_step;
                 }
                 
                 // kx so that it is the proper kx for FFTs
                 float_64 kx(int i){ // @TODO x_n
                     int const actual_n = n_x;
                     float const actual_step = params::x_res * SI::CELL_WIDTH_SI;
-                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
+                    return 2.0 * PI  * (float(i) - float(actual_n) / 2.0) / float(actual_n) / actual_step;
                 }
 
                 // ky so that it is the proper ky for FFTs
                 float_64 ky(int i){ // @TODO y_n
                     int const actual_n = n_y;
                     float const actual_step = params::y_res * SI::CELL_HEIGHT_SI;
-                    return 2 * PI  * (i - actual_n / 2.0) / actual_n / actual_step;
+                    return 2.0 * PI  * (float(i) - float(actual_n) / 2.0) / float(actual_n) / actual_step;
                 }
 
             }; // class Helper
