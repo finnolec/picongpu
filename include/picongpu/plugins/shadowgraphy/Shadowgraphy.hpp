@@ -351,7 +351,7 @@ namespace picongpu
                                 std::ostringstream filename;
                                 filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
 
-                                //data = helper->get_shadowgram();
+                                //helper->get_shadowgram();
                                 
                                 writeFile(helper->get_shadowgram(), filename.str());
 

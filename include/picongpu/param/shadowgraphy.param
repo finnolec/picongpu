@@ -133,7 +133,7 @@ namespace picongpu
                     int t_max = t_n / params::t_res;
                     float buffer_res = params::t_wf_buffer / params::t_res;
 
-                    if (t <= buffer_res ){
+                    if (t < buffer_res ){
                         t_factor = ( 1.0 - math::cos(PI * t / float_64(buffer_res)) ) / 2.0;
                     }  else if ((t > (t_max - buffer_res))){
                         t_factor =  math::cos(PI * (t - (t_max - buffer_res)) / float_64(buffer_res)) / 2.0 + 0.5;

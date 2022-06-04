@@ -103,6 +103,7 @@ namespace picongpu
                     nt = duration / params::t_res;
 
                     delta_z = focuspos;
+                    printf("deltaz = %e \n", delta_z);
 
                     ngpus = ngpuslong;
 
@@ -377,6 +378,7 @@ namespace picongpu
                             
                             int const omegaIndex = fourierhelper::get_omega_index(o, duration);
                             float_64 const omega_SI = omega(omegaIndex);
+                            float_64 const k_SI = omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) ;
                             printf("omegaIndex: %d \n", omegaIndex);
                             //printf("omega: %e \n", omega(omegaIndex));
                             //printf("fourierhelper frequencyfilter: %f \n", masks::frequency_filter_f(omega(omegaIndex)));
@@ -403,7 +405,7 @@ namespace picongpu
 
                                 }
                             }
-                            //writeKlausFile(o, fieldindex);
+                            writeKlausFile(o, fieldindex);
 
                             fftw_execute(plan_forward);
                             writeFourierFile(o, fieldindex, false);
@@ -433,8 +435,10 @@ namespace picongpu
 
                                         float const sign = omega_SI > 0.0 ? 1.0 : -1.0;
 
-                                        float_64 const phase = - delta_z * 
-                                                (  0 * math::sqrt(sqrtContent) +  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
+                                        //float_64 const phase = - delta_z *
+                                        //        (  0*math::sqrt(sqrtContent) +  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
+                                        float_64 const phase = delta_z * (k_SI - (kx(i) * kx(i) + ky(j) * ky(j)) / (2 * k_SI));
+
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
                                         complex_64 const propagated_field = masks::mask_f(kx(i), ky(j), omega(omegaIndex)) * field * propagator;
                                         //complex_64 const propagated_field = field;
