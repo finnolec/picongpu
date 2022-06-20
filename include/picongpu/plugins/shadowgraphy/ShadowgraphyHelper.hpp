@@ -193,7 +193,7 @@ namespace picongpu
                     // @TODO
                     printf("cpgu: %d ", cellspergpu);
                     printf("duariotn: %d", duration);
-                    float const lost_index_from_sw = math::fmod((SI::SPEED_OF_LIGHT_SI * duration * SI::DELTA_T_SI / 2.0 / SI::CELL_HEIGHT_SI), cellspergpu);
+                    float const lost_index_from_sw = math::fmod((SI::SPEED_OF_LIGHT_SI * duration * SI::DELTA_T_SI / 2.0 / SI::CELL_HEIGHT_SI), cellspergpu); // MUSS DAS NIHCT EIN GANZER INDEX SEIN @TODO
 
                     printf("lost index: %f\n", lost_index_from_sw);
 
@@ -405,7 +405,7 @@ namespace picongpu
 
                                 }
                             }
-                            writeKlausFile(o, fieldindex);
+                            //writeKlausFile(o, fieldindex);
 
                             fftw_execute(plan_forward);
                             writeFourierFile(o, fieldindex, false);
@@ -420,10 +420,10 @@ namespace picongpu
                                     int const j_ffs = (j  + n_y / 2) % n_y;
                                     
                                     
-                                    float_64 const sqrt1 = (omega_SI * omega_SI) / (float_64(SI::SPEED_OF_LIGHT_SI) * float_64(SI::SPEED_OF_LIGHT_SI));
+                                    float_64 const sqrt1 = k_SI * k_SI;
                                     float_64 const sqrt2 = kx(i) * kx(i);
                                     float_64 const sqrt3 = ky(j) * ky(j);
-                                    float_64 const sqrtContent = sqrt1 - sqrt2 - sqrt3;
+                                    float_64 const sqrtContent = (k_SI == 0.0) ? 0.0 : 1 - sqrt2 / sqrt1 - sqrt3 / sqrt1;
                                     
                                     if(sqrtContent >= 0.0)
                                     {
@@ -437,7 +437,9 @@ namespace picongpu
 
                                         //float_64 const phase = - delta_z *
                                         //        (  0*math::sqrt(sqrtContent) +  omega_SI / float_64(SI::SPEED_OF_LIGHT_SI) );
-                                        float_64 const phase = delta_z * (k_SI - (kx(i) * kx(i) + ky(j) * ky(j)) / (2 * k_SI));
+                                        //float_64 const phase = delta_z * (k_SI - (kx(i) * kx(i) + ky(j) * ky(j)) / (2 * k_SI));
+                                        float_64 const phase = (k_SI == 0.0) ? 0.0 : delta_z * k_SI * math::sqrt(sqrtContent);
+                                        //float_64 const phase = delta_z * k_SI;
 
                                         complex_64 const propagator = math::exp(complex_64(0, phase));
                                         complex_64 const propagated_field = masks::mask_f(kx(i), ky(j), omega(omegaIndex)) * field * propagator;
