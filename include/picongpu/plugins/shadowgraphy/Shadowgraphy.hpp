@@ -130,6 +130,7 @@ namespace picongpu
                 int ngpuslong;
                 float_X mwstart;
                 int duration;
+                int movingwindowstop;
 
                 bool isMaster = false;
                 bool debugoutput = false;
@@ -201,6 +202,10 @@ namespace picongpu
                         (this->pluginPrefix + ".duration").c_str(),
                         po::value<int>(&this->duration)->multitoken(),
                         "nt");
+                    desc.add_options()(
+                        (this->pluginPrefix + ".movingwindowstop").c_str(),
+                        po::value<int>(&this->movingwindowstop)->multitoken(),
+                        "when moving window stops timestep");
                 }
 
                 void pluginLoad() override
@@ -300,7 +305,7 @@ namespace picongpu
 
                                 printf("focus: %e \n", this->focuspos * 1e-6);
 
-                                helper = new Helper(globalGridSize, this->slicePoint, this->ngpuslong, this->mwstart, this->focuspos * 1e-6, this->duration, this->startTime);
+                                helper = new Helper(globalGridSize, this->slicePoint, this->ngpuslong, this->mwstart, this->focuspos * 1e-6, this->duration, this->startTime, this->movingwindowstop);
                             }
 
 
