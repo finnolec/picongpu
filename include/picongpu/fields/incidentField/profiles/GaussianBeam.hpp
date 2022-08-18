@@ -180,6 +180,10 @@ namespace picongpu
                          *      and the transformation of Laguerre-Gaussian laser modes"
                          * https://doi.org/10.1103/physreva.45.8185
                          *
+                         * J. F. Hua et al. (2004). "High-order corrected fields of ultrashort, 
+                         *      tightly focused laser pulses"
+                         * https://doi.org/10.1063/1.1811384
+                         *
                          * Wikipedia on Gaussian laser beams
                          * https://en.wikipedia.org/wiki/Gaussian_beam
                          *
