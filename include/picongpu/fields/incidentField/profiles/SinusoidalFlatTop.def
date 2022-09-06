@@ -42,17 +42,17 @@ namespace picongpu
                          * after the plateau unit: none */
                         static constexpr float_64 RAMP_INIT = 20.6146;
 
-                        static constexpr float_64 X_RAMP_LENGTH_SI = 6e-6;
-                        static constexpr float_64 X_PLAT_MIN_SI = 12e-6;
-                        static constexpr float_64 X_PLAT_MAX_SI = 12e-6;
+                        static constexpr float_64 POL_RAMP_LENGTH_SI = 6e-6;
+                        static constexpr float_64 POL_PLAT_MIN_SI = 12e-6;
+                        static constexpr float_64 POL_PLAT_MAX_SI = 12e-6;
                         
-                        static constexpr float_64 Y_RAMP_LENGTH_SI = 6e-6;
-                        static constexpr float_64 Y_PLAT_MIN_SI = 12e-6;
-                        static constexpr float_64 Y_PLAT_MAX_SI = 12e-6;
+                        static constexpr float_64 OFF_RAMP_LENGTH_SI = 6e-6;
+                        static constexpr float_64 OFF_PLAT_MIN_SI = 12e-6;
+                        static constexpr float_64 OFF_PLAT_MAX_SI = 12e-6;
                         
-                        static constexpr float_64 Z_RAMP_LENGTH_SI = 6e-6;
-                        static constexpr float_64 Z_PLAT_MIN_SI = 12e-6;
-                        static constexpr float_64 Z_PLAT_MAX_SI = 12e-6;
+                        //static constexpr float_64 Z_RAMP_LENGTH_SI = 6e-6;
+                        //static constexpr float_64 Z_PLAT_MIN_SI = 12e-6;
+                        //static constexpr float_64 Z_PLAT_MAX_SI = 12e-6;
                     };
                 } // namespace defaults
 

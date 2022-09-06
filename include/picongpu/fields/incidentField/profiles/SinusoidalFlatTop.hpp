@@ -69,26 +69,19 @@ namespace picongpu
                             (Params::RAMP_INIT * Params::PULSE_LENGTH_SI + Params::LASER_NOFOCUS_CONSTANT_SI)
                             / UNIT_TIME);
                         // unit: UNIT_LENGTH
-                        static constexpr float_64 X_RAMP_LENGTH
-                            = static_cast<float_X>(Params::X_RAMP_LENGTH_SI / UNIT_LENGTH);
-                        static constexpr float_64 X_PLAT_MIN
-                            = static_cast<float_X>(Params::X_PLAT_MIN_SI / UNIT_LENGTH);
-                        static constexpr float_64 X_PLAT_MAX
-                            = static_cast<float_X>(Params::X_PLAT_MAX_SI / UNIT_LENGTH);
+                        static constexpr float_64 POL_RAMP_LENGTH
+                            = static_cast<float_X>(Params::POL_RAMP_LENGTH_SI / UNIT_LENGTH);
+                        static constexpr float_64 POL_PLAT_MIN
+                            = static_cast<float_X>(Params::POL_PLAT_MIN_SI / UNIT_LENGTH);
+                        static constexpr float_64 POL_PLAT_MAX
+                            = static_cast<float_X>(Params::POL_PLAT_MAX_SI / UNIT_LENGTH);
                         // unit: UNIT_LENGTH
-                        static constexpr float_64 Y_RAMP_LENGTH
-                            = static_cast<float_X>(Params::Y_RAMP_LENGTH_SI / UNIT_LENGTH);
-                        static constexpr float_64 Y_PLAT_MIN
-                            = static_cast<float_X>(Params::Y_PLAT_MIN_SI / UNIT_LENGTH);
-                        static constexpr float_64 Y_PLAT_MAX
-                            = static_cast<float_X>(Params::Y_PLAT_MAX_SI / UNIT_LENGTH);
-                        // unit: UNIT_LENGTH
-                        static constexpr float_64 Z_RAMP_LENGTH
-                            = static_cast<float_X>(Params::Z_RAMP_LENGTH_SI / UNIT_LENGTH);
-                        static constexpr float_64 Z_PLAT_MIN
-                            = static_cast<float_X>(Params::Z_PLAT_MIN_SI / UNIT_LENGTH);
-                        static constexpr float_64 Z_PLAT_MAX
-                            = static_cast<float_X>(Params::Z_PLAT_MAX_SI / UNIT_LENGTH);
+                        static constexpr float_64 OFF_RAMP_LENGTH
+                            = static_cast<float_X>(Params::OFF_RAMP_LENGTH_SI / UNIT_LENGTH);
+                        static constexpr float_64 OFF_PLAT_MIN
+                            = static_cast<float_X>(Params::OFF_PLAT_MIN_SI / UNIT_LENGTH);
+                        static constexpr float_64 OFF_PLAT_MAX
+                            = static_cast<float_X>(Params::OFF_PLAT_MAX_SI / UNIT_LENGTH);
                     };
 
                     /** Plane wave incident E functor
@@ -176,28 +169,26 @@ namespace picongpu
                             float3_X const pos = this->getInternalCoordinates(totalCellIdx);
                             float_X transversalFactor = 1.0;
 
-                            if((Unitless::DIR_X != 1.0)){
-                                if((pos[0] <= (Unitless::X_PLAT_MIN - Unitless::X_RAMP_LENGTH)) || (pos[0] >= (Unitless::X_PLAT_MAX + Unitless::X_RAMP_LENGTH))){
-                                    transversalFactor = 0.0;
-                                } else if ((pos[0] > (Unitless::X_PLAT_MIN - Unitless::X_RAMP_LENGTH)) && (pos[0] < Unitless::X_PLAT_MIN)) {
-                                    transversalFactor *= 0.5; //(1.0 - math::cos(
-                                        //PI * (pos[0] - Unitless::X_PLAT_MIN + Unitless::X_RAMP_LENGTH) / Unitless::X_RAMP_LENGTH)) / 2.0;
-                                } else if ((pos[0] > Unitless::X_PLAT_MAX) && (pos[0] < (Unitless::X_PLAT_MAX + Unitless::X_RAMP_LENGTH))) {
-                                    transversalFactor *= 0.5; //(1.0 + math::cos(PI * (pos[0] - Unitless::X_PLAT_MAX) / Unitless::X_RAMP_LENGTH)) / 2.0;
-                                }
-                            }
-/*
-                            if((Unitless::DIR_Y != 1.0) && (transversalFactor != 0.0)){
-                                if((pos[1] <= (Unitless::Y_PLAT_MIN - Unitless::Y_RAMP_LENGTH)) || (pos[1] >= (Unitless::Y_PLAT_MAX + Unitless::Y_RAMP_LENGTH))){
-                                    transversalFactor = 0.0;
-                                } else if ((pos[1] > (Unitless::Y_PLAT_MIN - Unitless::Y_RAMP_LENGTH)) && (pos[1] < Unitless::Y_PLAT_MIN)) {
-                                    transversalFactor *= 0.5; //(1.0 - math::cos(
-                                        //PI * (pos[1] - Unitless::Y_PLAT_MIN + Unitless::Y_RAMP_LENGTH) / Unitless::Y_RAMP_LENGTH)) / 2.0;
-                                } else if ((pos[1] > Unitless::Y_PLAT_MAX) && (pos[1] < (Unitless::Y_PLAT_MAX + Unitless::Y_RAMP_LENGTH))) {
-                                    transversalFactor *= 0.5; //(1.0 + math::cos(PI * (pos[1] - Unitless::Y_PLAT_MAX) / Unitless::Y_RAMP_LENGTH)) / 2.0;
-                                }
+                            if((pos[1] <= (Unitless::POL_PLAT_MIN - Unitless::POL_RAMP_LENGTH)) || (pos[1] >= (Unitless::POL_PLAT_MAX + Unitless::POL_RAMP_LENGTH))){
+                                transversalFactor = 0.0;
+                            } else if ((pos[1] > (Unitless::POL_PLAT_MIN - Unitless::POL_RAMP_LENGTH)) && (pos[1] < Unitless::POL_PLAT_MIN)) {
+                                transversalFactor *= (1.0 - math::cos(
+                                    PI * (pos[1] - Unitless::POL_PLAT_MIN + Unitless::POL_RAMP_LENGTH) / Unitless::POL_RAMP_LENGTH)) / 2.0;
+                            } else if ((pos[1] > Unitless::POL_PLAT_MAX) && (pos[1] < (Unitless::POL_PLAT_MAX + Unitless::POL_RAMP_LENGTH))) {
+                                transversalFactor *= (1.0 + math::cos(PI * (pos[1] - Unitless::POL_PLAT_MAX) / Unitless::POL_RAMP_LENGTH)) / 2.0;
                             }
 
+
+                            if((pos[2] <= (Unitless::OFF_PLAT_MIN - Unitless::OFF_RAMP_LENGTH)) || (pos[2] >= (Unitless::OFF_PLAT_MAX + Unitless::OFF_RAMP_LENGTH))){
+                                transversalFactor = 0.0;
+                            } else if ((pos[2] > (Unitless::OFF_PLAT_MIN - Unitless::OFF_RAMP_LENGTH)) && (pos[2] < Unitless::OFF_PLAT_MIN)) {
+                                transversalFactor *= (1.0 - math::cos(
+                                    PI * (pos[2] - Unitless::OFF_PLAT_MIN + Unitless::OFF_RAMP_LENGTH) / Unitless::OFF_RAMP_LENGTH)) / 2.0;
+                            } else if ((pos[2] > Unitless::OFF_PLAT_MAX) && (pos[2] < (Unitless::OFF_PLAT_MAX + Unitless::OFF_RAMP_LENGTH))) {
+                                transversalFactor *= (1.0 + math::cos(PI * (pos[2] - Unitless::OFF_PLAT_MAX) / Unitless::OFF_RAMP_LENGTH)) / 2.0;
+                            }
+
+/*
                             if((Unitless::DIR_Z != 1.0) && (transversalFactor != 0.0)){
                                 if((pos[2] <= (Unitless::Z_PLAT_MIN - Unitless::Z_RAMP_LENGTH)) || (pos[2] >= (Unitless::Z_PLAT_MAX + Unitless::Z_RAMP_LENGTH))){
                                     transversalFactor = 0.0;
