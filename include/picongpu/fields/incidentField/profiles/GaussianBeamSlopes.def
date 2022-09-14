@@ -1,0 +1,100 @@
+/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Anton Helm, Rene Widera,
+ *                     Richard Pausch, Alexander Debus, Sergei Bastrakov
+ *
+ * This file is part of PIConGPU.
+ *
+ * PIConGPU is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * PIConGPU is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with PIConGPU.
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#pragma once
+
+#include "picongpu/fields/incidentField/profiles/BaseParam.def"
+
+
+namespace picongpu
+{
+    namespace fields
+    {
+        namespace incidentField
+        {
+            namespace profiles
+            {
+                namespace defaults
+                {
+                    namespace gaussianBeamSlopes
+                    {
+                        //! Use only the 0th Laguerremode for a standard Gaussian
+                        static constexpr uint32_t MODENUMBER = 0;
+                        PMACC_CONST_VECTOR(float_X, MODENUMBER + 1, LAGUERREMODES, 1.0);
+                        PMACC_CONST_VECTOR(float_X, MODENUMBER + 1, LAGUERREPHASES, 0.0);
+                        // This is just an example for a more complicated set of Laguerre modes
+                        // constexpr uint32_t MODENUMBER = 12;
+                        // PMACC_CONST_VECTOR(float_X, MODENUMBER + 1, LAGUERREMODES, -1.0, 0.0300519, 0.319461,
+                        // -0.23783, 0.0954839, 0.0318653, -0.144547, 0.0249208, -0.111989, 0.0434385, -0.030038,
+                        // -0.00896321, -0.0160788); PMACC_CONST_VECTOR(float_X, MODENUMBER + 1, LAGUERREPHASES,
+                        // 0.0, 1.0344594, -0.9384701, -2.7384883, 0.0016872, 2.4563653, -0.312892, -1.7298303,
+                        // -0.8039839, 3.0055385, -0.1503778, -9.6980362, -2.8122287);
+                    } // namespace gaussianBeamSlopes
+
+                    struct GaussianBeamSlopesParam : public BaseParam
+                    {
+                        /** Beam waist: distance from the axis where the pulse intensity (E^2)
+                         *              decreases to its 1/e^2-th part,
+                         *              at the focus position of the laser
+                         * W0_SI = FWHM_of_Intensity / sqrt{ 2* ln(2) }
+                         *                             [   1.17741    ]
+                         *
+                         * unit: meter
+                         */
+                        static constexpr float_64 W0_SI = 5.0e-6 / 1.17741;
+
+                        /** The laser pulse will be initialized PULSE_INIT times of the PULSE_LENGTH
+                         *
+                         *  unit: none
+                         */
+                        static constexpr float_64 PULSE_INIT = 20.0;
+
+                        /** Laguerre mode parameters
+                         *
+                         * @{
+                         */
+                        using LAGUERREMODES_t = gaussianBeamSlopes::LAGUERREMODES_t;
+                        using LAGUERREPHASES_t = gaussianBeamSlopes::LAGUERREPHASES_t;
+                        static constexpr uint32_t MODENUMBER = gaussianBeamSlopes::MODENUMBER;
+                        /** @} */
+
+                        
+                        static constexpr float_64 POL_RAMP_LENGTH_SI = 6e-6;
+                        static constexpr float_64 POL_PLAT_MIN_SI = 12e-6;
+                        static constexpr float_64 POL_PLAT_MAX_SI = 12e-6;
+                        
+                        static constexpr float_64 OFF_RAMP_LENGTH_SI = 6e-6;
+                        static constexpr float_64 OFF_PLAT_MIN_SI = 12e-6;
+                        static constexpr float_64 OFF_PLAT_MAX_SI = 12e-6;
+                    };
+                } // namespace defaults
+
+                /** Gaussian Beam laser profile with finite pulse length tag
+                 *
+                 * @tparam T_Params class parameter to configure the Gaussian Beam profile,
+                 *                  see members of defaults::GaussianBeamSlopesParam
+                 *                  for required members
+                 */
+                template<typename T_Params = defaults::GaussianBeamSlopesParam>
+                struct GaussianBeamSlopes;
+            } // namespace profiles
+        } // namespace incidentField
+    } // namespace fields
+} // namespace picongpu
