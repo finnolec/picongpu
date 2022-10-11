@@ -77,11 +77,9 @@ namespace picongpu
 
                         
                         static constexpr float_64 POL_RAMP_LENGTH_SI = 6e-6;
-                        static constexpr float_64 POL_PLAT_MIN_SI = 12e-6;
                         static constexpr float_64 POL_PLAT_MAX_SI = 12e-6;
                         
                         static constexpr float_64 OFF_RAMP_LENGTH_SI = 6e-6;
-                        static constexpr float_64 OFF_PLAT_MIN_SI = 12e-6;
                         static constexpr float_64 OFF_PLAT_MAX_SI = 12e-6;
                     };
                 } // namespace defaults

@@ -114,15 +114,11 @@ namespace picongpu
                         // unit: UNIT_LENGTH
                         static constexpr float_64 POL_RAMP_LENGTH
                             = static_cast<float_X>(Params::POL_RAMP_LENGTH_SI / UNIT_LENGTH);
-                        static constexpr float_64 POL_PLAT_MIN
-                            = static_cast<float_X>(Params::POL_PLAT_MIN_SI / UNIT_LENGTH);
                         static constexpr float_64 POL_PLAT_MAX
                             = static_cast<float_X>(Params::POL_PLAT_MAX_SI / UNIT_LENGTH);
                         // unit: UNIT_LENGTH
                         static constexpr float_64 OFF_RAMP_LENGTH
                             = static_cast<float_X>(Params::OFF_RAMP_LENGTH_SI / UNIT_LENGTH);
-                        static constexpr float_64 OFF_PLAT_MIN
-                            = static_cast<float_X>(Params::OFF_PLAT_MIN_SI / UNIT_LENGTH);
                         static constexpr float_64 OFF_PLAT_MAX
                             = static_cast<float_X>(Params::OFF_PLAT_MAX_SI / UNIT_LENGTH);
                     };
@@ -310,7 +306,7 @@ namespace picongpu
                                 transversalFactor *= 0.0;
                             }
 
-                            transversalFactor = 1.0;
+//                            transversalFactor = 1.0;
 
 
 /*
