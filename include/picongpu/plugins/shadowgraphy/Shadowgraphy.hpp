@@ -462,11 +462,11 @@ namespace picongpu
                     ::openPMD::Dataset dataset{datatype, extent};
 
                     auto mesh = series.iterations[currentStep].meshes["shadowgram"];
-                    mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+                    mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
                     mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
                     mesh.setGridUnitSI(1.0);
-                    mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
                     mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
+                    mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
 
                     auto shadowgram = mesh[::openPMD::RecordComponent::SCALAR];
                     shadowgram.resetDataset(dataset);

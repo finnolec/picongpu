@@ -322,6 +322,7 @@ namespace picongpu
                         {
                             int const omegaIndex = getOmegaIndex(o);
                             float_64 const omegaSI = omega(omegaIndex);
+                            printf("%.5e\n", omegaSI);
                             float_64 const kSI = omegaSI / float_64(SI::SPEED_OF_LIGHT_SI);
 
                             // put field into fftw array
@@ -499,19 +500,6 @@ namespace picongpu
                 vec2r getShadowgram() const
                 {
                     return shadowgram;
-                }
-
-                std::vector<float_64> getShadowgram1D()
-                {
-                    std::vector<float_64> retVec(getSizeX() * getSizeY());
-
-                    for (int i = 0; i < getSizeX(); ++i){
-                        for (int j = 0; j < getSizeY(); ++j){
-                            retVec[i + j * getSizeX()] = shadowgram[i][j];
-                        }
-                    }
-
-                    return retVec;
                 }
 
                 std::shared_ptr<pmacc::container::HostBuffer<float_64, DIM2>> getShadowgramBuf()
@@ -745,7 +733,7 @@ namespace picongpu
                     }
                     else
                     {
-                        return (i % numOmegas / 2) + getOmegaMinIndex();
+                        return (i % (numOmegas / 2)) + getOmegaMinIndex();
                     }
                 }
 
