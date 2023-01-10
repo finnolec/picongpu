@@ -361,7 +361,26 @@ namespace picongpu
 
                             if(fourierOutputEnabled)
                                 writeFourierFile(o, fieldIndex, false);
+/*
+                            for(int i = 0; i < pluginNumX; ++i){
+                                int const iffs = (i + pluginNumX / 2) % pluginNumX;
 
+                                for(int j = 0; j < pluginNumY; ++j)
+                                {   
+                                    int const jffs = (j + pluginNumY / 2) % pluginNumY;
+
+                                    if(i == 0){
+                                        std::cout << jffs << " ";
+                                    }
+                                }
+
+                                if(i == 0){
+                                    std::cout << std::endl;
+                                }
+                                std::cout << iffs << " ";
+                            }
+                            std::cout << std::endl;
+*/
                             // put field into fftw array
                             for(int i = 0; i < pluginNumX; ++i)
                             {
@@ -604,6 +623,7 @@ namespace picongpu
                                 int const index = i + j * pluginNumX;
                                 int const jffs = (j + pluginNumY / 2) % pluginNumY;
                                 int const indexffs = iffs + jffs * pluginNumX;
+                                //std::cout << indexffs << " ";
                                 if(!masksApplied)
                                 {
                                     outFile << fftwOutF[indexffs][0] << "+" << fftwOutF[indexffs][1] << "j"
@@ -615,6 +635,7 @@ namespace picongpu
                                             << "\t";
                                 }
                             } // for loop over all y
+                            //std::cout << std::endl;
 
                             outFile << std::endl;
                         } // for loop over all x
