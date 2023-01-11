@@ -201,38 +201,43 @@ namespace picongpu
                 {
                     /* called when plugin is loaded, command line flags are available here
                      * set notification period for our plugin at the PluginConnector */
-                    if(0 != notifyPeriod.size() && float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0))
-                    {
-                        /* in case the slice point is inside of [0.0,1.0] */
-                        sliceIsOK = true;
+                    if(0 != notifyPeriod.size()) {
+                        if(float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0)){
+                            /* in case the slice point is inside of [0.0,1.0] */
+                            sliceIsOK = true;
 
-                        /* The plugin integrates the Poynting vectors over time and must thus be called every tRes-th
-                         * time-step of the simulation until the integration is done */
-                        int startTime = std::stoi(this->notifyPeriod);
-                        int endTime = std::stoi(this->notifyPeriod) + this->duration;
+                            /* The plugin integrates the Poynting vectors over time and must thus be called every tRes-th
+                            * time-step of the simulation until the integration is done */
+                            int startTime = std::stoi(this->notifyPeriod);
+                            int endTime = std::stoi(this->notifyPeriod) + this->duration;
 
-                        std::string internalNotifyPeriod = std::to_string(startTime) + ":" + std::to_string(endTime)
-                            + ":" + std::to_string(params::tRes);
+                            std::string internalNotifyPeriod = std::to_string(startTime) + ":" + std::to_string(endTime)
+                                + ":" + std::to_string(params::tRes);
 
-                        Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
-                        namespace vec = ::pmacc::math;
-                        typedef SuperCellSize BlockDim;
+                            Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
+                            namespace vec = ::pmacc::math;
+                            typedef SuperCellSize BlockDim;
 
-                        vec::Size_t<simDim> size = vec::Size_t<simDim>(this->cellDescription->getGridSuperCells())
-                                * precisionCast<size_t>(BlockDim::toRT())
-                            - precisionCast<size_t>(2 * BlockDim::toRT());
-                        this->dBuffer_SI1 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
-                            size.shrink<simDim - 1>((this->plane + 1) % simDim));
-                        this->dBuffer_SI2 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
-                            size.shrink<simDim - 1>((this->plane + 1) % simDim));
+                            vec::Size_t<simDim> size = vec::Size_t<simDim>(this->cellDescription->getGridSuperCells())
+                                    * precisionCast<size_t>(BlockDim::toRT())
+                                - precisionCast<size_t>(2 * BlockDim::toRT());
+                            this->dBuffer_SI1 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
+                                size.shrink<simDim - 1>((this->plane + 1) % simDim));
+                            this->dBuffer_SI2 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
+                                size.shrink<simDim - 1>((this->plane + 1) % simDim));
+
+                        } else {
+
+                            /* in case the slice point is outside of [0.0,1.0] */
+                            sliceIsOK = false;
+                            std::cerr << "In the Shadowgraphy plugin the slice point"
+                                    << " (slicePoint=" << slicePoint << ") is outside of [0.0, 1.0]. " << std::endl
+                                    << "The request will be ignored. " << std::endl;
+                            }
                     }
                     else
                     {
-                        /* in case the slice point is outside of [0.0,1.0] */
-                        sliceIsOK = false;
-                        std::cerr << "In the Shadowgraphy plugin the slice point"
-                                  << " (slicePoint=" << slicePoint << ") is outside of [0.0, 1.0]. " << std::endl
-                                  << "The request will be ignored. " << std::endl;
+                            sliceIsOK = false;
                     }
                 }
 
