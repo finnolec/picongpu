@@ -33,6 +33,7 @@
 #include "picongpu/plugins/multi/Master.hpp"
 #include "picongpu/plugins/output/images/PngCreator.hpp"
 #include "picongpu/plugins/output/images/Visualisation.hpp"
+#include "picongpu/plugins/shadowgraphy/Shadowgraphy.hpp"
 #include "picongpu/plugins/transitionRadiation/TransitionRadiation.hpp"
 
 #include <pmacc/assert.hpp>
@@ -136,8 +137,8 @@ namespace picongpu
             Checkpoint,
             EnergyFields,
             ChargeConservation,
-            SumCurrents
-
+            SumCurrents,
+            plugins::shadowgraphy::Shadowgraphy
 #if(ENABLE_OPENPMD == 1)
             ,
             plugins::binning::BinningDispatcher,
