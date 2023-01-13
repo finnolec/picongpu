@@ -1,6 +1,4 @@
-/* Copyright 2013-2022 Axel Huebl, Heiko Burau, Rene Widera, Richard Pausch,
- *                     Klaus Steiniger, Felix Schmitt, Benjamin Worpitz
- *                     Finn-Ole Carstens
+/* Copyright 2023 Finn-Ole Carstens, Rene Widera
  *
  * This file is part of PIConGPU.
  *
@@ -32,12 +30,6 @@
 #include "picongpu/plugins/common/openPMDWriteMeta.hpp"
 #include "picongpu/plugins/shadowgraphy/ShadowgraphyHelper.hpp"
 
-#include <pmacc/cuSTL/algorithm/host/Foreach.hpp>
-#include <pmacc/cuSTL/algorithm/kernel/Foreach.hpp>
-#include <pmacc/cuSTL/algorithm/mpi/Gather.hpp>
-#include <pmacc/cuSTL/container/DeviceBuffer.hpp>
-#include <pmacc/cuSTL/container/HostBuffer.hpp>
-#include <pmacc/cuSTL/cursor/tools/slice.hpp>
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/math/Vector.hpp>
 #include <pmacc/math/vector/Float.hpp>
@@ -50,6 +42,7 @@
 #include <sstream>
 #include <string>
 
+#include <mpi.h>
 #include <openPMD/openPMD.hpp>
 #include <stdio.h>
 
@@ -63,24 +56,6 @@ namespace picongpu
     {
         namespace shadowgraphy
         {
-            namespace ShadowgraphyHelper
-            {
-                template<class Field>
-                class ConversionFunctor
-                {
-                public:
-                    /* convert field data to higher precision and convert to SI units on GPUs */
-                    template<typename T_Acc>
-                    DINLINE void operator()(
-                        T_Acc const& acc,
-                        float3_64& target,
-                        const typename Field::ValueType fieldData) const
-                    {
-                        target = precisionCast<float_64>(fieldData) * float_64((Field::getUnit())[0]);
-                    }
-                };
-            } // end namespace ShadowgraphyHelper
-
             class Shadowgraphy : public ILightweightPlugin
             {
             private:
@@ -89,31 +64,35 @@ namespace picongpu
                 std::string pluginPrefix;
                 std::string filenameExtension = openPMD::getDefaultExtension().c_str();
 
-                MappingDesc* cellDescription = nullptr;
+                MappingDesc* m_cellDescription = nullptr;
                 std::string notifyPeriod;
 
-                bool sliceIsOK;
+                bool sliceIsOK = false;
+
+                // do not change the plane, code is only supporting a plane in z direction
                 int plane = 2;
                 std::string fileName;
-                float_X slicePoint;
+                float_X slicePoint = 0.5;
 
-                std::unique_ptr<container::DeviceBuffer<float3_64, 2>> dBuffer_SI1;
-                std::unique_ptr<container::DeviceBuffer<float3_64, 2>> dBuffer_SI2;
+                bool isIntegrating = false;
+                int startTime = 0;
 
-                // std::unique_ptr<::openPMD::Series> openPMDSeries;
+                ///@todo: we must verify that this command line param is set!
+                float_X focuspos = 0.0_X;
+                int duration = 0;
 
+                MPI_Comm gatherComm = MPI_COMM_NULL;
+                // gather rank zero is the master to dump files
+                int gatherRank = -1;
+                int numDevicesInPlane = 0;
 
-                bool isIntegrating;
-                int startTime;
-
-                float focuspos;
-
-                int duration;
-
-                bool isMaster = false;
+                DataSpace<DIM2> localSliceSize;
+                DataSpace<DIM2> localSliceOffset;
+                DataSpace<DIM2> globalDomainSliceSize;
+                int globalPlaneIdx = -1;
+                int localPlaneIdx = -1;
 
                 shadowgraphy::Helper* helper = nullptr;
-                pmacc::mpi::MPIReduce reduce;
 
                 bool fourierOutputEnabled = false;
                 bool intermediateOutputEnabled = false;
@@ -122,8 +101,10 @@ namespace picongpu
                 Shadowgraphy()
                     : pluginName("Shadowgraphy: calculate the energy density of a laser by integrating"
                                  "the Poynting vectors in a spatially fixed slice over a given time interval")
-                    , isIntegrating(false)
+
                 {
+                    static_assert(simDim == DIM3, "Shadowgraphy-plugin requires 3D simulations.");
+
                     /* register our plugin during creation */
                     Environment<>::get().PluginConnector().registerPlugin(this);
                     pluginPrefix = "shadowgraphy";
@@ -153,13 +134,9 @@ namespace picongpu
                         po::value<std::string>(&this->filenameExtension)->multitoken(),
                         "openPMD filename extension");
                     desc.add_options()(
-                        (this->pluginPrefix + ".plane").c_str(),
-                        po::value<int>(&this->plane)->multitoken(),
-                        "specifies the axis which stands on the cutting plane (0,1,2)");
-                    desc.add_options()(
                         (this->pluginPrefix + ".slicePoint").c_str(),
                         po::value<float_X>(&this->slicePoint)->multitoken(),
-                        "slice point 0.0 <= x <= 1.0");
+                        "slice point 0.0 <= x < 1.0");
                     desc.add_options()(
                         (this->pluginPrefix + ".focuspos").c_str(),
                         po::value<float_X>(&this->focuspos)->multitoken(),
@@ -185,6 +162,89 @@ namespace picongpu
                 plugins::multi::Option<std::string> extension
                     = {"ext", "openPMD filename extension", openPMD::getDefaultExtension().c_str()};
 
+
+                void buildGatherCommunicator(bool isActive)
+                {
+                    int countRanks;
+                    int mpiRank;
+                    MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &countRanks));
+                    std::vector<int> allRank(countRanks);
+                    std::vector<int> groupRanks(countRanks);
+                    MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank));
+
+                    if(!isActive)
+                        mpiRank = -1;
+
+                    // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
+                    __getTransactionEvent().waitForFinished();
+                    MPI_CHECK(MPI_Allgather(&mpiRank, 1, MPI_INT, allRank.data(), 1, MPI_INT, MPI_COMM_WORLD));
+
+                    int numRanks = 0;
+                    for(int i = 0; i < countRanks; ++i)
+                    {
+                        if(allRank[i] != -1)
+                        {
+                            std::cout << "allRank[i] i=" << i << " value=" << allRank[i] << std::endl;
+                            groupRanks[numRanks] = allRank[i];
+                            numRanks++;
+                        }
+                    }
+                    numDevicesInPlane = numRanks;
+
+                    MPI_Group group = MPI_GROUP_NULL;
+                    MPI_Group newgroup = MPI_GROUP_NULL;
+                    MPI_CHECK(MPI_Comm_group(MPI_COMM_WORLD, &group));
+                    MPI_CHECK(MPI_Group_incl(group, numRanks, groupRanks.data(), &newgroup));
+
+                    MPI_CHECK(MPI_Comm_create(MPI_COMM_WORLD, newgroup, &gatherComm));
+
+                    if(mpiRank != -1)
+                    {
+                        MPI_CHECK(MPI_Comm_rank(gatherComm, &gatherRank));
+                        std::cout << "gather rank=" << gatherRank << std::endl;
+                    }
+                    MPI_CHECK(MPI_Group_free(&group));
+                    MPI_CHECK(MPI_Group_free(&newgroup));
+                }
+
+                void initGather()
+                {
+                    bool activatePlugin = true;
+
+                    if(activatePlugin)
+                    {
+                        const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
+
+                        auto globalDomain = subGrid.getGlobalDomain();
+                        globalDomainSliceSize = DataSpace<DIM2>(globalDomain.size.x(), globalDomain.size.y());
+
+                        auto globalPlaneExtent = globalDomain.size[plane];
+
+                        globalPlaneIdx = globalPlaneExtent * slicePoint;
+
+                        auto localDomain = subGrid.getLocalDomain();
+
+                        auto isPlaneInLocalDomain = globalPlaneIdx >= localDomain.offset[plane]
+                            && globalPlaneIdx < localDomain.offset[plane] + localDomain.size[plane];
+
+
+                        if(isPlaneInLocalDomain)
+                            localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
+
+                        std::cout << "isPlaneInLocalDomain=" << isPlaneInLocalDomain
+                                  << " localPlaneIdx=" << localPlaneIdx << " globalPlaneExtent=" << globalPlaneExtent
+                                  << std::endl;
+
+
+                        // collective call
+                        buildGatherCommunicator(isPlaneInLocalDomain);
+                        localSliceSize = DataSpace<DIM2>(localDomain.size.x(), localDomain.size.y());
+                        localSliceOffset = DataSpace<DIM2>(localDomain.offset.x(), localDomain.offset.y());
+                        std::cout << "localSliceOffset=" << localSliceOffset.toString() << std::endl;
+                        std::cout << "localSliceSize=" << localSliceSize.toString() << std::endl;
+                    }
+                }
+
                 //! Implementation of base class function.
                 void pluginLoad() override
                 {
@@ -192,9 +252,9 @@ namespace picongpu
                      * set notification period for our plugin at the PluginConnector */
                     if(0 != notifyPeriod.size())
                     {
-                        if(float_X(0.0) <= slicePoint && slicePoint <= float_X(1.0))
+                        if(float_X(0.0) <= slicePoint && slicePoint < float_X(1.0))
                         {
-                            /* in case the slice point is inside of [0.0,1.0] */
+                            /* in case the slice point is inside of [0.0,1.0) */
                             sliceIsOK = true;
 
                             /* The plugin integrates the Poynting vectors over time and must thus be called every
@@ -206,23 +266,15 @@ namespace picongpu
                                 + std::to_string(endTime) + ":" + std::to_string(params::tRes);
 
                             Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
-                            namespace vec = ::pmacc::math;
-                            typedef SuperCellSize BlockDim;
 
-                            vec::Size_t<simDim> size = vec::Size_t<simDim>(this->cellDescription->getGridSuperCells())
-                                    * precisionCast<size_t>(BlockDim::toRT())
-                                - precisionCast<size_t>(2 * BlockDim::toRT());
-                            this->dBuffer_SI1 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
-                                size.shrink<simDim - 1>((this->plane + 1) % simDim));
-                            this->dBuffer_SI2 = std::make_unique<container::DeviceBuffer<float3_64, simDim - 1>>(
-                                size.shrink<simDim - 1>((this->plane + 1) % simDim));
+                            initGather();
                         }
                         else
                         {
-                            /* in case the slice point is outside of [0.0,1.0] */
+                            /* in case the slice point is outside of [0.0,1.0) */
                             sliceIsOK = false;
                             std::cerr << "In the Shadowgraphy plugin the slice point"
-                                      << " (slicePoint=" << slicePoint << ") is outside of [0.0, 1.0]. " << std::endl
+                                      << " (slicePoint=" << slicePoint << ") is outside of [0.0, 1.0). " << std::endl
                                       << "The request will be ignored. " << std::endl;
                         }
                     }
@@ -244,17 +296,20 @@ namespace picongpu
                  */
                 void setMappingDescription(MappingDesc* cellDescription) override
                 {
-                    this->cellDescription = cellDescription;
+                    this->m_cellDescription = cellDescription;
                 }
 
                 //! Implementation of base class function.
                 void notify(uint32_t currentStep) override
                 {
+                    // skip notify, slice is not intersecting the local domain
+                    if(gatherRank == -1)
+                        return;
                     /* notification callback for simulation step currentStep
                      * called every notifyPeriod steps */
                     if(sliceIsOK)
                     {
-                        isMaster = reduce.hasResult(pmacc::mpi::reduceMethods::Reduce());
+                        bool isMaster = gatherRank == 0;
 
                         // First time the plugin is called:
                         if(isIntegrating == false)
@@ -263,21 +318,8 @@ namespace picongpu
 
                             if(isMaster)
                             {
-                                // Get grid size
-                                namespace vec = pmacc::math;
-                                typedef SuperCellSize BlockDim;
-                                DataConnector& dc = Environment<>::get().DataConnector();
-                                auto field = dc.get<FieldE>(FieldE::getName(), true)
-                                                 ->getGridBuffer()
-                                                 .getDeviceBuffer()
-                                                 .cartBuffer()
-                                                 .view(BlockDim::toRT(), -BlockDim::toRT());
-
-                                pmacc::GridController<simDim>& con
-                                    = pmacc::Environment<simDim>::get().GridController();
-                                vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
-                                vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
-
+                                std::cout << "master init " << currentStep << std::endl;
+                                /// @todo shared pointer
                                 helper = new Helper(
                                     currentStep,
                                     this->slicePoint,
@@ -295,36 +337,36 @@ namespace picongpu
                         // convert currentStep (simulation time-step) into localStep for time domain DFT
                         int localStep = (currentStep - startTime) / params::tRes;
 
-                        if(localStep != int(this->duration / params::tRes))
+                        std::cout << "try calculate " << localStep << std::endl;
+
+                        bool const dumpFinalData = localStep == int(this->duration / params::tRes);
+                        if(!dumpFinalData)
                         {
-                            namespace vec = ::pmacc::math;
-                            typedef SuperCellSize BlockDim;
+                            std::cout << "calculate " << currentStep << std::endl;
+
                             DataConnector& dc = Environment<>::get().DataConnector();
-                            auto field_coreBorderE = dc.get<FieldE>(FieldE::getName(), true)
-                                                         ->getGridBuffer()
-                                                         .getDeviceBuffer()
-                                                         .cartBuffer()
-                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
+                            auto fieldE = dc.get<FieldE>(FieldE::getName(), false);
 
-                            storeSlice<FieldE>(
-                                field_coreBorderE,
+                            std::cout << "prepare E field" << std::endl;
+
+                            storeSlice<shadowgraphy::Helper::FieldType::E>(
+                                fieldE->getHostDataBox().shift(m_cellDescription->getGridLayout().getGuard()),
                                 this->plane,
                                 this->slicePoint,
                                 localStep,
                                 currentStep);
 
-                            auto field_coreBorderB = dc.get<FieldB>(FieldB::getName(), true)
-                                                         ->getGridBuffer()
-                                                         .getDeviceBuffer()
-                                                         .cartBuffer()
-                                                         .view(BlockDim::toRT(), -BlockDim::toRT());
+                            auto fieldB = dc.get<FieldB>(FieldB::getName(), false);
 
-                            storeSlice<FieldB>(
-                                field_coreBorderB,
+                            std::cout << "prepare B field" << std::endl;
+
+                            storeSlice<shadowgraphy::Helper::FieldType::B>(
+                                fieldB->getHostDataBox().shift(m_cellDescription->getGridLayout().getGuard()),
                                 this->plane,
                                 this->slicePoint,
                                 localStep,
                                 currentStep);
+
 
                             if(isMaster)
                             {
@@ -335,6 +377,7 @@ namespace picongpu
                         {
                             if(isMaster)
                             {
+                                std::cout << "dump " << currentStep << std::endl;
                                 helper->propagateFields();
                                 helper->calculate_shadowgram();
 
@@ -352,96 +395,167 @@ namespace picongpu
                     }
                 }
 
-                /* Stores the field slices from the host on the device. 2 field slices are required to adjust for the
-                 * Yee-offset in the plugin.
+                /* Stores the field slices from the host on the device. 2 field slices are required to adjust for
+                 * the Yee-offset in the plugin.
                  * https://picongpu.readthedocs.io/en/latest/models/AOFDTD.html#maxwell-s-equations-on-the-mesh
-                 * The current implementation is based on the (outdated) slice field printer printer and uses custl!
-                 * It works, but it's not nice.
+                 * The current implementation is based on the (outdated) slice field printer printer and uses
+                 * custl! It works, but it's not nice.
                  */
-                template<typename Field, typename TField>
-                void storeSlice(const TField& field, int nAxis, float slicePoint, int localStep, int currentStep)
+                template<typename shadowgraphy::Helper::FieldType T_fieldType, typename T_FieldBox>
+                void storeSlice(const T_FieldBox& field, int nAxis, float slicePoint, int localStep, int currentStep)
                 {
-                    namespace vec = pmacc::math;
+                    bool isMaster = gatherRank == 0;
+
+                    auto pointField = std::make_shared<HostBufferIntern<float2_X, DIM2>>(localSliceSize);
+                    auto pointFieldBox = pointField->getDataBox();
+
+                    std::cout << "[" << gatherRank << "]"
+                              << " start loading slice" << std::endl;
+                    for(int y = 0; y < localSliceSize.y(); ++y)
+                        for(int x = 0; x < localSliceSize.x(); ++x)
+                        {
+                            DataSpace<DIM2> idx(x, y);
+                            DataSpace<DIM3> srcIdx(idx.x(), idx.y(), localPlaneIdx);
+                            pointFieldBox(idx) = helper->cross<T_fieldType>(field.shift(srcIdx));
+                        }
+                    std::cout << "[" << gatherRank << "]"
+                              << " end loding slice" << std::endl;
 
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
-                    vec::Size_t<simDim> gpuDim = (vec::Size_t<simDim>) con.getGpuNodes();
-                    vec::Size_t<simDim> globalGridSize = gpuDim * field.size();
+                    auto numDevices = con.getGpuNodes();
 
-                    // FIRST SLICE OF FIELD FOR YEE OFFSET
-                    int globalPlane1 = globalGridSize[nAxis] * slicePoint;
-                    int localPlane1 = globalPlane1 % field.size()[nAxis];
-                    int gpuPlane1 = globalPlane1 / field.size()[nAxis];
+                    std::cout << "[" << gatherRank << "]"
+                              << " num devices in slice plane =" << numDevicesInPlane << std::endl;
 
-                    // SECOND SLICE OF FIELD FOR YEE OFFSET
-                    int globalPlane2 = globalGridSize[nAxis] * slicePoint + 1;
-                    int localPlane2 = globalPlane2 % field.size()[nAxis];
-                    int gpuPlane2 = globalPlane2 / field.size()[nAxis];
+                    // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
+                    __getTransactionEvent().waitForFinished();
+                    // get number of elements per participating mpi rank
+                    auto extentPerDevice = std::vector<DataSpace<DIM2>>(numDevicesInPlane);
 
-                    vec::Int<simDim> nVector(vec::Int<simDim>::create(0));
-                    nVector[nAxis] = 1;
+                    std::cout << "[" << gatherRank << "]"
+                              << " start gather extents " << localSliceSize.toString() << std::endl;
+                    // gather extents
+                    MPI_CHECK(MPI_Gather(
+                        reinterpret_cast<int*>(&localSliceSize),
+                        2,
+                        MPI_INT,
+                        reinterpret_cast<int*>(extentPerDevice.data()),
+                        2,
+                        MPI_INT,
+                        0,
+                        gatherComm));
 
-                    zone::SphericZone<simDim> gpuGatheringZone1(gpuDim, nVector * gpuPlane1);
-                    gpuGatheringZone1.size[nAxis] = 1;
-
-                    zone::SphericZone<simDim> gpuGatheringZone2(gpuDim, nVector * gpuPlane2);
-                    gpuGatheringZone2.size[nAxis] = 1;
-
-
-                    algorithm::mpi::Gather<simDim> gather1(gpuGatheringZone1);
-
-                    algorithm::mpi::Gather<simDim> gather2(gpuGatheringZone2);
-
-                    if(!gather1.participate() && !gather2.participate())
+                    if(isMaster)
                     {
-                        return;
+                        for(int i = 0; i < numDevicesInPlane; ++i)
+                        {
+                            std::cout << "[" << gatherRank << "]"
+                                      << " extent recive=" << extentPerDevice[i].toString() << std::endl;
+                        }
                     }
 
-                    vec::UInt32<3> twistedAxesVec1((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
+                    std::cout << "[" << gatherRank << "]"
+                              << " end gather extents" << std::endl;
 
-                    // convert data to higher precision and to SI units
-                    ShadowgraphyHelper::ConversionFunctor<Field> cf1;
-                    algorithm::kernel::RT::Foreach()(
-                        dBuffer_SI1->zone(),
-                        dBuffer_SI1->origin(),
-                        cursor::tools::slice(field.originCustomAxes(twistedAxesVec1)(0, 0, localPlane1)),
-                        cf1);
+                    auto offsetPerDevice = std::vector<DataSpace<DIM2>>(numDevicesInPlane);
 
+                    std::cout << "[" << gatherRank << "]"
+                              << " start gather offsets " << localSliceOffset.toString() << std::endl;
 
-                    vec::UInt32<3> twistedAxesVec2((nAxis + 1) % 3, (nAxis + 2) % 3, nAxis);
+                    // gather offsets
+                    MPI_CHECK(MPI_Gather(
+                        reinterpret_cast<int*>(&localSliceOffset),
+                        2,
+                        MPI_INT,
+                        reinterpret_cast<int*>(offsetPerDevice.data()),
+                        2,
+                        MPI_INT,
+                        0,
+                        gatherComm));
 
-                    // convert data to higher precision and to SI units
-                    ShadowgraphyHelper::ConversionFunctor<Field> cf2;
-                    algorithm::kernel::RT::Foreach()(
-                        dBuffer_SI2->zone(),
-                        dBuffer_SI2->origin(),
-                        cursor::tools::slice(field.originCustomAxes(twistedAxesVec2)(0, 0, localPlane2)),
-                        cf2);
-
-
-                    // copy selected plane from device to host
-                    container::HostBuffer<float3_64, simDim - 1> hBuffer1(dBuffer_SI1->size());
-                    hBuffer1 = *dBuffer_SI1;
-
-                    // copy selected plane from device to host
-                    container::HostBuffer<float3_64, simDim - 1> hBuffer2(dBuffer_SI2->size());
-                    hBuffer2 = *dBuffer_SI2;
-
-                    // collect data from all nodes/GPUs
-                    vec::Size_t<simDim> globalDomainSize = Environment<simDim>::get().SubGrid().getGlobalDomain().size;
-                    vec::Size_t<simDim - 1> globalSliceSize
-                        = globalDomainSize.shrink<simDim - 1>((nAxis + 1) % simDim);
-                    container::HostBuffer<float3_64, simDim - 1> globalBuffer1(globalSliceSize);
-                    container::HostBuffer<float3_64, simDim - 1> globalBuffer2(globalSliceSize);
-
-                    gather1(globalBuffer1, hBuffer1, nAxis);
-                    gather2(globalBuffer2, hBuffer2, nAxis);
-
-                    if(!gather1.root() || !gather2.root())
+                    if(isMaster)
                     {
-                        return;
+                        for(int i = 0; i < numDevicesInPlane; ++i)
+                        {
+                            std::cout << "[" << gatherRank << "]"
+                                      << " offset recive=" << offsetPerDevice[i].toString() << std::endl;
+                        }
                     }
 
-                    helper->storeField<Field>(localStep, currentStep, &globalBuffer1, &globalBuffer2);
+                    std::cout << "[" << gatherRank << "]"
+                              << " end gather offsets" << std::endl;
+
+                    std::vector<int> displs(numDevicesInPlane);
+                    std::vector<int> count(numDevicesInPlane);
+                    // @todo replace by std::scan
+                    int offset = 0;
+                    int globalNumElements = 0u;
+
+                    if(isMaster)
+                    {
+                        for(int i = 0; i < numDevicesInPlane; ++i)
+                        {
+                            std::cout << "[" << gatherRank << "]"
+                                      << " offset=" << offset << std::endl;
+
+                            displs[i] = offset * sizeof(float2_X);
+                            count[i] = extentPerDevice[i].productOfComponents() * sizeof(float2_X);
+                            offset += extentPerDevice[i].productOfComponents();
+                            globalNumElements += extentPerDevice[i].productOfComponents();
+
+                            std::cout << "[" << gatherRank << "]"
+                                      << " extentPerDevice[" << i << "]=" << extentPerDevice[i] << std::endl;
+                            std::cout << "[" << gatherRank << "]"
+                                      << " displs[" << i << "]=" << displs[i] << std::endl;
+                            std::cout << "[" << gatherRank << "]"
+                                      << " count[" << i << "]=" << count[i] << std::endl;
+                        }
+                    }
+                    std::cout << "[" << gatherRank << "]"
+                              << " globalNumElements=" << globalNumElements << std::endl;
+
+                    // gather all data from other ranks
+                    auto allData = std::vector<float2_X>(globalNumElements);
+                    int localNumElements = localSliceSize.productOfComponents();
+
+                    MPI_CHECK(MPI_Gatherv(
+                        reinterpret_cast<char*>(pointFieldBox.getPointer()),
+                        localNumElements * sizeof(float2_X),
+                        MPI_CHAR,
+                        reinterpret_cast<char*>(allData.data()),
+                        count.data(),
+                        displs.data(),
+                        MPI_CHAR,
+                        0,
+                        gatherComm));
+
+                    std::cout << "[" << gatherRank << "]"
+                              << " finish MPI_Gatherv" << std::endl;
+
+
+                    if(isMaster)
+                    {
+                        auto globalField = std::make_shared<HostBufferIntern<float2_X, DIM2>>(globalDomainSliceSize);
+                        auto globalFieldBox = globalField->getDataBox();
+
+                        // aggregate data of all MPI ranks into a single 2D buffer
+                        for(int dataSetNumber = 0; dataSetNumber < numDevicesInPlane; ++dataSetNumber)
+                        {
+                            for(int y = 0; y < extentPerDevice[dataSetNumber].y(); ++y)
+                                for(int x = 0; x < extentPerDevice[dataSetNumber].x(); ++x)
+                                {
+                                    globalFieldBox(DataSpace<DIM2>(x, y) + offsetPerDevice[dataSetNumber]) = allData
+                                        [displs[dataSetNumber] / sizeof(float2_X)
+                                         + y * extentPerDevice[dataSetNumber].x() + x];
+                                }
+                        }
+
+                        std::cout << "[" << gatherRank << "]"
+                                  << " finish preparing global slice" << std::endl;
+                        helper->storeField<T_fieldType>(localStep, currentStep, globalFieldBox);
+                        std::cout << "[" << gatherRank << "]"
+                                  << " finish store field" << std::endl;
+                    }
                 }
 
                 void writeToOpenPMDFile(uint32_t currentStep)
@@ -467,10 +581,11 @@ namespace picongpu
                     auto shadowgram = mesh[::openPMD::RecordComponent::SCALAR];
                     shadowgram.resetDataset(dataset);
 
-                    shadowgram.storeChunk(
-                        std::shared_ptr<float_64>{&(*(helper->getShadowgramBuf()->origin())), [](auto const*) {}},
-                        offset,
-                        extent);
+                    // do not delete this object before dataPtr is not required anymore
+                    auto data = helper->getShadowgramBuf();
+                    auto sharedDataPtr = std::shared_ptr<float_64>{data->getPointer(), [](auto const*) {}};
+
+                    shadowgram.storeChunk(sharedDataPtr, offset, extent);
 
                     series.iterations[currentStep].close();
                 }
@@ -485,7 +600,6 @@ namespace picongpu
                     {
                         std::cerr << "Can't open file [" << name << "] for output, disable plugin output. "
                                   << std::endl;
-                        isMaster = false; // no Master anymore -> no process is able to write
                     }
                     else
                     {

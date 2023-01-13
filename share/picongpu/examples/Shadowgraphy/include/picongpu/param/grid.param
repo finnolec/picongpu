@@ -32,24 +32,21 @@ namespace picongpu
          *  the simulation area, not located outside of it as in the book.
          */
 
-        constexpr float_64 CELL_SIZE_SI = 1.0e-3; // 1 mm
+        constexpr float_64 CELL_SIZE_SI = 0.08e-6; // 1 mm
 
         /** equals X
          *  unit: meter */
-        constexpr float_64 CELL_WIDTH_SI = CELL_SIZE_SI;
+        constexpr float_64 CELL_WIDTH_SI = 5e-7;
         /** equals Y
          *  unit: meter */
-        constexpr float_64 CELL_HEIGHT_SI = CELL_WIDTH_SI;
+        constexpr float_64 CELL_HEIGHT_SI = 5e-7;
         /** equals Z
          *  unit: meter */
-        constexpr float_64 CELL_DEPTH_SI = CELL_WIDTH_SI;
+        constexpr float_64 CELL_DEPTH_SI = 16e-8;
 
         /** Duration of one timestep is just below the CFL limit
          *  unit: seconds */
-        constexpr float_64 CFL_RATIO = 0.999;
-        constexpr float_64 SQRT_3 = 1.73205080757;
-        constexpr float_64 DELTA_T_SI = CFL_RATIO * CELL_SIZE_SI / (SPEED_OF_LIGHT_SI * SQRT_3);
-
+        constexpr float_64 DELTA_T_SI = 4.837989049701902e-16;
         /** Note on units in reduced dimensions
          *
          * In 2D3V simulations, the CELL_DEPTH_SI (Z) cell length

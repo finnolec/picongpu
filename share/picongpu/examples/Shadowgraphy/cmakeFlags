@@ -31,7 +31,6 @@
 
 # Test 3d and 2d
 flags[0]=""
-flags[1]="-DPARAM_OVERWRITES:LIST='-DPARAM_DIMENSION=DIM2'"
 
 
 ################################################################################

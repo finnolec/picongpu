@@ -1,3 +1,22 @@
+/* Copyright 2023 Finn-Ole Carstens, Rene Widera
+ *
+ * This file is part of PIConGPU.
+ *
+ * PIConGPU is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * PIConGPU is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with PIConGPU.
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #pragma once
 
 #include "picongpu/simulation_defines.hpp"
@@ -6,7 +25,6 @@
 
 #include <pmacc/algorithms/math/defines/pi.hpp>
 #include <pmacc/assert.hpp>
-#include <pmacc/cuSTL/container/HostBuffer.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/math/Vector.hpp>
 #include <pmacc/math/vector/Float.hpp>
@@ -67,10 +85,10 @@ namespace picongpu
 
                 // Size of arrays
                 int pluginNumX, pluginNumY;
-                int omegaMinIndex, omegaMaxIndex, numOmegas;
+                int numOmegas;
 
-                int yTotalMinIndex, yTotalMaxIndex;
-                int cellsPerGpu;
+                int yTotalMinIndex;
+                int cellsPerGpuY;
                 bool isSlidingWindowActive;
 
                 // Variables for omega calculations
@@ -83,10 +101,13 @@ namespace picongpu
                 bool fourierOutputEnabled;
                 bool intermediateOutputEnabled;
 
-                std::shared_ptr<pmacc::container::HostBuffer<float_64, DIM2>> retBuffer;
-
-
             public:
+                enum class FieldType : uint32_t
+                {
+                    E,
+                    B
+                };
+
                 /** Constructor of shadowgraphy helper class
                  * To be called at the first timestep when the shadowgraphy time integration starts
                  *
@@ -110,10 +131,7 @@ namespace picongpu
                     dt = params::tRes * SI::DELTA_T_SI;
                     pluginNumT = duration / params::tRes;
 
-                    omegaMinIndex = getOmegaMinIndex();
-                    omegaMaxIndex = getOmegaMaxIndex();
                     numOmegas = getNumOmegas();
-
 
                     propagationDistance = focusPos;
 
@@ -123,7 +141,7 @@ namespace picongpu
 
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     int const nGpus = con.getGpuNodes()[1];
-                    cellsPerGpu = int(globalGridSize[1] / nGpus);
+                    cellsPerGpuY = int(globalGridSize[1] / nGpus);
 
                     pluginNumX = globalGridSize[0] / params::xRes - 2;
 
@@ -159,6 +177,7 @@ namespace picongpu
                         slidingWindowCorrection = 0.0;
                     }
 
+                    // @todo Why '-2'??????
                     pluginNumY = math::floor(
                         (yWindowSize - slidingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::yRes) -2);
 
@@ -176,11 +195,14 @@ namespace picongpu
                         = (MovingWindow::getInstance().getWindow(currentStep).globalDimensions.offset)[1];
                     int const yTotalOffset = int(startSlideCount * globalGridSize[1] / nGpus);
 
+                    std::cout << "size vector " << pluginNumX << "x" << pluginNumY << " num omegas=" << numOmegas
+                              << std::endl;
+
                     // The total domain indices of the integration slice are constant, because the screen is not
                     // co-propagating with the moving window
+
                     yTotalMinIndex
-                        = yTotalOffset + yGlobalOffset + math::floor(slidingWindowCorrection / SI::CELL_HEIGHT_SI) - 1;
-                    yTotalMaxIndex = yTotalMinIndex + pluginNumY;
+                        = yTotalOffset + yGlobalOffset + math::floor(slidingWindowCorrection / SI::CELL_HEIGHT_SI);
 
                     // Initialization of storage arrays
                     ExOmega = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
@@ -214,20 +236,44 @@ namespace picongpu
                     fftw_free(fftwOutB);
                 }
 
+                template<FieldType T_fieldType, typename T_FieldDataBox>
+                float2_X cross(T_FieldDataBox field)
+                {
+                    // fix yee offset
+                    if constexpr(T_fieldType == FieldType::E)
+                    {
+                        return float2_X(
+                            (field(DataSpace<DIM3>(0, 0, 0)).x() + field(DataSpace<DIM3>(-1, 0, 0)).x()) / 2.0_X,
+                            (field(DataSpace<DIM3>(0, 0, 0)).y() + field(DataSpace<DIM3>(0, -1, 0)).y()) / 2.0_X);
+                    }
+                    else if constexpr(T_fieldType == FieldType::B)
+                    {
+                        return float2_X(
+                            (field(DataSpace<DIM3>(0, 0, 0)).x() + field(DataSpace<DIM3>(0, -1, 0)).x()
+                             + field(DataSpace<DIM3>(0, 0, -1)).x() + field(DataSpace<DIM3>(0, -1, -1)).x())
+                                / 4.0_X,
+                            (field(DataSpace<DIM3>(0, 0, 0)).x() + field(DataSpace<DIM3>(-1, 0, 0)).x()
+                             + field(DataSpace<DIM3>(-1, 0, 0)).x() + field(DataSpace<DIM3>(-1, 0, -1)).x())
+                                / 4.0_X);
+                    }
+                    else
+                    {
+                        static_assert(!sizeof(T_FieldDataBox), "Unknown field description used");
+                    }
+
+                    ALPAKA_UNREACHABLE(float2_X{});
+                }
+
                 /** Store fields in helper class with proper resolution and fixed Yee offset
                  *
                  * @tparam F Field
                  * @param t current plugin timestep (simulation timestep - plugin start)
                  * @param currentStep current simulation timestep
-                 * @param fieldBuffer1 2D array of field at slicePos
+                 * @param field 3D data box shifted the the local simulation origin (no guard)
                  * @param fieldBuffer2 2D array of field at slicePos with 1 offset (to fix Yee offset)
                  */
-                template<typename F>
-                void storeField(
-                    int t,
-                    int currentStep,
-                    pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer1,
-                    pmacc::container::HostBuffer<float3_64, 2>* fieldBuffer2)
+                template<FieldType T_fieldType, typename T_FieldDataBox>
+                void storeField(int t, int currentStep, T_FieldDataBox fieldBox)
                 {
                     int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
 
@@ -238,38 +284,23 @@ namespace picongpu
                         {
                             // Transform the total coordinates of the fixed shadowgraphy screen to the global
                             // coordinates of the field-buffers
-                            int const simJ = fields::absorber::NUM_CELLS[0][1] + yTotalMinIndex
-                                - currentSlideCount * cellsPerGpu + j * params::yRes;
+                            int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                                - currentSlideCount * cellsPerGpuY + j * params::yRes;
 
                             float_64 const wf
                                 = masks::positionWf(i, j, pluginNumX, pluginNumY) * masks::timeWf(t, duration);
 
+                            auto value = fieldBox(DataSpace<DIM2>{simI, simJ});
                             // fix yee offset
-                            if(F::getName() == "E")
+                            if constexpr(T_fieldType == FieldType::E)
                             {
-                                tmpEx[i][j] = wf
-                                    * ((*(fieldBuffer2->origin()(simI, simJ + 1))).x()
-                                       + (*(fieldBuffer2->origin()(simI + 1, simJ + 1))).x())
-                                    / 2.0;
-                                tmpEy[i][j] = wf
-                                    * ((*(fieldBuffer2->origin()(simI + 1, simJ))).y()
-                                       + (*(fieldBuffer2->origin()(simI + 1, simJ + 1))).y())
-                                    / 2.0;
+                                tmpEx[i][j] = UNIT_EFIELD * wf * value.x();
+                                tmpEy[i][j] = UNIT_EFIELD * wf * value.y();
                             }
-                            else
+                            else if constexpr(T_fieldType == FieldType::B)
                             {
-                                tmpBx[i][j] = wf
-                                    * ((*(fieldBuffer1->origin()(simI + 1, simJ))).x()
-                                       + (*(fieldBuffer1->origin()(simI + 1, simJ + 1))).x()
-                                       + (*(fieldBuffer2->origin()(simI + 1, simJ))).x()
-                                       + (*(fieldBuffer2->origin()(simI + 1, simJ + 1))).x())
-                                    / 4.0;
-                                tmpBy[i][j] = wf
-                                    * ((*(fieldBuffer1->origin()(simI, simJ + 1))).y()
-                                       + (*(fieldBuffer1->origin()(simI + 1, simJ + 1))).y()
-                                       + (*(fieldBuffer2->origin()(simI, simJ + 1))).y()
-                                       + (*(fieldBuffer2->origin()(simI + 1, simJ + 1))).y())
-                                    / 4.0;
+                                tmpBx[i][j] = UNIT_BFIELD * wf * value.x();
+                                tmpBy[i][j] = UNIT_BFIELD * wf * value.y();
                             }
                         }
                     }
@@ -321,7 +352,7 @@ namespace picongpu
                         {
                             int const omegaIndex = getOmegaIndex(o);
                             float_64 const omegaSI = omega(omegaIndex);
-                            printf("%.5e\n", omegaSI);
+                            // printf("%.5e\n", omegaSI);
                             float_64 const kSI = omegaSI / float_64(SI::SPEED_OF_LIGHT_SI);
 
                             // put field into fftw array
@@ -520,16 +551,17 @@ namespace picongpu
                     return shadowgram;
                 }
 
-                std::shared_ptr<pmacc::container::HostBuffer<float_64, DIM2>> getShadowgramBuf()
+                auto getShadowgramBuf()
                 {
-                    // pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
-                    retBuffer = std::make_shared<pmacc::container::HostBuffer<float_64, DIM2>>(getSizeX(), getSizeY());
+                    auto retBuffer
+                        = std::make_shared<HostBufferIntern<float_64, DIM2>>(DataSpace<DIM2>(getSizeX(), getSizeY()));
+                    auto dataBox = retBuffer->getDataBox();
 
                     for(int j = 0; j < getSizeY(); ++j)
                     {
                         for(int i = 0; i < getSizeX(); ++i)
                         {
-                            *(retBuffer->origin()(i, j)) = static_cast<float_64>(shadowgram[i][j]);
+                            dataBox({i, j}) = static_cast<float_64>(shadowgram[i][j]);
                         }
                     }
 
@@ -737,6 +769,9 @@ namespace picongpu
                 //! Return size of trimmed arrays in omega dimension
                 int getNumOmegas() const
                 {
+                    PMACC_VERIFY_MSG(
+                        getOmegaMaxIndex() > getOmegaMinIndex(),
+                        "Shadowgraphy: omega max <= omega min is not allowed!");
                     return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
                 }
 
