@@ -27,9 +27,6 @@
 #include <pmacc/assert.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/math/Vector.hpp>
-#include <pmacc/math/vector/Float.hpp>
-#include <pmacc/math/vector/Int.hpp>
-#include <pmacc/math/vector/Size_t.hpp>
 
 #include <cmath> // what
 
@@ -49,12 +46,12 @@ namespace picongpu
             private:
                 using complex_64 = alpaka::Complex<float_64>;
 
-                typedef std::vector<std::vector<std::vector<complex_64>>> vec3c;
-                typedef std::vector<std::vector<complex_64>> vec2c;
-                typedef std::vector<complex_64> vec1c;
-                typedef std::vector<std::vector<std::vector<float_64>>> vec3r;
-                typedef std::vector<std::vector<float_64>> vec2r;
-                typedef std::vector<float_64> vec1r;
+                using vec3c = std::vector<std::vector<std::vector<complex_64>>>;
+                using vec2c = std::vector<std::vector<complex_64>>;
+                using vec1c = std::vector<complex_64>;
+                using vec3r = std::vector<std::vector<std::vector<float_64>>>;
+                using vec2r = std::vector<std::vector<float_64>>;
+                using vec1r = std::vector<float_64>;
 
                 // Arrays to store Ex, Ey, Bx and Bz per time step temporarily
                 vec2r tmpEx, tmpEy;
@@ -74,12 +71,6 @@ namespace picongpu
                 vec3c EyOmega;
                 vec3c BxOmega;
                 vec3c ByOmega;
-
-                // Arrays for propagated fields
-                vec3c ExOmegaPropagated;
-                vec3c EyOmegaPropagated;
-                vec3c BxOmegaPropagated;
-                vec3c ByOmegaPropagated;
 
                 vec2r shadowgram;
 
@@ -210,31 +201,14 @@ namespace picongpu
                     BxOmega = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
                     ByOmega = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
 
-                    ExOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
-                    EyOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
-                    BxOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
-                    ByOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
-
                     tmpEx = vec2r(pluginNumX, vec1r(pluginNumY));
                     tmpEy = vec2r(pluginNumX, vec1r(pluginNumY));
                     tmpBx = vec2r(pluginNumX, vec1r(pluginNumY));
                     tmpBy = vec2r(pluginNumX, vec1r(pluginNumY));
 
                     shadowgram = vec2r(pluginNumX, vec1r(pluginNumY));
-
-                    init_fftw();
                 }
 
-                /** Destructor of the shadowgraphy helper class
-                 * To be called at the last time step when the shadowgraphy time integration ends
-                 */
-                ~Helper()
-                {
-                    fftw_free(fftwInF);
-                    fftw_free(fftwOutF);
-                    fftw_free(fftwInB);
-                    fftw_free(fftwOutB);
-                }
 
                 template<FieldType T_fieldType, typename T_FieldDataBox>
                 float2_X cross(T_FieldDataBox field)
@@ -272,9 +246,10 @@ namespace picongpu
                  * @param field 3D data box shifted the the local simulation origin (no guard)
                  * @param fieldBuffer2 2D array of field at slicePos with 1 offset (to fix Yee offset)
                  */
-                template<FieldType T_fieldType, typename T_FieldDataBox>
-                void storeField(int t, int currentStep, T_FieldDataBox fieldBox)
+                template<FieldType T_fieldType, typename T_SliceBuffer>
+                void storeField(int t, int currentStep, T_SliceBuffer sliceBuffer)
                 {
+                    auto globalFieldBox = sliceBuffer->getDataBox();
                     int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
 
                     for(int i = 0; i < pluginNumX; i++)
@@ -290,7 +265,7 @@ namespace picongpu
                             float_64 const wf
                                 = masks::positionWf(i, j, pluginNumX, pluginNumY) * masks::timeWf(t, duration);
 
-                            auto value = fieldBox(DataSpace<DIM2>{simI, simJ});
+                            auto value = globalFieldBox(DataSpace<DIM2>{simI, simJ});
                             // fix yee offset
                             if constexpr(T_fieldType == FieldType::E)
                             {
@@ -344,8 +319,16 @@ namespace picongpu
                  * transforming it back into
                  * $(x, y, \omega)$-domain.
                  */
-                void propagateFields()
+                void propagateFieldsAndCalculateShadowgram()
                 {
+                    init_fftw();
+
+                    // Arrays for propagated fields
+                    auto ExOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
+                    auto EyOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
+                    auto BxOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
+                    auto ByOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
+
                     for(int fieldIndex = 0; fieldIndex < 4; fieldIndex++)
                     {
                         for(int o = 0; o < numOmegas; ++o)
@@ -490,59 +473,10 @@ namespace picongpu
                             }
                         }
                     }
-                }
 
-                /** Perform an inverse Fourier transform into time domain of both the electric and magnetic field
-                 * and then perform a time integration to generate a 2D image out of the 3D array.
-                 */
-                void calculate_shadowgram()
-                {
-                    // Loop over all timesteps
-                    for(int t = 0; t < pluginNumT; ++t)
-                    {
-                        float_64 const tSI = t * int(params::tRes) * float_64(picongpu::SI::DELTA_T_SI);
+                    calculate_shadowgram(ExOmegaPropagated, EyOmegaPropagated, BxOmegaPropagated, ByOmegaPropagated);
 
-                        // Initialization of storage arrays
-                        vec2c ExTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
-                        vec2c EyTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
-                        vec2c BxTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
-                        vec2c ByTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
-
-                        // DFT loop to time domain
-                        for(int o = 0; o < numOmegas; ++o)
-                        {
-                            int const omegaIndex = getOmegaIndex(o);
-                            float_64 const omegaSI = omega(omegaIndex);
-
-                            complex_64 const phase = complex_64(0, -tSI * omegaSI);
-                            complex_64 const exponential = math::exp(phase);
-
-                            for(int i = 0; i < pluginNumX; ++i)
-                            {
-                                for(int j = 0; j < pluginNumY; ++j)
-                                {
-                                    complex_64 const Ex = ExOmegaPropagated[i][j][o] * exponential;
-                                    complex_64 const Ey = EyOmegaPropagated[i][j][o] * exponential;
-                                    complex_64 const Bx = BxOmegaPropagated[i][j][o] * exponential;
-                                    complex_64 const By = ByOmegaPropagated[i][j][o] * exponential;
-                                    shadowgram[i][j] += (dt
-                                                         / (SI::MUE0_SI * pluginNumT * pluginNumT * pluginNumX
-                                                            * pluginNumX * pluginNumY * pluginNumY))
-                                        * (Ex * By - Ey * Bx + ExTmpSum[i][j] * By + Ex * ByTmpSum[i][j]
-                                           - EyTmpSum[i][j] * Bx - Ey * BxTmpSum[i][j])
-                                              .real();
-
-                                    if(o < (numOmegas - 1))
-                                    {
-                                        ExTmpSum[i][j] += Ex;
-                                        EyTmpSum[i][j] += Ey;
-                                        BxTmpSum[i][j] += Bx;
-                                        ByTmpSum[i][j] += By;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    free_fftw();
                 }
 
                 //! Get shadowgram as a 2D image
@@ -600,6 +534,71 @@ namespace picongpu
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag
                     planBackward
                         = fftw_plan_dft_2d(pluginNumY, pluginNumX, fftwInB, fftwOutB, FFTW_BACKWARD, FFTW_MEASURE);
+                }
+
+                void free_fftw()
+                {
+                    fftw_free(fftwInF);
+                    fftw_free(fftwOutF);
+                    fftw_free(fftwInB);
+                    fftw_free(fftwOutB);
+                }
+
+                /** Perform an inverse Fourier transform into time domain of both the electric and magnetic field
+                 * and then perform a time integration to generate a 2D image out of the 3D array.
+                 */
+                void calculate_shadowgram(
+                    vec3c const& ExOmegaPropagated,
+                    vec3c const& EyOmegaPropagated,
+                    vec3c const& BxOmegaPropagated,
+                    vec3c const& ByOmegaPropagated)
+                {
+                    // Loop over all timesteps
+                    for(int t = 0; t < pluginNumT; ++t)
+                    {
+                        float_64 const tSI = t * int(params::tRes) * float_64(picongpu::SI::DELTA_T_SI);
+
+                        // Initialization of storage arrays
+                        vec2c ExTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
+                        vec2c EyTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
+                        vec2c BxTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
+                        vec2c ByTmpSum = vec2c(pluginNumX, vec1c(pluginNumY));
+
+                        // DFT loop to time domain
+                        for(int o = 0; o < numOmegas; ++o)
+                        {
+                            int const omegaIndex = getOmegaIndex(o);
+                            float_64 const omegaSI = omega(omegaIndex);
+
+                            complex_64 const phase = complex_64(0, -tSI * omegaSI);
+                            complex_64 const exponential = math::exp(phase);
+
+                            for(int i = 0; i < pluginNumX; ++i)
+                            {
+                                for(int j = 0; j < pluginNumY; ++j)
+                                {
+                                    complex_64 const Ex = ExOmegaPropagated[i][j][o] * exponential;
+                                    complex_64 const Ey = EyOmegaPropagated[i][j][o] * exponential;
+                                    complex_64 const Bx = BxOmegaPropagated[i][j][o] * exponential;
+                                    complex_64 const By = ByOmegaPropagated[i][j][o] * exponential;
+                                    shadowgram[i][j] += (dt
+                                                         / (SI::MUE0_SI * pluginNumT * pluginNumT * pluginNumX
+                                                            * pluginNumX * pluginNumY * pluginNumY))
+                                        * (Ex * By - Ey * Bx + ExTmpSum[i][j] * By + Ex * ByTmpSum[i][j]
+                                           - EyTmpSum[i][j] * Bx - Ey * BxTmpSum[i][j])
+                                              .real();
+
+                                    if(o < (numOmegas - 1))
+                                    {
+                                        ExTmpSum[i][j] += Ex;
+                                        EyTmpSum[i][j] += Ey;
+                                        BxTmpSum[i][j] += Bx;
+                                        ByTmpSum[i][j] += By;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 /** Store fields in helper class with proper resolution and fixed Yee offset in (k_x, k_y,
