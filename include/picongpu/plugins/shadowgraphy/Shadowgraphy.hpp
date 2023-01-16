@@ -28,15 +28,11 @@
 #include "picongpu/plugins/common/openPMDDefaultExtension.hpp"
 #include "picongpu/plugins/common/openPMDVersion.def"
 #include "picongpu/plugins/common/openPMDWriteMeta.hpp"
+#include "picongpu/plugins/shadowgraphy/GatherSlice.hpp"
 #include "picongpu/plugins/shadowgraphy/ShadowgraphyHelper.hpp"
 
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/math/Vector.hpp>
-#include <pmacc/math/vector/Float.hpp>
-#include <pmacc/math/vector/Int.hpp>
-#include <pmacc/math/vector/Size_t.hpp>
-#include <pmacc/mpi/MPIReduce.hpp>
-#include <pmacc/mpi/reduceMethods/Reduce.hpp>
 
 #include <iostream>
 #include <sstream>
@@ -81,18 +77,10 @@ namespace picongpu
                 float_X focuspos = 0.0_X;
                 int duration = 0;
 
-                MPI_Comm gatherComm = MPI_COMM_NULL;
-                // gather rank zero is the master to dump files
-                int gatherRank = -1;
-                int numDevicesInPlane = 0;
-
-                DataSpace<DIM2> localSliceSize;
-                DataSpace<DIM2> localSliceOffset;
-                DataSpace<DIM2> globalDomainSliceSize;
-                int globalPlaneIdx = -1;
                 int localPlaneIdx = -1;
 
-                shadowgraphy::Helper* helper = nullptr;
+                std::unique_ptr<shadowgraphy::Helper> helper;
+                std::unique_ptr<shadowgraphy::GatherSlice> gather;
 
                 bool fourierOutputEnabled = false;
                 bool intermediateOutputEnabled = false;
@@ -162,89 +150,6 @@ namespace picongpu
                 plugins::multi::Option<std::string> extension
                     = {"ext", "openPMD filename extension", openPMD::getDefaultExtension().c_str()};
 
-
-                void buildGatherCommunicator(bool isActive)
-                {
-                    int countRanks;
-                    int mpiRank;
-                    MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &countRanks));
-                    std::vector<int> allRank(countRanks);
-                    std::vector<int> groupRanks(countRanks);
-                    MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank));
-
-                    if(!isActive)
-                        mpiRank = -1;
-
-                    // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
-                    __getTransactionEvent().waitForFinished();
-                    MPI_CHECK(MPI_Allgather(&mpiRank, 1, MPI_INT, allRank.data(), 1, MPI_INT, MPI_COMM_WORLD));
-
-                    int numRanks = 0;
-                    for(int i = 0; i < countRanks; ++i)
-                    {
-                        if(allRank[i] != -1)
-                        {
-                            std::cout << "allRank[i] i=" << i << " value=" << allRank[i] << std::endl;
-                            groupRanks[numRanks] = allRank[i];
-                            numRanks++;
-                        }
-                    }
-                    numDevicesInPlane = numRanks;
-
-                    MPI_Group group = MPI_GROUP_NULL;
-                    MPI_Group newgroup = MPI_GROUP_NULL;
-                    MPI_CHECK(MPI_Comm_group(MPI_COMM_WORLD, &group));
-                    MPI_CHECK(MPI_Group_incl(group, numRanks, groupRanks.data(), &newgroup));
-
-                    MPI_CHECK(MPI_Comm_create(MPI_COMM_WORLD, newgroup, &gatherComm));
-
-                    if(mpiRank != -1)
-                    {
-                        MPI_CHECK(MPI_Comm_rank(gatherComm, &gatherRank));
-                        std::cout << "gather rank=" << gatherRank << std::endl;
-                    }
-                    MPI_CHECK(MPI_Group_free(&group));
-                    MPI_CHECK(MPI_Group_free(&newgroup));
-                }
-
-                void initGather()
-                {
-                    bool activatePlugin = true;
-
-                    if(activatePlugin)
-                    {
-                        const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
-
-                        auto globalDomain = subGrid.getGlobalDomain();
-                        globalDomainSliceSize = DataSpace<DIM2>(globalDomain.size.x(), globalDomain.size.y());
-
-                        auto globalPlaneExtent = globalDomain.size[plane];
-
-                        globalPlaneIdx = globalPlaneExtent * slicePoint;
-
-                        auto localDomain = subGrid.getLocalDomain();
-
-                        auto isPlaneInLocalDomain = globalPlaneIdx >= localDomain.offset[plane]
-                            && globalPlaneIdx < localDomain.offset[plane] + localDomain.size[plane];
-
-
-                        if(isPlaneInLocalDomain)
-                            localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
-
-                        std::cout << "isPlaneInLocalDomain=" << isPlaneInLocalDomain
-                                  << " localPlaneIdx=" << localPlaneIdx << " globalPlaneExtent=" << globalPlaneExtent
-                                  << std::endl;
-
-
-                        // collective call
-                        buildGatherCommunicator(isPlaneInLocalDomain);
-                        localSliceSize = DataSpace<DIM2>(localDomain.size.x(), localDomain.size.y());
-                        localSliceOffset = DataSpace<DIM2>(localDomain.offset.x(), localDomain.offset.y());
-                        std::cout << "localSliceOffset=" << localSliceOffset.toString() << std::endl;
-                        std::cout << "localSliceSize=" << localSliceSize.toString() << std::endl;
-                    }
-                }
-
                 //! Implementation of base class function.
                 void pluginLoad() override
                 {
@@ -267,7 +172,20 @@ namespace picongpu
 
                             Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
 
-                            initGather();
+                            const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
+                            auto globalDomain = subGrid.getGlobalDomain();
+                            auto globalPlaneExtent = globalDomain.size[plane];
+                            auto localDomain = subGrid.getLocalDomain();
+
+                            auto globalPlaneIdx = globalPlaneExtent * slicePoint;
+
+                            auto isPlaneInLocalDomain = globalPlaneIdx >= localDomain.offset[plane]
+                                && globalPlaneIdx < localDomain.offset[plane] + localDomain.size[plane];
+                            if(isPlaneInLocalDomain)
+                                localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
+
+                            gather = std::make_unique<shadowgraphy::GatherSlice>();
+                            gather->participate(isPlaneInLocalDomain);
                         }
                         else
                         {
@@ -303,24 +221,22 @@ namespace picongpu
                 void notify(uint32_t currentStep) override
                 {
                     // skip notify, slice is not intersecting the local domain
-                    if(gatherRank == -1)
+                    if(!gather->isParticipating())
                         return;
                     /* notification callback for simulation step currentStep
                      * called every notifyPeriod steps */
                     if(sliceIsOK)
                     {
-                        bool isMaster = gatherRank == 0;
-
                         // First time the plugin is called:
                         if(isIntegrating == false)
                         {
                             startTime = currentStep;
 
-                            if(isMaster)
+                            if(gather->isMaster() && helper == nullptr)
                             {
                                 std::cout << "master init " << currentStep << std::endl;
                                 /// @todo shared pointer
-                                helper = new Helper(
+                                helper = std::make_unique<Helper>(
                                     currentStep,
                                     this->slicePoint,
                                     this->focuspos * 1e-6,
@@ -328,8 +244,6 @@ namespace picongpu
                                     this->fourierOutputEnabled,
                                     this->intermediateOutputEnabled);
                             }
-
-
                             // Create Integrator object %TODO
                             isIntegrating = true;
                         }
@@ -342,44 +256,41 @@ namespace picongpu
                         bool const dumpFinalData = localStep == int(this->duration / params::tRes);
                         if(!dumpFinalData)
                         {
-                            std::cout << "calculate " << currentStep << std::endl;
-
-                            DataConnector& dc = Environment<>::get().DataConnector();
-                            auto fieldE = dc.get<FieldE>(FieldE::getName(), false);
-
                             std::cout << "prepare E field" << std::endl;
-
-                            storeSlice<shadowgraphy::Helper::FieldType::E>(
-                                fieldE->getHostDataBox().shift(m_cellDescription->getGridLayout().getGuard()),
-                                this->plane,
-                                this->slicePoint,
-                                localStep,
-                                currentStep);
-
-                            auto fieldB = dc.get<FieldB>(FieldB::getName(), false);
+                            auto sliceBufferE
+                                = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(FieldE::getName(), localPlaneIdx);
+                            if(gather->isMaster())
+                            {
+                                std::cout << " finish preparing global slice" << std::endl;
+                                helper->storeField<shadowgraphy::Helper::FieldType::E>(
+                                    localStep,
+                                    currentStep,
+                                    sliceBufferE);
+                            }
 
                             std::cout << "prepare B field" << std::endl;
+                            auto sliceBufferB
+                                = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(FieldB::getName(), localPlaneIdx);
+                            if(gather->isMaster())
+                            {
+                                std::cout << " finish preparing global slice" << std::endl;
+                                helper->storeField<shadowgraphy::Helper::FieldType::B>(
+                                    localStep,
+                                    currentStep,
+                                    sliceBufferB);
+                            }
 
-                            storeSlice<shadowgraphy::Helper::FieldType::B>(
-                                fieldB->getHostDataBox().shift(m_cellDescription->getGridLayout().getGuard()),
-                                this->plane,
-                                this->slicePoint,
-                                localStep,
-                                currentStep);
-
-
-                            if(isMaster)
+                            if(gather->isMaster())
                             {
                                 helper->calculate_dft(localStep);
                             }
                         }
                         else
                         {
-                            if(isMaster)
+                            if(gather->isMaster())
                             {
                                 std::cout << "dump " << currentStep << std::endl;
-                                helper->propagateFields();
-                                helper->calculate_shadowgram();
+                                helper->propagateFieldsAndCalculateShadowgram();
 
                                 std::ostringstream filename;
                                 filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
@@ -388,174 +299,67 @@ namespace picongpu
 
                                 writeToOpenPMDFile(currentStep);
 
-                                delete(helper);
+                                // delete helper and free all memory
+                                helper.reset(nullptr);
                             }
                             isIntegrating = false;
                         }
                     }
                 }
 
-                /* Stores the field slices from the host on the device. 2 field slices are required to adjust for
-                 * the Yee-offset in the plugin.
-                 * https://picongpu.readthedocs.io/en/latest/models/AOFDTD.html#maxwell-s-equations-on-the-mesh
-                 * The current implementation is based on the (outdated) slice field printer printer and uses
-                 * custl! It works, but it's not nice.
+            private:
+                /** Create and store the global slice out of local data.
+                 *
+                 * Create the slice of the local field. The field values will be interpolated to the origin of the
+                 * cell. Gather the local field data into a single global field on the gather master.
+                 *
+                 * @tparam T_fieldType
+                 * @param fieldName
+                 * @param localPlaneIdx
+                 * @return Buffer with gathered global slice. (only gather master buffer contains data)
                  */
-                template<typename shadowgraphy::Helper::FieldType T_fieldType, typename T_FieldBox>
-                void storeSlice(const T_FieldBox& field, int nAxis, float slicePoint, int localStep, int currentStep)
+                template<typename shadowgraphy::Helper::FieldType T_fieldType>
+                auto getGlobalSlice(std::string fieldName, int localPlaneIdx) const
+                    -> std::shared_ptr<HostBufferIntern<float2_X, DIM2>>
                 {
-                    bool isMaster = gatherRank == 0;
+                    DataConnector& dc = Environment<>::get().DataConnector();
+                    auto inputFieldBuffer = dc.get<FieldE>(FieldE::getName(), false);
 
-                    auto pointField = std::make_shared<HostBufferIntern<float2_X, DIM2>>(localSliceSize);
-                    auto pointFieldBox = pointField->getDataBox();
+                    const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
+                    auto globalDomain = subGrid.getGlobalDomain();
+                    auto globalPlaneExtent = globalDomain.size[plane];
 
-                    std::cout << "[" << gatherRank << "]"
-                              << " start loading slice" << std::endl;
+                    auto localDomainOffset = subGrid.getLocalDomain().offset.shrink<DIM2>(0);
+                    auto globalDomainSliceSize = subGrid.getGlobalDomain().size.shrink<DIM2>(0);
+
+                    auto fieldSlice = createSlice<T_fieldType>(inputFieldBuffer, localPlaneIdx);
+                    return gather->gatherSlice(fieldSlice, globalDomainSliceSize, localDomainOffset);
+                }
+
+                template<typename shadowgraphy::Helper::FieldType T_fieldType, typename T_FieldBuffer>
+                auto createSlice(std::shared_ptr<T_FieldBuffer> inputFieldBuffer, int sliceCellZ) const
+                {
+                    auto bufferGridLayout = inputFieldBuffer->getGridLayout();
+                    DataSpace<DIM2> localSliceSize
+                        = bufferGridLayout.getDataSpaceWithoutGuarding().template shrink<DIM2>(0);
+
+                    // skip guard cells
+                    auto inputFieldBox = inputFieldBuffer->getHostDataBox().shift(bufferGridLayout.getGuard());
+
+                    auto sliceBuffer = std::make_shared<HostBufferIntern<float2_X, DIM2>>(localSliceSize);
+                    auto sliceBox = sliceBuffer->getDataBox();
+
+                    std::cout << " start loading slice" << std::endl;
                     for(int y = 0; y < localSliceSize.y(); ++y)
                         for(int x = 0; x < localSliceSize.x(); ++x)
                         {
                             DataSpace<DIM2> idx(x, y);
-                            DataSpace<DIM3> srcIdx(idx.x(), idx.y(), localPlaneIdx);
-                            pointFieldBox(idx) = helper->cross<T_fieldType>(field.shift(srcIdx));
+                            DataSpace<DIM3> srcIdx(idx.x(), idx.y(), sliceCellZ);
+                            sliceBox(idx) = helper->cross<T_fieldType>(inputFieldBox.shift(srcIdx));
                         }
-                    std::cout << "[" << gatherRank << "]"
-                              << " end loding slice" << std::endl;
+                    std::cout << " end loading slice" << std::endl;
 
-                    pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
-                    auto numDevices = con.getGpuNodes();
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " num devices in slice plane =" << numDevicesInPlane << std::endl;
-
-                    // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
-                    __getTransactionEvent().waitForFinished();
-                    // get number of elements per participating mpi rank
-                    auto extentPerDevice = std::vector<DataSpace<DIM2>>(numDevicesInPlane);
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " start gather extents " << localSliceSize.toString() << std::endl;
-                    // gather extents
-                    MPI_CHECK(MPI_Gather(
-                        reinterpret_cast<int*>(&localSliceSize),
-                        2,
-                        MPI_INT,
-                        reinterpret_cast<int*>(extentPerDevice.data()),
-                        2,
-                        MPI_INT,
-                        0,
-                        gatherComm));
-
-                    if(isMaster)
-                    {
-                        for(int i = 0; i < numDevicesInPlane; ++i)
-                        {
-                            std::cout << "[" << gatherRank << "]"
-                                      << " extent recive=" << extentPerDevice[i].toString() << std::endl;
-                        }
-                    }
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " end gather extents" << std::endl;
-
-                    auto offsetPerDevice = std::vector<DataSpace<DIM2>>(numDevicesInPlane);
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " start gather offsets " << localSliceOffset.toString() << std::endl;
-
-                    // gather offsets
-                    MPI_CHECK(MPI_Gather(
-                        reinterpret_cast<int*>(&localSliceOffset),
-                        2,
-                        MPI_INT,
-                        reinterpret_cast<int*>(offsetPerDevice.data()),
-                        2,
-                        MPI_INT,
-                        0,
-                        gatherComm));
-
-                    if(isMaster)
-                    {
-                        for(int i = 0; i < numDevicesInPlane; ++i)
-                        {
-                            std::cout << "[" << gatherRank << "]"
-                                      << " offset recive=" << offsetPerDevice[i].toString() << std::endl;
-                        }
-                    }
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " end gather offsets" << std::endl;
-
-                    std::vector<int> displs(numDevicesInPlane);
-                    std::vector<int> count(numDevicesInPlane);
-                    // @todo replace by std::scan
-                    int offset = 0;
-                    int globalNumElements = 0u;
-
-                    if(isMaster)
-                    {
-                        for(int i = 0; i < numDevicesInPlane; ++i)
-                        {
-                            std::cout << "[" << gatherRank << "]"
-                                      << " offset=" << offset << std::endl;
-
-                            displs[i] = offset * sizeof(float2_X);
-                            count[i] = extentPerDevice[i].productOfComponents() * sizeof(float2_X);
-                            offset += extentPerDevice[i].productOfComponents();
-                            globalNumElements += extentPerDevice[i].productOfComponents();
-
-                            std::cout << "[" << gatherRank << "]"
-                                      << " extentPerDevice[" << i << "]=" << extentPerDevice[i] << std::endl;
-                            std::cout << "[" << gatherRank << "]"
-                                      << " displs[" << i << "]=" << displs[i] << std::endl;
-                            std::cout << "[" << gatherRank << "]"
-                                      << " count[" << i << "]=" << count[i] << std::endl;
-                        }
-                    }
-                    std::cout << "[" << gatherRank << "]"
-                              << " globalNumElements=" << globalNumElements << std::endl;
-
-                    // gather all data from other ranks
-                    auto allData = std::vector<float2_X>(globalNumElements);
-                    int localNumElements = localSliceSize.productOfComponents();
-
-                    MPI_CHECK(MPI_Gatherv(
-                        reinterpret_cast<char*>(pointFieldBox.getPointer()),
-                        localNumElements * sizeof(float2_X),
-                        MPI_CHAR,
-                        reinterpret_cast<char*>(allData.data()),
-                        count.data(),
-                        displs.data(),
-                        MPI_CHAR,
-                        0,
-                        gatherComm));
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " finish MPI_Gatherv" << std::endl;
-
-
-                    if(isMaster)
-                    {
-                        auto globalField = std::make_shared<HostBufferIntern<float2_X, DIM2>>(globalDomainSliceSize);
-                        auto globalFieldBox = globalField->getDataBox();
-
-                        // aggregate data of all MPI ranks into a single 2D buffer
-                        for(int dataSetNumber = 0; dataSetNumber < numDevicesInPlane; ++dataSetNumber)
-                        {
-                            for(int y = 0; y < extentPerDevice[dataSetNumber].y(); ++y)
-                                for(int x = 0; x < extentPerDevice[dataSetNumber].x(); ++x)
-                                {
-                                    globalFieldBox(DataSpace<DIM2>(x, y) + offsetPerDevice[dataSetNumber]) = allData
-                                        [displs[dataSetNumber] / sizeof(float2_X)
-                                         + y * extentPerDevice[dataSetNumber].x() + x];
-                                }
-                        }
-
-                        std::cout << "[" << gatherRank << "]"
-                                  << " finish preparing global slice" << std::endl;
-                        helper->storeField<T_fieldType>(localStep, currentStep, globalFieldBox);
-                        std::cout << "[" << gatherRank << "]"
-                                  << " finish store field" << std::endl;
-                    }
+                    return sliceBuffer;
                 }
 
                 void writeToOpenPMDFile(uint32_t currentStep)
