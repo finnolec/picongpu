@@ -138,7 +138,7 @@ namespace picongpu
             EnergyFields,
             ChargeConservation,
             SumCurrents,
-            plugins::shadowgraphy::Shadowgraphy
+            plugins::multi::Master<plugins::shadowgraphy::Shadowgraphy>
 #if(ENABLE_OPENPMD == 1)
             ,
             plugins::binning::BinningDispatcher,

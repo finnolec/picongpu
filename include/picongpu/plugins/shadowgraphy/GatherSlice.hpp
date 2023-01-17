@@ -30,12 +30,14 @@ namespace picongpu
     {
         namespace shadowgraphy
         {
+            //! Gather data of a 2D Cartesian host buffer into a single MPI rank's host memory.
             class GatherSlice
             {
             private:
                 MPI_Comm gatherComm = MPI_COMM_NULL;
-                // gather rank zero is the master to dump files
+                // gather rank zero will hold final data
                 int gatherRank = -1;
+                // number of ranks participating into the gather operation
                 int numRanksInPlane = 0;
 
             public:
@@ -45,10 +47,13 @@ namespace picongpu
 
                 virtual ~GatherSlice()
                 {
-                    auto err = MPI_Comm_free(&gatherComm);
-                    if(err != MPI_SUCCESS)
-                        std::cerr << __FILE__ << ":" << __LINE__ << "MPI_Comm_free failed." << std::endl;
-                    gatherComm = MPI_COMM_NULL;
+                    if(gatherComm != MPI_COMM_NULL)
+                    {
+                        auto err = MPI_Comm_free(&gatherComm);
+                        if(err != MPI_SUCCESS)
+                            std::cerr << __FILE__ << ":" << __LINE__ << "MPI_Comm_free failed." << std::endl;
+                        gatherComm = MPI_COMM_NULL;
+                    }
                     gatherRank = -1;
                     numRanksInPlane = 0;
                 }
@@ -150,9 +155,10 @@ namespace picongpu
                     DataSpace<DIM2> globalSliceExtent,
                     DataSpace<DIM2> localSliceOffset) const
                 {
+                    using ValueType = T_DataType;
                     // guard against wrong usage, only ranks which are participating into the gather are allowed
                     if(!isParticipating())
-                        return std::shared_ptr<HostBufferIntern<float2_X, DIM2>>{};
+                        return std::shared_ptr<HostBufferIntern<ValueType, DIM2>>{};
 
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     auto numDevices = con.getGpuNodes();
@@ -233,8 +239,8 @@ namespace picongpu
                             std::cout << "[" << gatherRank << "]"
                                       << " offset=" << offset << std::endl;
 
-                            displs[i] = offset * sizeof(float2_X);
-                            count[i] = extentPerDevice[i].productOfComponents() * sizeof(float2_X);
+                            displs[i] = offset * sizeof(ValueType);
+                            count[i] = extentPerDevice[i].productOfComponents() * sizeof(ValueType);
                             offset += extentPerDevice[i].productOfComponents();
                             globalNumElements += extentPerDevice[i].productOfComponents();
 
@@ -250,12 +256,12 @@ namespace picongpu
                               << " globalNumElements=" << globalNumElements << std::endl;
 
                     // gather all data from other ranks
-                    auto allData = std::vector<float2_X>(globalNumElements);
+                    auto allData = std::vector<ValueType>(globalNumElements);
                     int localNumElements = localSliceSize.productOfComponents();
 
                     MPI_CHECK(MPI_Gatherv(
                         reinterpret_cast<char*>(localInputSlice->getDataBox().getPointer()),
-                        localNumElements * sizeof(float2_X),
+                        localNumElements * sizeof(ValueType),
                         MPI_CHAR,
                         reinterpret_cast<char*>(allData.data()),
                         count.data(),
@@ -267,7 +273,7 @@ namespace picongpu
                     std::cout << "[" << gatherRank << "]"
                               << " finish MPI_Gatherv" << std::endl;
 
-                    std::shared_ptr<HostBufferIntern<float2_X, DIM2>> globalField;
+                    std::shared_ptr<HostBufferIntern<ValueType, DIM2>> globalField;
                     if(isMaster())
                     {
                         // globalNumElements is only on the master rank valid
@@ -275,7 +281,7 @@ namespace picongpu
                             globalSliceExtent.productOfComponents() == globalNumElements,
                             "Expected and gathered number of elements differ.");
 
-                        globalField = std::make_shared<HostBufferIntern<float2_X, DIM2>>(globalSliceExtent);
+                        globalField = std::make_shared<HostBufferIntern<ValueType, DIM2>>(globalSliceExtent);
                         auto globalFieldBox = globalField->getDataBox();
 
                         // aggregate data of all MPI ranks into a single 2D buffer
@@ -285,7 +291,7 @@ namespace picongpu
                                 for(int x = 0; x < extentPerDevice[dataSetNumber].x(); ++x)
                                 {
                                     globalFieldBox(DataSpace<DIM2>(x, y) + offsetPerDevice[dataSetNumber]) = allData
-                                        [displs[dataSetNumber] / sizeof(float2_X)
+                                        [displs[dataSetNumber] / sizeof(ValueType)
                                          + y * extentPerDevice[dataSetNumber].x() + x];
                                 }
                         }
