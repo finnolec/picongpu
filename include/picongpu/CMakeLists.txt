@@ -74,7 +74,6 @@ function(PIC_dependency name description default)
         set(PIC_SEARCH_${name} FALSE PARENT_SCOPE)
     endif()
     set(PIC_HAVE_${name} PARENT_SCOPE)
-    set(${name}_FOUND FALSE PARENT_SCOPE)
 endfunction()
 
 # Set status of a dependency

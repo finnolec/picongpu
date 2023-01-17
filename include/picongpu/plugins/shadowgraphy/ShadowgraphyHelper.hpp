@@ -83,11 +83,11 @@ namespace picongpu
                 bool isSlidingWindowActive;
 
                 // Variables for omega calculations
-                float dt;
+                float_X dt;
                 int pluginNumT;
                 int duration;
 
-                float propagationDistance;
+                float_X propagationDistance;
 
                 bool fourierOutputEnabled;
                 bool intermediateOutputEnabled;
@@ -110,8 +110,8 @@ namespace picongpu
                  */
                 Helper(
                     int currentStep,
-                    float slicePoint,
-                    float focusPos,
+                    float_X slicePoint,
+                    float_X focusPos,
                     int duration,
                     bool fourierOutputEnabled,
                     bool intermediateOutputEnabled)
@@ -147,7 +147,7 @@ namespace picongpu
                     int yWindowSize;
                     if(isSlidingWindowEnabled)
                     {
-                        yWindowSize = int((float(nGpus - 1) / float(nGpus)) * globalGridSize[1]);
+                        yWindowSize = int((float_X(nGpus - 1) / float_X(nGpus)) * globalGridSize[1]);
                     }
                     else
                     {
@@ -156,7 +156,7 @@ namespace picongpu
 
                     // If the sliding window is active, the resulting shadowgram will also be smaller to adjust for the
                     // laser propagation distance
-                    float slidingWindowCorrection;
+                    float_X slidingWindowCorrection;
                     if(isSlidingWindowActive)
                     {
                         int const cellsUntilIntegrationPlane = slicePoint * globalGridSize[2];
@@ -799,10 +799,10 @@ namespace picongpu
                  *
                  * @return angular frequency in SI units
                  */
-                float omega(int i) const
+                float_X omega(int i) const
                 {
-                    float const actualStep = dt;
-                    return 2.0 * PI * (float(i) - float(pluginNumT) / 2.0) / float(pluginNumT) / actualStep;
+                    float_X const actualStep = dt;
+                    return 2.0X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT) / actualStep;
                 }
 
                 /** x component of k vector in SI units for FFTs
@@ -811,10 +811,10 @@ namespace picongpu
                  *
                  * @return x component of k vector in SI units
                  */
-                float kx(int i) const
+                float_X kx(int i) const
                 {
-                    float const actualStep = params::xRes * SI::CELL_WIDTH_SI;
-                    return 2.0 * PI * (float(i) - float(pluginNumX) / 2.0) / float(pluginNumX) / actualStep;
+                    float_X const actualStep = params::xRes * SI::CELL_WIDTH_SI;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumX) / 2.0_X) / float_X(pluginNumX) / actualStep;
                 }
 
                 /** y component of k vector in SI units for FFTs
@@ -823,10 +823,10 @@ namespace picongpu
                  *
                  * @return y component of k vector in SI units
                  */
-                float ky(int i) const
+                float_X ky(int i) const
                 {
-                    float const actualStep = params::yRes * SI::CELL_HEIGHT_SI;
-                    return 2.0 * PI * (float(i) - float(pluginNumY) / 2.0) / float(pluginNumY) / actualStep;
+                    float_X const actualStep = params::yRes * SI::CELL_HEIGHT_SI;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumY) / 2.0_X) / float_X(pluginNumY) / actualStep;
                 }
             }; // class Helper
         } // namespace shadowgraphy
