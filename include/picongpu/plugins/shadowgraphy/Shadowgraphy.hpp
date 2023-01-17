@@ -23,11 +23,11 @@
 
 #include "picongpu/fields/FieldB.hpp"
 #include "picongpu/fields/FieldE.hpp"
-#include "picongpu/plugins/ILightweightPlugin.hpp"
 #include "picongpu/plugins/common/openPMDAttributes.hpp"
 #include "picongpu/plugins/common/openPMDDefaultExtension.hpp"
 #include "picongpu/plugins/common/openPMDVersion.def"
 #include "picongpu/plugins/common/openPMDWriteMeta.hpp"
+#include "picongpu/plugins/multi/multi.hpp"
 #include "picongpu/plugins/shadowgraphy/GatherSlice.hpp"
 #include "picongpu/plugins/shadowgraphy/ShadowgraphyHelper.hpp"
 
@@ -52,30 +52,123 @@ namespace picongpu
     {
         namespace shadowgraphy
         {
-            class Shadowgraphy : public ILightweightPlugin
+            class Shadowgraphy : public plugins::multi::IInstance
             {
             private:
-                // technical variables for PIConGPU plugins
-                std::string pluginName;
-                std::string pluginPrefix;
-                std::string filenameExtension = openPMD::getDefaultExtension().c_str();
+                struct Help : public plugins::multi::IHelp
+                {
+                    /** creates an instance
+                     *
+                     * @param help plugin defined help
+                     * @param id index of the plugin, range: [0;help->getNumPlugins())
+                     */
+                    std::shared_ptr<IInstance> create(
+                        std::shared_ptr<IHelp>& help,
+                        size_t const id,
+                        MappingDesc* cellDescription) override
+                    {
+                        return std::shared_ptr<IInstance>(new Shadowgraphy(help, id, cellDescription));
+                    }
 
+                    //! periodicity of computing the particle energy
+                    plugins::multi::Option<int> optionStart
+                        = {"start", "step to start plugin [for each n-th step]", 0};
+                    plugins::multi::Option<int> optionDuration
+                        = {"duration", "number of steps used to aggregate fields: 0 is disabling the plugin", 0};
+                    plugins::multi::Option<std::string> optionFileName
+                        = {"file", "file name to store slices in: ", "shadowgram"};
+                    plugins::multi::Option<std::string> optionFileExtention
+                        = {"ext",
+                           "openPMD filename extension. This controls the"
+                           "backend picked by the openPMD API. Available extensions: ["
+                               + openPMD::printAvailableExtensions() + "]",
+                           openPMD::getDefaultExtension().c_str()};
+                    plugins::multi::Option<float_X> optionSlicePoint
+                        = {"slicePoint", "slice point in the direction 0.0 <= x < 1.0", 0.5};
+                    plugins::multi::Option<float_X> optionFocusPosition
+                        = {"focusPos", "focus position relative to slice point [in meter]", 0.0};
+                    plugins::multi::Option<bool> optionFourierOutput
+                        = {"fourierOutput",
+                           "optional output: E and B fields in (kx, ky, omega) Fourier space, 1==enabled",
+                           0};
+                    plugins::multi::Option<bool> optionIntermediateOutput
+                        = {"intermediateOutput",
+                           "optional output: E and B fields in (kx, ky, omega) Fourier space, 1==enabled",
+                           0};
+
+
+                    ///! method used by plugin controller to get --help description
+                    void registerHelp(
+                        boost::program_options::options_description& desc,
+                        std::string const& masterPrefix = std::string{}) override
+                    {
+#if(PIC_ENABLE_FFTW3 == 1)
+                        optionStart.registerHelp(desc, masterPrefix + prefix);
+                        optionFileName.registerHelp(desc, masterPrefix + prefix);
+                        optionFileExtention.registerHelp(desc, masterPrefix + prefix);
+                        optionSlicePoint.registerHelp(desc, masterPrefix + prefix);
+                        optionFocusPosition.registerHelp(desc, masterPrefix + prefix);
+                        optionDuration.registerHelp(desc, masterPrefix + prefix);
+                        optionFourierOutput.registerHelp(desc, masterPrefix + prefix);
+                        optionIntermediateOutput.registerHelp(desc, masterPrefix + prefix);
+#else
+                        desc.add_options()("Shadowgraphy", "plugin disabled [compiled without dependency FFTW]");
+#endif
+                    }
+
+                    void expandHelp(
+                        boost::program_options::options_description& desc,
+                        std::string const& masterPrefix = std::string{}) override
+                    {
+                    }
+
+
+                    void validateOptions() override
+                    {
+                        ///@todo verify options
+                    }
+
+                    size_t getNumPlugins() const override
+                    {
+                        return optionDuration.size();
+                    }
+
+                    std::string getDescription() const override
+                    {
+                        return description;
+                    }
+
+                    std::string getOptionPrefix() const
+                    {
+                        return prefix;
+                    }
+
+                    std::string getName() const override
+                    {
+                        return name;
+                    }
+
+                    std::string const name = "Shadowgraphy";
+                    //! short description of the plugin
+                    std::string const description
+                        = "Calculate the energy density of a laser by integrating the Pointing vectors in a spatially "
+                          "fixed slice over a given time interval.";
+                    //! prefix used for command line arguments
+                    std::string const prefix = "shadowgraphy";
+                };
+
+            private:
                 MappingDesc* m_cellDescription = nullptr;
-                std::string notifyPeriod;
 
                 bool sliceIsOK = false;
 
                 // do not change the plane, code is only supporting a plane in z direction
                 int plane = 2;
-                std::string fileName;
-                float_X slicePoint = 0.5;
 
                 bool isIntegrating = false;
                 int startTime = 0;
-
-                ///@todo: we must verify that this command line param is set!
-                float_X focuspos = 0.0_X;
-                int duration = 0;
+                // duration adjusted to be a multiple of params::tRes
+                int adjustedDuration = 0;
 
                 int localPlaneIdx = -1;
 
@@ -85,90 +178,44 @@ namespace picongpu
                 bool fourierOutputEnabled = false;
                 bool intermediateOutputEnabled = false;
 
-            public:
-                Shadowgraphy()
-                    : pluginName("Shadowgraphy: calculate the energy density of a laser by integrating"
-                                 "the Poynting vectors in a spatially fixed slice over a given time interval")
+                std::shared_ptr<Help> m_help;
+                size_t m_id;
 
+            public:
+                Shadowgraphy(
+                    std::shared_ptr<plugins::multi::IHelp>& help,
+                    size_t const id,
+                    MappingDesc* cellDescription)
+                    : m_cellDescription(cellDescription)
+                    , m_help(std::static_pointer_cast<Help>(help))
+                    , m_id(id)
                 {
                     static_assert(simDim == DIM3, "Shadowgraphy-plugin requires 3D simulations.");
-
-                    /* register our plugin during creation */
-                    Environment<>::get().PluginConnector().registerPlugin(this);
-                    pluginPrefix = "shadowgraphy";
+                    init();
                 }
 
-                //! Implementation of base class function.
-                std::string pluginGetName() const override
+                void init()
                 {
-                    return "Shadowgraphy";
-                }
-
-
-                //! Implementation of base class function.
-                void pluginRegisterHelp(po::options_description& desc) override
-                {
-#if(PIC_ENABLE_FFTW3 == 1)
-                    desc.add_options()(
-                        (this->pluginPrefix + ".period").c_str(),
-                        po::value<std::string>(&this->notifyPeriod)->multitoken(),
-                        "notify period");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".fileName").c_str(),
-                        po::value<std::string>(&this->fileName)->multitoken(),
-                        "file name to store slices in");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".ext").c_str(),
-                        po::value<std::string>(&this->filenameExtension)->multitoken(),
-                        "openPMD filename extension");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".slicePoint").c_str(),
-                        po::value<float_X>(&this->slicePoint)->multitoken(),
-                        "slice point 0.0 <= x < 1.0");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".focuspos").c_str(),
-                        po::value<float_X>(&this->focuspos)->multitoken(),
-                        "focus position relative to slice point in microns");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".duration").c_str(),
-                        po::value<int>(&this->duration)->multitoken(),
-                        "nt");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".fourieroutput").c_str(),
-                        po::value<bool>(&fourierOutputEnabled)->zero_tokens(),
-                        "optional output: E and B fields in (kx, ky, omega) Fourier space");
-                    desc.add_options()(
-                        (this->pluginPrefix + ".intermediateoutput").c_str(),
-                        po::value<bool>(&intermediateOutputEnabled)->zero_tokens(),
-                        "optional output: E and B fields in (x, y, omega) Fourier space");
-#else
-                    desc.add_options()(
-                        (this->pluginPrefix).c_str(),
-                        "plugin disabled [compiled without dependency FFTW]");
-#endif
-                }
-                plugins::multi::Option<std::string> extension
-                    = {"ext", "openPMD filename extension", openPMD::getDefaultExtension().c_str()};
-
-                //! Implementation of base class function.
-                void pluginLoad() override
-                {
+                    auto duration = m_help->optionDuration.get(m_id);
+                    // adjust to be a multiple of params::tRes
+                    adjustedDuration = (duration / params::tRes) * params::tRes;
+                    auto startStep = m_help->optionStart.get(m_id);
+                    auto slicePoint = m_help->optionSlicePoint.get(m_id);
                     /* called when plugin is loaded, command line flags are available here
                      * set notification period for our plugin at the PluginConnector */
-                    if(0 != notifyPeriod.size())
+                    if(adjustedDuration > 0)
                     {
                         if(float_X(0.0) <= slicePoint && slicePoint < float_X(1.0))
                         {
                             /* in case the slice point is inside of [0.0,1.0) */
                             sliceIsOK = true;
 
-                            /* The plugin integrates the Poynting vectors over time and must thus be called every
+                            /* The plugin integrates the Pointing vectors over time and must thus be called every
                              * tRes-th time-step of the simulation until the integration is done */
-                            int startTime = std::stoi(this->notifyPeriod);
-                            int endTime = std::stoi(this->notifyPeriod) + this->duration;
+                            int lastStep = startStep + adjustedDuration;
 
-                            std::string internalNotifyPeriod = std::to_string(startTime) + ":"
-                                + std::to_string(endTime) + ":" + std::to_string(params::tRes);
+                            std::string internalNotifyPeriod = std::to_string(startStep) + ":"
+                                + std::to_string(lastStep) + ":" + std::to_string(params::tRes);
 
                             Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
 
@@ -183,6 +230,9 @@ namespace picongpu
                                 && globalPlaneIdx < localDomain.offset[plane] + localDomain.size[plane];
                             if(isPlaneInLocalDomain)
                                 localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
+
+                            std::cout << "global slice cellZ=" << globalPlaneIdx << " localPlaneIdx=" << localPlaneIdx
+                                      << std::endl;
 
                             gather = std::make_unique<shadowgraphy::GatherSlice>();
                             gather->participate(isPlaneInLocalDomain);
@@ -202,19 +252,20 @@ namespace picongpu
                     }
                 }
 
-                //! Implementation of base class function.
-                void pluginUnload() override
+                void restart(uint32_t restartStep, std::string const& restartDirectory) override
                 {
-                    /* called when plugin is unloaded, cleanup here */
+                    ///@todo please implement
                 }
 
-                /** Implementation of base class function. Sets mapping description.
-                 *
-                 * @param cellDescription
-                 */
-                void setMappingDescription(MappingDesc* cellDescription) override
+                void checkpoint(uint32_t currentStep, std::string const& checkpointDirectory) override
                 {
-                    this->m_cellDescription = cellDescription;
+                    ///@todo please implement
+                }
+
+                //! must be implemented by the user
+                static std::shared_ptr<plugins::multi::IHelp> getHelp()
+                {
+                    return std::shared_ptr<plugins::multi::IHelp>(new Help{});
                 }
 
                 //! Implementation of base class function.
@@ -235,14 +286,14 @@ namespace picongpu
                             if(gather->isMaster() && helper == nullptr)
                             {
                                 std::cout << "master init " << currentStep << std::endl;
-                                /// @todo shared pointer
+                                auto slicePoint = m_help->optionSlicePoint.get(m_id);
                                 helper = std::make_unique<Helper>(
                                     currentStep,
-                                    this->slicePoint,
-                                    this->focuspos * 1e-6,
-                                    this->duration,
-                                    this->fourierOutputEnabled,
-                                    this->intermediateOutputEnabled);
+                                    slicePoint,
+                                    m_help->optionFocusPosition.get(m_id),
+                                    adjustedDuration,
+                                    m_help->optionFourierOutput.get(m_id),
+                                    m_help->optionIntermediateOutput.get(m_id));
                             }
                             // Create Integrator object %TODO
                             isIntegrating = true;
@@ -253,12 +304,14 @@ namespace picongpu
 
                         std::cout << "try calculate " << localStep << std::endl;
 
-                        bool const dumpFinalData = localStep == int(this->duration / params::tRes);
+                        bool const dumpFinalData = localStep == (adjustedDuration / params::tRes);
                         if(!dumpFinalData)
                         {
+                            DataConnector& dc = Environment<>::get().DataConnector();
                             std::cout << "prepare E field" << std::endl;
+                            auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName(), false);
                             auto sliceBufferE
-                                = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(FieldE::getName(), localPlaneIdx);
+                                = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
                             if(gather->isMaster())
                             {
                                 std::cout << " finish preparing global slice" << std::endl;
@@ -269,8 +322,9 @@ namespace picongpu
                             }
 
                             std::cout << "prepare B field" << std::endl;
+                            auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName(), false);
                             auto sliceBufferB
-                                = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(FieldB::getName(), localPlaneIdx);
+                                = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
                             if(gather->isMaster())
                             {
                                 std::cout << " finish preparing global slice" << std::endl;
@@ -293,7 +347,8 @@ namespace picongpu
                                 helper->propagateFieldsAndCalculateShadowgram();
 
                                 std::ostringstream filename;
-                                filename << this->fileName << "_" << startTime << ":" << currentStep << ".dat";
+                                filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
+                                         << ".dat";
 
                                 writeFile(helper->getShadowgram(), filename.str());
 
@@ -314,17 +369,15 @@ namespace picongpu
                  * cell. Gather the local field data into a single global field on the gather master.
                  *
                  * @tparam T_fieldType
-                 * @param fieldName
-                 * @param localPlaneIdx
+                 * @tparam T_Buffer
+                 * @param inputFieldBuffer
+                 * @param cellIdxZ
                  * @return Buffer with gathered global slice. (only gather master buffer contains data)
                  */
-                template<typename shadowgraphy::Helper::FieldType T_fieldType>
-                auto getGlobalSlice(std::string fieldName, int localPlaneIdx) const
+                template<typename shadowgraphy::Helper::FieldType T_fieldType, typename T_Buffer>
+                auto getGlobalSlice(std::shared_ptr<T_Buffer> inputFieldBuffer, int cellIdxZ) const
                     -> std::shared_ptr<HostBufferIntern<float2_X, DIM2>>
                 {
-                    DataConnector& dc = Environment<>::get().DataConnector();
-                    auto inputFieldBuffer = dc.get<FieldE>(FieldE::getName(), false);
-
                     const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
                     auto globalDomain = subGrid.getGlobalDomain();
                     auto globalPlaneExtent = globalDomain.size[plane];
@@ -332,7 +385,7 @@ namespace picongpu
                     auto localDomainOffset = subGrid.getLocalDomain().offset.shrink<DIM2>(0);
                     auto globalDomainSliceSize = subGrid.getGlobalDomain().size.shrink<DIM2>(0);
 
-                    auto fieldSlice = createSlice<T_fieldType>(inputFieldBuffer, localPlaneIdx);
+                    auto fieldSlice = createSlice<T_fieldType>(inputFieldBuffer, cellIdxZ);
                     return gather->gatherSlice(fieldSlice, globalDomainSliceSize, localDomainOffset);
                 }
 
@@ -365,7 +418,7 @@ namespace picongpu
                 void writeToOpenPMDFile(uint32_t currentStep)
                 {
                     std::stringstream filename;
-                    filename << pluginPrefix << "_%T." << filenameExtension;
+                    filename << m_help->optionFileName.get(m_id) << "_%T." << m_help->optionFileExtention.get(m_id);
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
 
                     ::openPMD::Extent extent
