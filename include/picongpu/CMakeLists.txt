@@ -74,6 +74,7 @@ function(PIC_dependency name description default)
         set(PIC_SEARCH_${name} FALSE PARENT_SCOPE)
     endif()
     set(PIC_HAVE_${name} PARENT_SCOPE)
+    set(${name}_FOUND FALSE PARENT_SCOPE)
 endfunction()
 
 # Set status of a dependency
@@ -454,45 +455,27 @@ PIC_dependency_set_status(ISAAC ${ISAAC_FOUND})
 # Find FFTW3
 ################################################################################
 
-# look at https://stackoverflow.com/questions/44277114/how-to-use-fftw-library-in-cmake for the PkgConfig-things
-
 PIC_dependency(FFTW3 "FFT library for shadowgraphy plugin" AUTO)
 
 if(PIC_SEARCH_FFTW3)
+    # look at https://stackoverflow.com/questions/44277114/how-to-use-fftw-library-in-cmake for the PkgConfig-things
     # find PkgConfig installation for FFTW3
     find_package(PkgConfig)
-
     if(PkgConfig_FOUND)
-        #set(LIBS ${LIBS} PkgConfig::PkgConfig)
         pkg_check_modules(FFTW3 fftw3 IMPORTED_TARGET)
-        #message(STATUS "Oy")
-        message(STATUS "Found FFTW3: ${FFTW3_LIBRARY_DIRS}")
-        add_definitions(-DPIC_ENABLE_FFTW3=1)
+        if(TARGET PkgConfig::FFTW3)
+            message(STATUS "Found FFTW3: ${FFTW3_LIBRARY_DIRS}")
+        else()
+            message(STATUS "Could NOT find FFTW3 - "
+                    "set FFTW3_Dir or check your CMAKE_PREFIX_PATH")
+        endif()
     else(PkgConfig_FOUND)
-        message(STATUS "Could NOT find PkgConfig for fftw- "
+        message(STATUS "Could NOT find PkgConfig for fftw3- "
                        "set Pkgconfig_DIR or check your CMAKE_PREFIX_PATH")
     endif(PkgConfig_FOUND)
 endif(PIC_SEARCH_FFTW3)
 
-#if(TARGET PkgConfig::FFTW3)
-#    message(STATUS "theuiqtae 1")
-#    message(STATUS ${FFTW3_DIR})
-#    message(STATUS ${FFTW3_ROOT})
-#    message(STATUS ${FFTW3_LIBRARY_DIRS})
-#    message(STATUS ${PkgConfig_LIBRARY_DIRS})
-#else(TARGET PkgConfig::FFTW3)
-#    message(STATUS "utisnaoe tinae 2")
-#endif(TARGET PkgConfig::FFTW3)
-
 PIC_dependency_set_status(FFTW3 ${FFTW3_FOUND})
-
-#find_package(PkgConfig)
-#pkg_search_module(FFTW3 fftw3 IMPORTED_TARGET)
-
-#if(TARGET PkgConfig::FFTW3)
-#    target_link_libraries(picongpu PRIVATE PkgConfig::FFTW3)
-#    target_compile_definitions(picongpu PUBLIC "-DHAVE_FFTW3=1")
-#endif()
 
 ################################################################################
 # PIConGPU Workarounds
@@ -561,8 +544,7 @@ target_link_libraries(picongpu PRIVATE pmacc::pmacc)
 #PIC_dependency(FFTW3 "FFT library for shadowgraphy plugin" AUTO)
 if(PIC_HAVE_FFTW3)
     target_link_libraries(picongpu PRIVATE PkgConfig::FFTW3)
-    target_compile_definitions(picongpu PUBLIC "-DHAVE_FFTW3=1")
-    # add_definitions(-DPIC_ENABLE_FFTW3=1)
+    target_compile_definitions(picongpu PUBLIC "-DPIC_ENABLE_FFTW3=1")
 endif(PIC_HAVE_FFTW3)
 
 if(PIC_HAVE_openPMD)

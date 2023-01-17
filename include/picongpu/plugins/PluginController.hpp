@@ -33,7 +33,6 @@
 #include "picongpu/plugins/multi/Master.hpp"
 #include "picongpu/plugins/output/images/PngCreator.hpp"
 #include "picongpu/plugins/output/images/Visualisation.hpp"
-#include "picongpu/plugins/shadowgraphy/Shadowgraphy.hpp"
 #include "picongpu/plugins/transitionRadiation/TransitionRadiation.hpp"
 
 #include <pmacc/assert.hpp>
@@ -43,6 +42,10 @@
  * \todo rename PngPlugin to ImagePlugin or similar
  */
 #include "picongpu/plugins/PngPlugin.hpp"
+
+#if(SIMDIM == DIM3 && PIC_ENABLE_FFTW3 == 1)
+#    include "picongpu/plugins/shadowgraphy/Shadowgraphy.hpp"
+#endif
 
 #if(ENABLE_OPENPMD == 1)
 #    include "picongpu/plugins/PhaseSpace/PhaseSpace.hpp"
@@ -136,10 +139,13 @@ namespace picongpu
         /* define stand alone plugins */
         using StandAlonePlugins = bmpl::vector<
             Checkpoint,
-            EnergyFields,
             ChargeConservation,
-            SumCurrents
+            SumCurrents,
+            EnergyFields
+#if(SIMDIM == DIM3 && PIC_ENABLE_FFTW3 == 1)
+            ,
             plugins::multi::Master<plugins::shadowgraphy::Shadowgraphy>
+#endif
 
 #if(ENABLE_OPENPMD == 1)
             ,
