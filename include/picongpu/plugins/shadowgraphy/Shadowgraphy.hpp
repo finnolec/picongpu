@@ -45,13 +45,11 @@
 
 namespace picongpu
 {
-    using namespace pmacc;
-    namespace po = boost::program_options;
-
     namespace plugins
     {
         namespace shadowgraphy
         {
+            namespace po = boost::program_options;
             class Shadowgraphy : public plugins::multi::IInstance
             {
             private:
@@ -102,7 +100,6 @@ namespace picongpu
                         boost::program_options::options_description& desc,
                         std::string const& masterPrefix = std::string{}) override
                     {
-#if(PIC_ENABLE_FFTW3 == 1)
                         optionStart.registerHelp(desc, masterPrefix + prefix);
                         optionFileName.registerHelp(desc, masterPrefix + prefix);
                         optionFileExtention.registerHelp(desc, masterPrefix + prefix);
@@ -111,9 +108,6 @@ namespace picongpu
                         optionDuration.registerHelp(desc, masterPrefix + prefix);
                         optionFourierOutput.registerHelp(desc, masterPrefix + prefix);
                         optionIntermediateOutput.registerHelp(desc, masterPrefix + prefix);
-#else
-                        desc.add_options()("Shadowgraphy", "plugin disabled [compiled without dependency FFTW]");
-#endif
                     }
 
                     void expandHelp(
