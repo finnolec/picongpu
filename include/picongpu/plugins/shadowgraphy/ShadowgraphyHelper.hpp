@@ -84,6 +84,7 @@ namespace picongpu
                 bool intermediateOutputEnabled;
 
                 std::shared_ptr<pmacc::container::HostBuffer<float_64, DIM2>> retBuffer;
+                std::shared_ptr<pmacc::container::HostBuffer<float_64, DIM3>> retBufferF;
 
                 
 
@@ -521,6 +522,32 @@ namespace picongpu
                     return shadowgram;
                 }
 
+                std::shared_ptr<pmacc::container::HostBuffer<complex_64, DIM3>> getFourierBuf(bool isNegativeFrequency, bool isElectricField, bool isX)
+                {
+                    //pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
+                    retBufferF = std::make_shared<pmacc::container::HostBuffer<complex_64, DIM3>>(getSizeX(), getSizeY(), getNumOmegas()/2);
+                    for (int j = 0; j < getSizeY(); ++j){
+                        for (int i = 0; i < getSizeX(); ++i){
+                            for (int o = getNumOmegas()/2; o < getNumOmegas(); ++o){
+                                
+                                int const oSigned = (isNegativeFrequency) ? o : o + getNumOmegas()/2;
+
+                                if (isElectricField && isX){
+                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(ExOmega[i][j][oSigned]);
+                                } else if (isElectricField && (!isX)) {
+                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(EyOmega[i][j][oSigned]);
+                                } else if ((!isElectricField) && isX) {
+                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(BxOmega[i][j][oSigned]);
+                                } else if ((!isElectricField) && (!isX)) {
+                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(ByOmega[i][j][oSigned]);
+                                }
+                            }
+                        }
+                    }
+
+                    return retBufferF;
+                }
+
                 std::shared_ptr<pmacc::container::HostBuffer<float_64, DIM2>> getShadowgramBuf()
                 {
                     //pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
@@ -737,6 +764,12 @@ namespace picongpu
                 int getNumOmegas() const
                 {
                     return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
+                }
+
+                //! Return size of trimmed arrays in omega dimension
+                int getNumT() const
+                {
+                    return duration / params::tRes;
                 }
 
                 /** Return omega index for a matrix that doesn't remove the zero-valued frequencies.
