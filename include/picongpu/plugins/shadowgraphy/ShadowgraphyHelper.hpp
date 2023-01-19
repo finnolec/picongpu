@@ -522,24 +522,26 @@ namespace picongpu
                     return shadowgram;
                 }
 
-                std::shared_ptr<pmacc::container::HostBuffer<complex_64, DIM3>> getFourierBuf(bool isNegativeFrequency, bool isElectricField, bool isX)
+                auto getFourierBuf(bool isNegativeFrequency, bool isElectricField, bool isX)
                 {
                     //pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
-                    retBufferF = std::make_shared<pmacc::container::HostBuffer<complex_64, DIM3>>(getSizeX(), getSizeY(), getNumOmegas()/2);
-                    for (int j = 0; j < getSizeY(); ++j){
-                        for (int i = 0; i < getSizeX(); ++i){
+                    auto retBufferF = std::make_shared<HostBufferIntern<complex_64, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
+                    auto dataBox = retBufferF->getDataBox();
+
+                    for (int i = 0; i < getSizeX(); ++i){
+                        for (int j = 0; j < getSizeY(); ++j){
                             for (int o = getNumOmegas()/2; o < getNumOmegas(); ++o){
                                 
                                 int const oSigned = (isNegativeFrequency) ? o : o + getNumOmegas()/2;
 
                                 if (isElectricField && isX){
-                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(ExOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<complex_64>(ExOmega[i][j][oSigned]);
                                 } else if (isElectricField && (!isX)) {
-                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(EyOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<complex_64>(EyOmega[i][j][oSigned]);
                                 } else if ((!isElectricField) && isX) {
-                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(BxOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<complex_64>(BxOmega[i][j][oSigned]);
                                 } else if ((!isElectricField) && (!isX)) {
-                                    *(retBuffer->origin()(i, j, o)) = static_cast<complex_64>(ByOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<complex_64>(ByOmega[i][j][oSigned]);
                                 }
                             }
                         }
@@ -574,6 +576,11 @@ namespace picongpu
                     return pluginNumY;
                 }
 
+                //! Return size of trimmed arrays in omega dimension
+                int getNumOmegas() const
+                {
+                    return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
+                }
             private:
                 //! Initialize fftw memory things, supposed to be called once at the start of the plugin loop
                 void init_fftw()
@@ -760,11 +767,6 @@ namespace picongpu
                     return retIndex + 1;
                 }
 
-                //! Return size of trimmed arrays in omega dimension
-                int getNumOmegas() const
-                {
-                    return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
-                }
 
                 //! Return size of trimmed arrays in omega dimension
                 int getNumT() const

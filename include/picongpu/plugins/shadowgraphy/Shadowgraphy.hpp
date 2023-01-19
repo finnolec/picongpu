@@ -58,6 +58,7 @@ export LD_LIBRARY_PATH=$FFTW3_ROOT/lib:$LD_LIBRARY_PATH
 
 #include <openPMD/openPMD.hpp>
 
+#include <cmath> // what
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -68,6 +69,7 @@ export LD_LIBRARY_PATH=$FFTW3_ROOT/lib:$LD_LIBRARY_PATH
 namespace picongpu
 {
     using namespace pmacc;
+    using complex_64 = alpaka::Complex<float_64>;
     namespace po = boost::program_options;
 
     namespace plugins
@@ -508,12 +510,12 @@ namespace picongpu
 
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, true);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, false);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, true;
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, true);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, false);
 
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, true);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, false);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, true;
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, true);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, false);
 
                     series.iterations[currentStep].close();
@@ -531,22 +533,25 @@ namespace picongpu
                     ::openPMD::Datatype datatype = ::openPMD::determineDatatype<complex_64>();
                     ::openPMD::Dataset dataset{datatype, extent};
 
-                    std::stringstream fieldName = "";
+                    std::string fieldName = "";
+
                     if (isElectricField){
-                        fieldName << "E";
+                        fieldName.append("E");
                     } else {
-                        fieldName << "B";
+                        fieldName.append("B");
                     }
                     if (isX){
-                        fieldName << "x";
+                        fieldName.append("x");
                     } else {
-                        fieldName << "y";
+                        fieldName.append("y");
                     }
                     if (isNegativeFrequency){
-                        fieldName << " (negative frequency)";
+                        fieldName.append("1");
+                    } else {
+                        fieldName.append("2");
                     }
 
-                    auto mesh = series.iterations[currentStep].meshes[fieldName.str()];
+                    auto mesh = series.iterations[currentStep].meshes[fieldName];
                     mesh.setAxisLabels(std::vector<std::string>{"x", "y", "omega"});
                     mesh.setAttribute<int>("duration", duration);
                     mesh.setAttribute<float_X>("dt", UNIT_TIME * params::tRes);
@@ -556,14 +561,14 @@ namespace picongpu
                     fourierField.resetDataset(dataset);
 
                     auto data = helper -> getFourierBuf(isNegativeFrequency, isElectricField, isX);
-                    auto sharedDataPtr = std::shared_ptr<float_64>{data->getPointer(), [](auto const*) {}};
+                    auto sharedDataPtr = std::shared_ptr<complex_64>{data->getPointer(), [](auto const*) {}};
 
                     fourierField.storeChunk(
                         sharedDataPtr,
                         offset,
                         extent);
 
-                    fourierField.iterations[currentStep].close();
+                    series.iterations[currentStep].close();
                 }
 
                 
