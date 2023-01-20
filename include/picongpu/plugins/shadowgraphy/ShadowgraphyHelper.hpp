@@ -502,6 +502,44 @@ namespace picongpu
                     return retBuffer;
                 }
 
+                auto getFourierBuf(bool isNegativeFrequency, bool isElectricField, bool isX)
+                {
+                    //pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
+                    auto retBufferF = std::make_shared<HostBufferIntern<complex_64, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
+                    auto dataBox = retBufferF->getDataBox();
+
+                    for (int i = 0; i < getSizeX(); ++i){
+                        for (int j = 0; j < getSizeY(); ++j){
+                            for (int o = getNumOmegas()/2; o < getNumOmegas(); ++o){
+                                
+                                int const oSigned = (isNegativeFrequency) ? o : o + getNumOmegas()/2;
+
+                                if (isElectricField && isX){
+                                    dataBox({i, j, o}) = static_cast<complex_64>(ExOmega[i][j][oSigned]);
+                                } else if (isElectricField && (!isX)) {
+                                    dataBox({i, j, o}) = static_cast<complex_64>(EyOmega[i][j][oSigned]);
+                                } else if ((!isElectricField) && isX) {
+                                    dataBox({i, j, o}) = static_cast<complex_64>(BxOmega[i][j][oSigned]);
+                                } else if ((!isElectricField) && (!isX)) {
+                                    dataBox({i, j, o}) = static_cast<complex_64>(ByOmega[i][j][oSigned]);
+                                }
+                            }
+                        }
+                    }
+
+                    return retBufferF;
+                }
+
+                //! Return size of trimmed arrays in omega dimension
+                int getNumOmegas() const
+                {
+                    PMACC_VERIFY_MSG(
+                        getOmegaMaxIndex() > getOmegaMinIndex(),
+                        "Shadowgraphy: omega max <= omega min is not allowed!");
+                    return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
+                }
+
+
                 //! Get amount of shadowgram pixels in x direction
                 int getSizeX() const
                 {
@@ -600,6 +638,8 @@ namespace picongpu
                         }
                     }
                 }
+
+
 
                 /** Store fields in helper class with proper resolution and fixed Yee offset in (k_x, k_y,
                  * \omega)-domain
@@ -765,13 +805,11 @@ namespace picongpu
                     return retIndex + 1;
                 }
 
+
                 //! Return size of trimmed arrays in omega dimension
-                int getNumOmegas() const
+                int getNumT() const
                 {
-                    PMACC_VERIFY_MSG(
-                        getOmegaMaxIndex() > getOmegaMinIndex(),
-                        "Shadowgraphy: omega max <= omega min is not allowed!");
-                    return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
+                    return duration / params::tRes;
                 }
 
                 /** Return omega index for a matrix that doesn't remove the zero-valued frequencies.
@@ -802,7 +840,7 @@ namespace picongpu
                 float_X omega(int i) const
                 {
                     float_X const actualStep = dt;
-                    return 2.0X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT) / actualStep;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT) / actualStep;
                 }
 
                 /** x component of k vector in SI units for FFTs
