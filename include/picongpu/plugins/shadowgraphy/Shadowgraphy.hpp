@@ -45,6 +45,8 @@
 
 namespace picongpu
 {
+    using complex_64 = alpaka::Complex<float_64>;
+
     namespace plugins
     {
         namespace shadowgraphy
@@ -425,8 +427,10 @@ namespace picongpu
                     auto mesh = series.iterations[currentStep].meshes["shadowgram"];
                     mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
                     mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
-                    mesh.setGridUnitSI(1.0);
-                    mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
+                    mesh.setGridUnitSI(UNIT_LENGTH);
+                    mesh.setGridSpacing(std::vector<double>{cellSize[0] * params::xRes, cellSize[1] * params::yRes});
+                    mesh.setAttribute<int>("duration", m_help->optionDuration.get(m_id));
+                    mesh.setAttribute<float_X>("dt", UNIT_TIME * params::tRes);
                     mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
 
                     auto shadowgram = mesh[::openPMD::RecordComponent::SCALAR];
@@ -441,6 +445,83 @@ namespace picongpu
                     series.iterations[currentStep].close();
                 }
 
+                void writeFourierOutputToOpenPMDFile(uint32_t currentStep)
+                {
+                    std::stringstream filename;
+                    filename << m_help->optionFileName.get(m_id) << "_fourierdata_%T." << m_help->optionFileExtention.get(m_id);
+                    ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
+                    
+                    auto mesh = series.iterations[currentStep].meshes["shadowgram"];
+                    mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
+                    mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
+                    mesh.setGridUnitSI(1.0);
+                    mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
+                    mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, true);
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, false);
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, true);
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, false);
+
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, true);
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, false);
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, true);
+                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, false);
+
+                    series.iterations[currentStep].close();
+
+
+                }
+
+                void writeSingleFourierFieldToOpenPMDFile(uint32_t currentStep, ::openPMD::Series series, bool isNegativeFrequency, bool isElectricField, bool isX){
+                    ::openPMD::Extent extent = {   
+                        static_cast<unsigned long int>(helper->getNumOmegas() / 2),
+                        static_cast<unsigned long int>(helper->getSizeY()),  
+                        static_cast<unsigned long int>(helper->getSizeX())
+                    };
+                    ::openPMD::Offset offset = {0, 0, 0};
+                    ::openPMD::Datatype datatype = ::openPMD::determineDatatype<complex_64>();
+                    ::openPMD::Dataset dataset{datatype, extent};
+
+                    std::string fieldName = "";
+
+                    if (isElectricField){
+                        fieldName.append("E");
+                    } else {
+                        fieldName.append("B");
+                    }
+                    if (isX){
+                        fieldName.append("x");
+                    } else {
+                        fieldName.append("y");
+                    }
+                    if (isNegativeFrequency){
+                        fieldName.append("1");
+                    } else {
+                        fieldName.append("2");
+                    }
+
+                    auto mesh = series.iterations[currentStep].meshes[fieldName];
+                    mesh.setAxisLabels(std::vector<std::string>{"x", "y", "omega"});
+                    mesh.setAttribute<int>("duration", m_help->optionDuration.get(m_id));
+                    mesh.setAttribute<float_X>("dt", UNIT_TIME * params::tRes);
+
+
+                    auto fourierField = mesh[::openPMD::RecordComponent::SCALAR];
+                    fourierField.resetDataset(dataset);
+
+                    auto data = helper -> getFourierBuf(isNegativeFrequency, isElectricField, isX);
+                    auto sharedDataPtr = std::shared_ptr<complex_64>{data->getPointer(), [](auto const*) {}};
+
+                    fourierField.storeChunk(
+                        sharedDataPtr,
+                        offset,
+                        extent);
+
+                    series.iterations[currentStep].close();
+                }
+
+                
 
                 void writeFile(std::vector<std::vector<float_64>> values, std::string name)
                 {
