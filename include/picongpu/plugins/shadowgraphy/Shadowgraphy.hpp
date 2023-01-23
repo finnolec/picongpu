@@ -281,7 +281,7 @@ namespace picongpu
 
                             if(gather->isMaster() && helper == nullptr)
                             {
-                                std::cout << "master init " << currentStep << std::endl;
+                                //std::cout << "master init " << currentStep << std::endl;
                                 auto slicePoint = m_help->optionSlicePoint.get(m_id);
                                 helper = std::make_unique<Helper>(
                                     currentStep,
@@ -298,32 +298,32 @@ namespace picongpu
                         // convert currentStep (simulation time-step) into localStep for time domain DFT
                         int localStep = (currentStep - startTime) / params::tRes;
 
-                        std::cout << "try calculate " << localStep << std::endl;
+                        //std::cout << "try calculate " << localStep << std::endl;
 
                         bool const dumpFinalData = localStep == (adjustedDuration / params::tRes);
                         if(!dumpFinalData)
                         {
                             DataConnector& dc = Environment<>::get().DataConnector();
-                            std::cout << "prepare E field" << std::endl;
+                            //std::cout << "prepare E field" << std::endl;
                             auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName(), false);
                             auto sliceBufferE
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
                             if(gather->isMaster())
                             {
-                                std::cout << " finish preparing global slice" << std::endl;
+                                //std::cout << " finish preparing global slice" << std::endl;
                                 helper->storeField<shadowgraphy::Helper::FieldType::E>(
                                     localStep,
                                     currentStep,
                                     sliceBufferE);
                             }
 
-                            std::cout << "prepare B field" << std::endl;
+                            //std::cout << "prepare B field" << std::endl;
                             auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName(), false);
                             auto sliceBufferB
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
                             if(gather->isMaster())
                             {
-                                std::cout << " finish preparing global slice" << std::endl;
+                                //std::cout << " finish preparing global slice" << std::endl;
                                 helper->storeField<shadowgraphy::Helper::FieldType::B>(
                                     localStep,
                                     currentStep,
@@ -339,7 +339,12 @@ namespace picongpu
                         {
                             if(gather->isMaster())
                             {
-                                std::cout << "dump " << currentStep << std::endl;
+                                //std::cout << "dump " << currentStep << std::endl;
+
+                                if(m_help->optionFourierOutput.get(m_id)){
+                                    writeFourierOutputToOpenPMDFile(currentStep);
+                                }
+
                                 helper->propagateFieldsAndCalculateShadowgram();
 
                                 std::ostringstream filename;
@@ -452,12 +457,12 @@ namespace picongpu
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
                     
                     auto mesh = series.iterations[currentStep].meshes["shadowgram"];
-                    mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
+                    mesh.setAxisLabels(std::vector<std::string>{"x", "y", "omega"});
                     mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
                     mesh.setGridUnitSI(1.0);
                     mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
                     mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
-
+/*
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, true);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, false);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, true);
@@ -467,7 +472,7 @@ namespace picongpu
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, false);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, true);
                     writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, false);
-
+*/
                     series.iterations[currentStep].close();
 
 
@@ -475,9 +480,9 @@ namespace picongpu
 
                 void writeSingleFourierFieldToOpenPMDFile(uint32_t currentStep, ::openPMD::Series series, bool isNegativeFrequency, bool isElectricField, bool isX){
                     ::openPMD::Extent extent = {   
-                        static_cast<unsigned long int>(helper->getNumOmegas() / 2),
-                        static_cast<unsigned long int>(helper->getSizeY()),  
-                        static_cast<unsigned long int>(helper->getSizeX())
+                        static_cast<unsigned long int>(helper->getSizeX()),  
+                        static_cast<unsigned long int>(helper->getSizeY()),
+                        static_cast<unsigned long int>(helper->getNumOmegas() / 2)
                     };
                     ::openPMD::Offset offset = {0, 0, 0};
                     ::openPMD::Datatype datatype = ::openPMD::determineDatatype<complex_64>();
@@ -513,10 +518,10 @@ namespace picongpu
                     auto data = helper -> getFourierBuf(isNegativeFrequency, isElectricField, isX);
                     auto sharedDataPtr = std::shared_ptr<complex_64>{data->getPointer(), [](auto const*) {}};
 
-                    fourierField.storeChunk(
-                        sharedDataPtr,
-                        offset,
-                        extent);
+                    //fourierField.storeChunk(
+                    //    sharedDataPtr,
+                    //    offset,
+                    //    extent);
 
                     series.iterations[currentStep].close();
                 }
