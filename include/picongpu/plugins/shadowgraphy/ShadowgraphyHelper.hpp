@@ -367,13 +367,13 @@ namespace picongpu
                                     }
                                 }
                             }
-                            if(intermediateOutputEnabled)
-                                writeIntermediateFile(o, fieldIndex);
+                            // if(intermediateOutputEnabled)
+                            //    writeIntermediateFile(o, fieldIndex);
 
                             fftw_execute(planForward);
 
-                            if(fourierOutputEnabled)
-                                writeFourierFile(o, fieldIndex, false);
+                            // if(fourierOutputEnabled)
+                            //    writeFourierFile(o, fieldIndex, false);
                             /*
                                                         for(int i = 0; i < pluginNumX; ++i){
                                                             int const iffs = (i + pluginNumX / 2) % pluginNumX;
@@ -437,8 +437,8 @@ namespace picongpu
                                 }
                             }
 
-                            if(fourierOutputEnabled)
-                                writeFourierFile(o, fieldIndex, true);
+                            // if(fourierOutputEnabled)
+                            //    writeFourierFile(o, fieldIndex, true);
 
                             fftw_execute(planBackward);
 
