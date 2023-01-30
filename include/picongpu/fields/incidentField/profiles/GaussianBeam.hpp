@@ -110,6 +110,9 @@ namespace picongpu
                         // unit: UNIT_TIME
                         static constexpr float_X INIT_TIME
                             = static_cast<float_X>((Params::PULSE_INIT * Params::PULSE_LENGTH_SI) / UNIT_TIME);
+
+                        // unit: UNIT_TIME
+                        static constexpr float_X TIME_DELAY = static_cast<float_X>(Params::TIME_DELAY_SI / UNIT_TIME);
                     };
 
                     /** Gaussian beam incident E functor
@@ -212,7 +215,7 @@ namespace picongpu
                             // transform to 3d internal coordinate system
                             float3_X pos = this->getInternalCoordinates(totalCellIdx);
                             auto const time = this->getCurrentTime(totalCellIdx);
-                            if(time < 0.0_X)
+                            if(time < Unitless::TIME_DELAY)
                                 return 0.0_X;
 
                             // calculate focus position relative to the current point in the propagation direction
@@ -231,7 +234,7 @@ namespace picongpu
                             // we shift the complete pulse for the half of this time to start with
                             // the front of the laser pulse.
                             constexpr auto mue = 0.5_X * Unitless::INIT_TIME;
-                            auto const phase = Unitless::w * (time - mue - focusPos / SPEED_OF_LIGHT)
+                            auto const phase = Unitless::w * (time - Unitless::TIME_DELAY - mue - focusPos / SPEED_OF_LIGHT)
                                 + Unitless::LASER_PHASE + phaseShift;
 
                             // Apply tilt if needed
