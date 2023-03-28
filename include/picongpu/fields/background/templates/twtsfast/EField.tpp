@@ -399,8 +399,10 @@ namespace picongpu
                     - complex_T(0, 8) * y * math::tan(float_T(PI / 2.0) - phiT) * cscPhi * cscPhi * sinPhi2_4
                     - complex_T(0, 2) * z * tanPhi2_2;
 
+                complex_T const phaseShift = complex_T(0, PI / 4);
+
                 complex_T const result
-                    = (math::exp(helpVar3) * tauG * math::sqrt(cspeed * om0 * rho0 / helpVar2)) / math::sqrt(helpVar4);
+                    = (math::exp(helpVar3 + phaseShift) * tauG * math::sqrt(cspeed * om0 * rho0 / helpVar2)) / math::sqrt(helpVar4);
 
                 return result.real();
             }
