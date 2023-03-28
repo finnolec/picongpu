@@ -488,7 +488,7 @@ namespace picongpu
                 auto getShadowgramBuf()
                 {
                     auto retBuffer
-                        = std::make_shared<HostBufferIntern<float_64, DIM2>>(DataSpace<DIM2>(getSizeX(), getSizeY()));
+                        = std::make_shared<HostBuffer<float_64, DIM2>>(DataSpace<DIM2>(getSizeX(), getSizeY()));
                     auto dataBox = retBuffer->getDataBox();
 
                     for(int j = 0; j < getSizeY(); ++j)
@@ -505,7 +505,7 @@ namespace picongpu
                 auto getFourierBuf(bool isNegativeFrequency, bool isElectricField, bool isX)
                 {
                     //pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
-                    auto retBufferF = std::make_shared<HostBufferIntern<complex_64, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
+                    auto retBufferF = std::make_shared<HostBuffer<complex_64, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
                     auto dataBox = retBufferF->getDataBox();
 
                     for (int i = 0; i < getSizeX(); ++i){

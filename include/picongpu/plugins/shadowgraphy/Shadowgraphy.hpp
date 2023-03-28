@@ -305,7 +305,8 @@ namespace picongpu
                         {
                             DataConnector& dc = Environment<>::get().DataConnector();
                             //std::cout << "prepare E field" << std::endl;
-                            auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName(), false);
+                            auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName());
+                            inputFieldBufferE->synchronize();
                             auto sliceBufferE
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
                             if(gather->isMaster())
@@ -318,7 +319,8 @@ namespace picongpu
                             }
 
                             //std::cout << "prepare B field" << std::endl;
-                            auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName(), false);
+                            auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName());
+                            inputFieldBufferB->synchronize();
                             auto sliceBufferB
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
                             if(gather->isMaster())
@@ -377,7 +379,7 @@ namespace picongpu
                  */
                 template<typename shadowgraphy::Helper::FieldType T_fieldType, typename T_Buffer>
                 auto getGlobalSlice(std::shared_ptr<T_Buffer> inputFieldBuffer, int cellIdxZ) const
-                    -> std::shared_ptr<HostBufferIntern<float2_X, DIM2>>
+                    -> std::shared_ptr<HostBuffer<float2_X, DIM2>>
                 {
                     const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
                     auto globalDomain = subGrid.getGlobalDomain();
@@ -400,7 +402,7 @@ namespace picongpu
                     // skip guard cells
                     auto inputFieldBox = inputFieldBuffer->getHostDataBox().shift(bufferGridLayout.getGuard());
 
-                    auto sliceBuffer = std::make_shared<HostBufferIntern<float2_X, DIM2>>(localSliceSize);
+                    auto sliceBuffer = std::make_shared<HostBuffer<float2_X, DIM2>>(localSliceSize);
                     auto sliceBox = sliceBuffer->getDataBox();
 
                     std::cout << " start loading slice" << std::endl;
