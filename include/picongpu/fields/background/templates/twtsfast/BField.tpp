@@ -519,7 +519,7 @@ namespace picongpu
                     - complex_T(0, 8) * y * math::tan(float_T(PI / 2.0) - phiT) * cscPhi * cscPhi * sinPhi2_4
                     - complex_T(0, 2) * z * tanPhi2_2;
 
-                complex_T const phaseShift = complex_T(0, PI);
+                complex_T const phaseShift = complex_T(0, PI/2);
 
                 complex_T const result
                     = (math::exp(helpVar3 + phaseShift) * tauG * secPhi2 * secPhi2
@@ -827,7 +827,7 @@ namespace picongpu
                        - complex_T(0, 2) * z * tanPhi2_2);
 
 
-                complex_T const phaseShift = complex_T(0, PI);
+                complex_T const phaseShift = complex_T(0, PI/2);
 
                 const complex_T result = float_T(phiPositive) * float_T(-1.0)
                     * (cspeed * math::exp(helpVar3 + phaseShift) * k * tauG * x * rho0
