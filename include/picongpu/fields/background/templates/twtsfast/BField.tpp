@@ -664,8 +664,11 @@ namespace picongpu
                 const complex_T helpVar9 = cspeed * om0 * tauG2 - complex_T(0, 1) * y * cosPhi * secPhi2_2 * tanPhi2
                     - complex_T(0, 2) * z * tanPhi2_2;
 
+
+                complex_T const phaseShift = complex_T(0, PI/2);
+
                 const complex_T result = float_T(phiPositive)
-                    * (complex_T(0, 2) * math::exp(helpVar8) * tauG * tanPhi2 * (cspeed * t - z + y * tanPhi2)
+                    * (complex_T(0, 2) * math::exp(helpVar8 + phaseShift) * tauG * tanPhi2 * (cspeed * t - z + y * tanPhi2)
                        * math::sqrt(om0 * rho0 / helpVar7))
                     / math::pow(helpVar9, float_T(1.5));
 
