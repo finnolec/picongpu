@@ -404,7 +404,7 @@ namespace picongpu
                 complex_T const result
                     = (math::exp(helpVar3 + phaseShift) * tauG * math::sqrt(cspeed * om0 * rho0 / helpVar2)) / math::sqrt(helpVar4);
 
-                return result.real();
+                return 0.0 * result.real();
             }
 
             /** Calculate the Ey(r,t) field here

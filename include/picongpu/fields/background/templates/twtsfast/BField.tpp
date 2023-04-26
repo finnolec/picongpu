@@ -672,7 +672,7 @@ namespace picongpu
                        * math::sqrt(om0 * rho0 / helpVar7))
                     / math::pow(helpVar9, float_T(1.5));
 
-                return 0.0 * result.real() / UNIT_SPEED;
+                return result.real() / UNIT_SPEED;
             }
 
             /** Calculate the Bx(r,t) field
