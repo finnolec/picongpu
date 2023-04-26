@@ -528,7 +528,7 @@ namespace picongpu
                        * math::sqrt(cspeed * om0 * rho0 / helpVar2))
                     / (float_T(2.0) * cspeed * math::pow(helpVar4, float_T(1.5)));
 
-                0 * return result.real() / UNIT_SPEED;
+                return 0.0 * result.real() / UNIT_SPEED;
             }
 
             /** Calculate the Bz(r,t) field
