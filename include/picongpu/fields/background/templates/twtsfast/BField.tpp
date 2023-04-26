@@ -528,7 +528,7 @@ namespace picongpu
                        * math::sqrt(cspeed * om0 * rho0 / helpVar2))
                     / (float_T(2.0) * cspeed * math::pow(helpVar4, float_T(1.5)));
 
-                return result.real() / UNIT_SPEED;
+                return 0.0 * result.real() / UNIT_SPEED;
             }
 
             /** Calculate the Bz(r,t) field
@@ -672,7 +672,7 @@ namespace picongpu
                        * math::sqrt(om0 * rho0 / helpVar7))
                     / math::pow(helpVar9, float_T(1.5));
 
-                return result.real() / UNIT_SPEED;
+                return 0.0 * result.real() / UNIT_SPEED;
             }
 
             /** Calculate the Bx(r,t) field
@@ -837,7 +837,7 @@ namespace picongpu
                        * math::pow(float_T(1.0) / helpVar2, float_T(1.5)))
                     / math::sqrt(helpVar4);
 
-                return result.real() / UNIT_SPEED;
+                0.0 * return result.real() / UNIT_SPEED;
             }
 
         } /* namespace twtsfast */
