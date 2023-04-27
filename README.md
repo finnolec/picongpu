@@ -1,3 +1,5 @@
+This branch can be deleted, the history is in production-2023-tweac-components.
+
 PIConGPU - Particle-in-Cell Simulations for the Exascale Era
 ============================================================
 
