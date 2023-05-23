@@ -140,8 +140,7 @@ namespace picongpu
             Checkpoint,
             EnergyFields,
             ChargeConservation,
-            SumCurrents,
-            plugins::multi::Master<plugins::shadowgraphy::Shadowgraphy>
+            SumCurrents
 #if(SIMDIM == DIM3 && PIC_ENABLE_FFTW3 == 1)
             ,
             plugins::multi::Master<plugins::shadowgraphy::Shadowgraphy>

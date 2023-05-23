@@ -106,7 +106,7 @@ namespace picongpu
                         globalMpiRank = -1;
 
                     // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
-                    __getTransactionEvent().waitForFinished();
+                    eventSystem::getTransactionEvent().waitForFinished();
                     MPI_CHECK(MPI_Allgather(&globalMpiRank, 1, MPI_INT, allRank.data(), 1, MPI_INT, MPI_COMM_WORLD));
 
                     int numRanks = 0;
@@ -151,14 +151,14 @@ namespace picongpu
                  */
                 template<typename T_DataType>
                 auto gatherSlice(
-                    std::shared_ptr<HostBufferIntern<T_DataType, DIM2>> localInputSlice,
+                    std::shared_ptr<HostBuffer<T_DataType, DIM2>> localInputSlice,
                     DataSpace<DIM2> globalSliceExtent,
                     DataSpace<DIM2> localSliceOffset) const
                 {
                     using ValueType = T_DataType;
                     // guard against wrong usage, only ranks which are participating into the gather are allowed
                     if(!isParticipating())
-                        return std::shared_ptr<HostBufferIntern<ValueType, DIM2>>{};
+                        return std::shared_ptr<HostBuffer<ValueType, DIM2>>{};
 
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     auto numDevices = con.getGpuNodes();
@@ -167,7 +167,7 @@ namespace picongpu
                               << " num devices in slice plane =" << numRanksInPlane << std::endl;
 
                     // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
-                    __getTransactionEvent().waitForFinished();
+                    eventSystem::getTransactionEvent().waitForFinished();
                     // get number of elements per participating mpi rank
                     auto extentPerDevice = std::vector<DataSpace<DIM2>>(numRanksInPlane);
 
@@ -273,7 +273,7 @@ namespace picongpu
                     std::cout << "[" << gatherRank << "]"
                               << " finish MPI_Gatherv" << std::endl;
 
-                    std::shared_ptr<HostBufferIntern<ValueType, DIM2>> globalField;
+                    std::shared_ptr<HostBuffer<ValueType, DIM2>> globalField;
                     if(isMaster())
                     {
                         // globalNumElements is only on the master rank valid
@@ -281,7 +281,7 @@ namespace picongpu
                             globalSliceExtent.productOfComponents() == globalNumElements,
                             "Expected and gathered number of elements differ.");
 
-                        globalField = std::make_shared<HostBufferIntern<ValueType, DIM2>>(globalSliceExtent);
+                        globalField = std::make_shared<HostBuffer<ValueType, DIM2>>(globalSliceExtent);
                         auto globalFieldBox = globalField->getDataBox();
 
                         // aggregate data of all MPI ranks into a single 2D buffer
