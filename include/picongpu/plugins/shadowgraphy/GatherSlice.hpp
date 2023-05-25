@@ -114,7 +114,6 @@ namespace picongpu
                     {
                         if(allRank[i] != -1)
                         {
-                            std::cout << "allRank[i] i=" << i << " value=" << allRank[i] << std::endl;
                             groupRanks[numRanks] = allRank[i];
                             numRanks++;
                         }
@@ -131,7 +130,6 @@ namespace picongpu
                     if(globalMpiRank != -1)
                     {
                         MPI_CHECK(MPI_Comm_rank(gatherComm, &gatherRank));
-                        std::cout << "gather rank=" << gatherRank << std::endl;
                     }
                     MPI_CHECK(MPI_Group_free(&group));
                     MPI_CHECK(MPI_Group_free(&newgroup));
@@ -163,9 +161,6 @@ namespace picongpu
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     auto numDevices = con.getGpuNodes();
 
-                    std::cout << "[" << gatherRank << "]"
-                              << " num devices in slice plane =" << numRanksInPlane << std::endl;
-
                     // avoid deadlock between not finished pmacc tasks and mpi blocking collectives
                     eventSystem::getTransactionEvent().waitForFinished();
                     // get number of elements per participating mpi rank
@@ -173,8 +168,6 @@ namespace picongpu
 
                     auto localSliceSize = localInputSlice->getDataSpace();
 
-                    std::cout << "[" << gatherRank << "]"
-                              << " start gather extents " << localSliceSize.toString() << std::endl;
                     // gather extents
                     MPI_CHECK(MPI_Gather(
                         reinterpret_cast<int*>(&localSliceSize),
@@ -186,22 +179,7 @@ namespace picongpu
                         0,
                         gatherComm));
 
-                    if(isMaster())
-                    {
-                        for(int i = 0; i < numRanksInPlane; ++i)
-                        {
-                            std::cout << "[" << gatherRank << "]"
-                                      << " extent recive=" << extentPerDevice[i].toString() << std::endl;
-                        }
-                    }
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " end gather extents" << std::endl;
-
                     auto offsetPerDevice = std::vector<DataSpace<DIM2>>(numRanksInPlane);
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " start gather offsets " << localSliceOffset.toString() << std::endl;
 
                     // gather offsets
                     MPI_CHECK(MPI_Gather(
@@ -214,18 +192,6 @@ namespace picongpu
                         0,
                         gatherComm));
 
-                    if(isMaster())
-                    {
-                        for(int i = 0; i < numRanksInPlane; ++i)
-                        {
-                            std::cout << "[" << gatherRank << "]"
-                                      << " offset recive=" << offsetPerDevice[i].toString() << std::endl;
-                        }
-                    }
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " end gather offsets" << std::endl;
-
                     std::vector<int> displs(numRanksInPlane);
                     std::vector<int> count(numRanksInPlane);
                     // @todo replace by std::scan
@@ -236,24 +202,12 @@ namespace picongpu
                     {
                         for(int i = 0; i < numRanksInPlane; ++i)
                         {
-                            std::cout << "[" << gatherRank << "]"
-                                      << " offset=" << offset << std::endl;
-
                             displs[i] = offset * sizeof(ValueType);
                             count[i] = extentPerDevice[i].productOfComponents() * sizeof(ValueType);
                             offset += extentPerDevice[i].productOfComponents();
                             globalNumElements += extentPerDevice[i].productOfComponents();
-
-                            std::cout << "[" << gatherRank << "]"
-                                      << " extentPerDevice[" << i << "]=" << extentPerDevice[i] << std::endl;
-                            std::cout << "[" << gatherRank << "]"
-                                      << " displs[" << i << "]=" << displs[i] << std::endl;
-                            std::cout << "[" << gatherRank << "]"
-                                      << " count[" << i << "]=" << count[i] << std::endl;
                         }
                     }
-                    std::cout << "[" << gatherRank << "]"
-                              << " globalNumElements=" << globalNumElements << std::endl;
 
                     // gather all data from other ranks
                     auto allData = std::vector<ValueType>(globalNumElements);
@@ -269,9 +223,6 @@ namespace picongpu
                         MPI_CHAR,
                         0,
                         gatherComm));
-
-                    std::cout << "[" << gatherRank << "]"
-                              << " finish MPI_Gatherv" << std::endl;
 
                     std::shared_ptr<HostBuffer<ValueType, DIM2>> globalField;
                     if(isMaster())

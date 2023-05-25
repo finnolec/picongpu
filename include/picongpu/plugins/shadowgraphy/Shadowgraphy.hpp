@@ -304,11 +304,12 @@ namespace picongpu
                         if(!dumpFinalData)
                         {
                             DataConnector& dc = Environment<>::get().DataConnector();
-                            //std::cout << "prepare E field" << std::endl;
                             auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName());
-                            eventSystem::getTransactionEvent().waitForFinished();
+                            inputFieldBufferE->synchronize();
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             auto sliceBufferE
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             if(gather->isMaster())
                             {
                                 //std::cout << " finish preparing global slice" << std::endl;
@@ -317,12 +318,14 @@ namespace picongpu
                                     currentStep,
                                     sliceBufferE);
                             }
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
 
-                            //std::cout << "prepare B field" << std::endl;
                             auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName());
-                            eventSystem::getTransactionEvent().waitForFinished();
+                            inputFieldBufferB->synchronize();
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             auto sliceBufferB
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             if(gather->isMaster())
                             {
                                 //std::cout << " finish preparing global slice" << std::endl;
@@ -331,31 +334,38 @@ namespace picongpu
                                     currentStep,
                                     sliceBufferB);
                             }
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
 
                             if(gather->isMaster())
                             {
                                 helper->calculate_dft(localStep);
                             }
+                            printf("line %d in file %s\n", __LINE__, __FILE__);
                         }
                         else
                         {
                             if(gather->isMaster())
                             {
+                                printf("line %d in file %s\n", __LINE__, __FILE__);
                                 //std::cout << "dump " << currentStep << std::endl;
 
                                 if(m_help->optionFourierOutput.get(m_id)){
                                     writeFourierOutputToOpenPMDFile(currentStep);
                                 }
+                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 helper->propagateFieldsAndCalculateShadowgram();
+                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 std::ostringstream filename;
                                 filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
                                          << ".dat";
+                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 writeFile(helper->getShadowgram(), filename.str());
 
                                 writeToOpenPMDFile(currentStep);
+                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 // delete helper and free all memory
                                 helper.reset(nullptr);
@@ -422,7 +432,9 @@ namespace picongpu
                 {
                     std::stringstream filename;
                     filename << m_help->optionFileName.get(m_id) << "_%T." << m_help->optionFileExtention.get(m_id);
+                    printf("line 425\n");
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
+                    printf("427\n");
 
                     ::openPMD::Extent extent
                         = {static_cast<unsigned long int>(helper->getSizeY()),
