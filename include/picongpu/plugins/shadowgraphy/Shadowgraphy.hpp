@@ -306,10 +306,8 @@ namespace picongpu
                             DataConnector& dc = Environment<>::get().DataConnector();
                             auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName());
                             inputFieldBufferE->synchronize();
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             auto sliceBufferE
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             if(gather->isMaster())
                             {
                                 //std::cout << " finish preparing global slice" << std::endl;
@@ -318,14 +316,11 @@ namespace picongpu
                                     currentStep,
                                     sliceBufferE);
                             }
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
 
                             auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName());
                             inputFieldBufferB->synchronize();
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             auto sliceBufferB
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
                             if(gather->isMaster())
                             {
                                 //std::cout << " finish preparing global slice" << std::endl;
@@ -334,38 +329,31 @@ namespace picongpu
                                     currentStep,
                                     sliceBufferB);
                             }
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
 
                             if(gather->isMaster())
                             {
                                 helper->calculate_dft(localStep);
                             }
-                            printf("line %d in file %s\n", __LINE__, __FILE__);
                         }
                         else
                         {
                             if(gather->isMaster())
                             {
-                                printf("line %d in file %s\n", __LINE__, __FILE__);
                                 //std::cout << "dump " << currentStep << std::endl;
 
                                 if(m_help->optionFourierOutput.get(m_id)){
                                     writeFourierOutputToOpenPMDFile(currentStep);
                                 }
-                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 helper->propagateFieldsAndCalculateShadowgram();
-                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 std::ostringstream filename;
                                 filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
                                          << ".dat";
-                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 writeFile(helper->getShadowgram(), filename.str());
 
                                 writeToOpenPMDFile(currentStep);
-                                printf("line %d in file %s\n", __LINE__, __FILE__);
 
                                 // delete helper and free all memory
                                 helper.reset(nullptr);
@@ -470,73 +458,50 @@ namespace picongpu
                     filename << m_help->optionFileName.get(m_id) << "_fourierdata_%T." << m_help->optionFileExtention.get(m_id);
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
                     
-                    auto mesh = series.iterations[currentStep].meshes["shadowgram"];
-                    mesh.setAxisLabels(std::vector<std::string>{"x", "y", "omega"});
-                    mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
+                    auto mesh = series.iterations[currentStep].meshes["fourier"];
+                    mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian);
+                    mesh.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    mesh.setGridSpacing(std::vector<double>{1.0, 1.0, 1.0});
+                    mesh.setGridGlobalOffset(std::vector<double>{0.0, 0.0, 0.0});
                     mesh.setGridUnitSI(1.0);
-                    mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
-                    mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
-/*
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, true);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, true, false);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, true);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, true, false, false);
-
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, true);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, true, false);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, true);
-                    writeSingleFourierFieldToOpenPMDFile(currentStep, series, false, false, false);
-*/
-                    series.iterations[currentStep].close();
-
-
-                }
-
-                void writeSingleFourierFieldToOpenPMDFile(uint32_t currentStep, ::openPMD::Series series, bool isNegativeFrequency, bool isElectricField, bool isX){
-                    ::openPMD::Extent extent = {   
-                        static_cast<unsigned long int>(helper->getSizeX()),  
-                        static_cast<unsigned long int>(helper->getSizeY()),
-                        static_cast<unsigned long int>(helper->getNumOmegas() / 2)
-                    };
-                    ::openPMD::Offset offset = {0, 0, 0};
-                    ::openPMD::Datatype datatype = ::openPMD::determineDatatype<complex_64>();
-                    ::openPMD::Dataset dataset{datatype, extent};
-
-                    std::string fieldName = "";
-
-                    if (isElectricField){
-                        fieldName.append("E");
-                    } else {
-                        fieldName.append("B");
-                    }
-                    if (isX){
-                        fieldName.append("x");
-                    } else {
-                        fieldName.append("y");
-                    }
-                    if (isNegativeFrequency){
-                        fieldName.append("1");
-                    } else {
-                        fieldName.append("2");
-                    }
-
-                    auto mesh = series.iterations[currentStep].meshes[fieldName];
                     mesh.setAxisLabels(std::vector<std::string>{"x", "y", "omega"});
-                    mesh.setAttribute<int>("duration", m_help->optionDuration.get(m_id));
-                    mesh.setAttribute<float_X>("dt", UNIT_TIME * params::tRes);
+                    mesh.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::L, 1.0},
+                        {::openPMD::UnitDimension::M, 1.0},
+                        {::openPMD::UnitDimension::T, -3.0},
+                        {::openPMD::UnitDimension::I, -1.0}});
+                    
+                    const int N_tmpBuffer = helper->getSizeX() * helper->getSizeY() * helper->getNumOmegas() / 2;
+                    std::vector<std::complex<float_64>> fallbackBuffer;
 
+                    // reshape abstract MeshRecordComponent
+                    ::openPMD::Datatype datatype = ::openPMD::determineDatatype<std::complex<float_64>>();
+                    ::openPMD::Extent extent 
+                            = {static_cast<unsigned long int>(helper->getNumOmegas() / 2),
+                           static_cast<unsigned long int>(helper->getSizeY()),
+                           static_cast<unsigned long int>(helper->getSizeX())}; 
+                    ::openPMD::Offset offset = {0, 0, 0};
 
-                    auto fourierField = mesh[::openPMD::RecordComponent::SCALAR];
-                    fourierField.resetDataset(dataset);
+                    // go through all 8 different fields components
+                    for(int i=0; i<8; ++i){
+                        std::string dir = helper->dataLabelsFieldComponent(i);
 
-                    auto data = helper -> getFourierBuf(isNegativeFrequency, isElectricField, isX);
-                    auto sharedDataPtr = std::shared_ptr<complex_64>{data->getPointer(), [](auto const*) {}};
+                        mesh[dir].setUnitSI(1.0);
 
-                    //fourierField.storeChunk(
-                    //    sharedDataPtr,
-                    //    offset,
-                    //    extent);
+                        mesh[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
+                        ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
+                        mesh[dir].resetDataset(dataset);
+                        
+                        // do not delete this object before dataPtr is not required anymore
+                        auto data = helper->getFourierBuf(i);
+                        auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
+                            data->getPointer(), [](auto const*) {}};
 
+                        mesh[dir].storeChunk(sharedDataPtr, offset, extent);
+                        series.flush();
+                    }
+                    
                     series.iterations[currentStep].close();
                 }
 

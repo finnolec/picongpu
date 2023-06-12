@@ -32,6 +32,10 @@
 
 #include <fftw3.h>
 #include <stdio.h>
+#include <iostream>
+#include <chrono>
+
+#include <complex>
 
 namespace picongpu
 {
@@ -367,8 +371,8 @@ namespace picongpu
                                     }
                                 }
                             }
-                            // if(intermediateOutputEnabled)
-                            //    writeIntermediateFile(o, fieldIndex);
+                           // if(intermediateOutputEnabled)
+                            writeIntermediateFile(o, fieldIndex);
 
                             fftw_execute(planForward);
 
@@ -502,27 +506,40 @@ namespace picongpu
                     return retBuffer;
                 }
 
-                auto getFourierBuf(bool isNegativeFrequency, bool isElectricField, bool isX)
+                auto getFourierBuf(int index)
                 {
-                    //pmacc::container::HostBuffer<float_64, DIM2> retBuffer(getSizeX(), getSizeY());
-                    auto retBufferF = std::make_shared<HostBuffer<complex_64, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
+                    auto retBufferF = std::make_shared<HostBuffer<std::complex<float_64>, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
                     auto dataBox = retBufferF->getDataBox();
+
+                    // The fields are split into 2 parts in the output, because the omega-domain
+                    // is not necessarily continues due to band-pass filters
+                    vec3c * retField;
+                    if(index  <= 1)
+                        retField = &ExOmega;
+                    else if(index <= 3)
+                        retField = &EyOmega;
+                    else if(index <= 5)
+                        retField = &BxOmega;
+                    else if(index <= 7)
+                        retField = &ByOmega;
 
                     for (int i = 0; i < getSizeX(); ++i){
                         for (int j = 0; j < getSizeY(); ++j){
-                            for (int o = getNumOmegas()/2; o < getNumOmegas(); ++o){
+                            for (int o = 0; o < getNumOmegas() / 2; ++o){
                                 
-                                int const oSigned = (isNegativeFrequency) ? o : o + getNumOmegas()/2;
-
+                                int const oSigned = ((index % 2) == 0) ? o : o + getNumOmegas()/2;
+                                dataBox({i, j, o}) = static_cast<std::complex<float_64>>((*retField)[i][j][oSigned]);
+/*
                                 if (isElectricField && isX){
-                                    dataBox({i, j, o}) = static_cast<complex_64>(ExOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(ExOmega[i][j][oSigned]);
                                 } else if (isElectricField && (!isX)) {
-                                    dataBox({i, j, o}) = static_cast<complex_64>(EyOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(EyOmega[i][j][oSigned]);
                                 } else if ((!isElectricField) && isX) {
-                                    dataBox({i, j, o}) = static_cast<complex_64>(BxOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(BxOmega[i][j][oSigned]);
                                 } else if ((!isElectricField) && (!isX)) {
-                                    dataBox({i, j, o}) = static_cast<complex_64>(ByOmega[i][j][oSigned]);
+                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(ByOmega[i][j][oSigned]);
                                 }
+*/
                             }
                         }
                     }
@@ -550,6 +567,24 @@ namespace picongpu
                 int getSizeY() const
                 {
                     return pluginNumY;
+                }
+
+                /** This method returns openPMD data structure names for detector directions
+                 *
+                 *
+                 */
+                std::string dataLabelsFieldComponent(int index) const {
+                    const std::string dataLabelList[] = {
+                        "Ex-negative",
+                        "Ex-positive",
+                        "Ey-negative",
+                        "Ey-positive",
+                        "Bx-negative",
+                        "Bx-positive",
+                        "By-negative",
+                        "By-positive",
+                    };
+                    return dataLabelList[index];
                 }
 
             private:
