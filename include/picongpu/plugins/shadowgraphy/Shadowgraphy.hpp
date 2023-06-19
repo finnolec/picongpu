@@ -457,24 +457,27 @@ namespace picongpu
                     std::stringstream filename;
                     filename << m_help->optionFileName.get(m_id) << "_fourierdata_%T." << m_help->optionFileExtention.get(m_id);
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
-                    
-                    auto mesh = series.iterations[currentStep].meshes["fourier"];
-                    mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian);
-                    mesh.setDataOrder(::openPMD::Mesh::DataOrder::C);
-                    mesh.setGridSpacing(std::vector<double>{1.0, 1.0, 1.0});
-                    mesh.setGridGlobalOffset(std::vector<double>{0.0, 0.0, 0.0});
-                    mesh.setGridUnitSI(1.0);
-                    mesh.setAxisLabels(std::vector<std::string>{"x", "y", "omega"});
-                    mesh.setUnitDimension(
+
+                    auto meshNeg = series.iterations[currentStep].meshes["Fourier Domain Fields - negative"];
+                    meshNeg.setGeometry(::openPMD::Mesh::Geometry::cartesian);
+                    meshNeg.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    meshNeg.setGridSpacing(std::vector<double>{1.0, 1.0, 1.0});
+                    meshNeg.setGridGlobalOffset(std::vector<double>{
+                        static_cast<double>(helper->getOmegaIndex(0)), 
+                        0.0, 
+                        0.0});
+                    meshNeg.setGridUnitSI(1.0);
+                    meshNeg.setAxisLabels(std::vector<std::string>{
+                        "Spatial x index", 
+                        "Spatial y index", 
+                        "Fourier transform frequency index"});
+                    meshNeg.setUnitDimension(
                         std::map<::openPMD::UnitDimension, double>{
                         {::openPMD::UnitDimension::L, 1.0},
                         {::openPMD::UnitDimension::M, 1.0},
                         {::openPMD::UnitDimension::T, -3.0},
                         {::openPMD::UnitDimension::I, -1.0}});
                     
-                    const int N_tmpBuffer = helper->getSizeX() * helper->getSizeY() * helper->getNumOmegas() / 2;
-                    std::vector<std::complex<float_64>> fallbackBuffer;
-
                     // reshape abstract MeshRecordComponent
                     ::openPMD::Datatype datatype = ::openPMD::determineDatatype<std::complex<float_64>>();
                     ::openPMD::Extent extent 
@@ -484,23 +487,82 @@ namespace picongpu
                     ::openPMD::Offset offset = {0, 0, 0};
 
                     // go through all 8 different fields components
-                    for(int i=0; i<8; ++i){
+                    for(int i=0; i<8; i+=2){
                         std::string dir = helper->dataLabelsFieldComponent(i);
-
-                        mesh[dir].setUnitSI(1.0);
-
-                        mesh[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
-                        ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
-                        mesh[dir].resetDataset(dataset);
-                        
                         // do not delete this object before dataPtr is not required anymore
                         auto data = helper->getFourierBuf(i);
                         auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
-                            data->getPointer(), [](auto const*) {}};
-
-                        mesh[dir].storeChunk(sharedDataPtr, offset, extent);
+                        data->getPointer(), [](auto const*) {}};
+                        meshNeg[dir].setUnitSI(1.0);
+                        meshNeg[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
+                        ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
+                        meshNeg[dir].resetDataset(dataset);
+                        meshNeg[dir].storeChunk(sharedDataPtr, offset, extent);
                         series.flush();
                     }
+
+                    auto meshPos = series.iterations[currentStep].meshes["Fourier Domain Fields - positive"];
+                    meshPos.setGeometry(::openPMD::Mesh::Geometry::cartesian);
+                    meshPos.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    meshPos.setGridSpacing(std::vector<double>{1.0, 1.0, 1.0});
+                    meshPos.setGridGlobalOffset(std::vector<double>{
+                        static_cast<double>(helper->getOmegaIndex(helper->getNumOmegas() / 2)), 
+                        0.0, 
+                        0.0});
+                    meshPos.setGridUnitSI(1.0);
+                    meshPos.setAxisLabels(std::vector<std::string>{
+                        "Spatial x index", 
+                        "Spatial y index", 
+                        "Fourier transform frequency index"});
+                    meshPos.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::L, 1.0},
+                        {::openPMD::UnitDimension::M, 1.0},
+                        {::openPMD::UnitDimension::T, -3.0},
+                        {::openPMD::UnitDimension::I, -1.0}});
+                    for(int i=1; i<8; i+=2){
+                        std::string dir = helper->dataLabelsFieldComponent(i);
+                        // do not delete this object before dataPtr is not required anymore
+                        auto data = helper->getFourierBuf(i);
+                        auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
+                        data->getPointer(), [](auto const*) {}};
+                        meshPos[dir].setUnitSI(1.0);
+                        meshPos[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
+                        ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
+                        meshPos[dir].resetDataset(dataset);
+                        meshPos[dir].storeChunk(sharedDataPtr, offset, extent);
+                        series.flush();
+                    }
+
+                    //series.flush();
+                    auto omegas = std::vector<float_X>(helper->getNumT());
+                    for(int i = 0; i < helper->getNumT(); ++i){
+                        omegas[i] = helper->omega(i);
+                    }
+                    ::openPMD::Mesh meshOmega = series.iterations[currentStep].meshes["Fourier Transform Frequencies"];
+                    meshOmega.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+                    meshOmega.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    meshOmega.setGridSpacing(std::vector<double>{1.0});
+                    meshOmega.setGridGlobalOffset(std::vector<double>{0.0});
+                    meshOmega.setGridUnitSI(1.0);
+                    meshOmega.setAxisLabels(std::vector<std::string>{"Fourier transform frequency index"});
+                    meshOmega.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::T, -1.0}});
+                    ::openPMD::MeshRecordComponent omegaMRC = meshOmega["omegas"];
+                    //const picongpu::float_64 factorOmega = 1.0 / UNIT_TIME;
+                    //omegaMRC.setUnitSI(factorOmega);
+                    omegaMRC.setPosition(std::vector<double>{0.0});
+
+                    ::openPMD::Datatype datatype_omega = ::openPMD::determineDatatype<float_X>();
+                    ::openPMD::Extent extent_omega = {static_cast<unsigned long int>(helper->getNumT())};
+                    ::openPMD::Dataset dataset_omega = ::openPMD::Dataset(datatype_omega, extent_omega);
+                    omegaMRC.resetDataset(dataset_omega);
+                
+                    // write actual data
+                    ::openPMD::Offset offset_omega = {0};
+                    omegaMRC.storeChunk(omegas, offset_omega, extent_omega);
+                    
                     
                     series.iterations[currentStep].close();
                 }

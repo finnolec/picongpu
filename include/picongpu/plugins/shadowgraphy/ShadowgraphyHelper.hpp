@@ -547,6 +547,20 @@ namespace picongpu
                     return retBufferF;
                 }
 
+
+                /** angular frequency in SI units
+                 *
+                 * @param i frequency index for trimmed plugin array
+                 *
+                 * @return angular frequency in SI units
+                 */
+                float_X omega(int i) const
+                {
+                    float_X const actualStep = dt;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT) / actualStep;
+                }
+
+
                 //! Return size of trimmed arrays in omega dimension
                 int getNumOmegas() const
                 {
@@ -556,6 +570,32 @@ namespace picongpu
                     return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
                 }
 
+               
+
+                /** Return omega index for a matrix that doesn't remove the zero-valued frequencies.
+                 * Used for properly treating raw Fourier space data of this plugin.
+                 *
+                 * @param i frequency index for trimmed plugin array
+                 *
+                 * @return index for non-trimmed array in frequency domain
+                 */
+                int getOmegaIndex(int i) const
+                {
+                    if(i < numOmegas / 2)
+                    {
+                        return duration / params::tRes - getOmegaMinIndex() - numOmegas / 2 + i + 1;
+                    }
+                    else
+                    {
+                        return (i % (numOmegas / 2)) + getOmegaMinIndex();
+                    }
+                }
+
+                //! Return size of trimmed arrays in omega dimension
+                int getNumT() const
+                {
+                    return duration / params::tRes;
+                }
 
                 //! Get amount of shadowgram pixels in x direction
                 int getSizeX() const
@@ -574,7 +614,7 @@ namespace picongpu
                  *
                  */
                 std::string dataLabelsFieldComponent(int index) const {
-                    const std::string dataLabelList[] = {
+                    /*const std::string dataLabelList[] = {
                         "Ex-negative",
                         "Ex-positive",
                         "Ey-negative",
@@ -583,8 +623,15 @@ namespace picongpu
                         "Bx-positive",
                         "By-negative",
                         "By-positive",
+                    };*/
+                    const int localIndex = index/2;
+                    const std::string dataLabelList[] = {
+                        "Ex",
+                        "Ey",
+                        "Bx",
+                        "By",
                     };
-                    return dataLabelList[index];
+                    return dataLabelList[localIndex];
                 }
 
             private:
@@ -820,7 +867,8 @@ namespace picongpu
                     }
                 }
 
-                //! Return minimum omega index for trimmed arrays in omega dimension
+
+                 //! Return minimum omega index for trimmed arrays in omega dimension
                 int getOmegaMinIndex() const
                 {
                     float_64 const actualStep = params::tRes * SI::DELTA_T_SI;
@@ -840,43 +888,6 @@ namespace picongpu
                     return retIndex + 1;
                 }
 
-
-                //! Return size of trimmed arrays in omega dimension
-                int getNumT() const
-                {
-                    return duration / params::tRes;
-                }
-
-                /** Return omega index for a matrix that doesn't remove the zero-valued frequencies.
-                 * Used for properly treating raw Fourier space data of this plugin.
-                 *
-                 * @param i frequency index for trimmed plugin array
-                 *
-                 * @return index for non-trimmed array in frequency domain
-                 */
-                int getOmegaIndex(int i) const
-                {
-                    if(i < numOmegas / 2)
-                    {
-                        return duration / params::tRes - getOmegaMinIndex() - numOmegas / 2 + i + 1;
-                    }
-                    else
-                    {
-                        return (i % (numOmegas / 2)) + getOmegaMinIndex();
-                    }
-                }
-
-                /** angular frequency in SI units
-                 *
-                 * @param i frequency index for trimmed plugin array
-                 *
-                 * @return angular frequency in SI units
-                 */
-                float_X omega(int i) const
-                {
-                    float_X const actualStep = dt;
-                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT) / actualStep;
-                }
 
                 /** x component of k vector in SI units for FFTs
                  *
