@@ -450,9 +450,9 @@ namespace picongpu
                 auto const yMod = float_T(pos.y() + numberOfPeriods * deltaY);
                 auto const zMod = float_T(pos.z() + numberOfPeriods * deltaZ);
 
-                auto const x = - float_T(phiPositive * pos.x() / UNIT_LENGTH);
-                auto const y = - float_T(phiPositive * yMod / UNIT_LENGTH);
-                auto const z = float_T(zMod / UNIT_LENGTH);
+                auto const x = float_T(pos.x() / UNIT_LENGTH);
+                auto const y = float_T(phiPositive * yMod / UNIT_LENGTH);
+                auto const z = float_T(phiPositive * zMod / UNIT_LENGTH);
                 auto const t = float_T(timeMod / UNIT_TIME);
 
                 /* Calculating shortcuts for speeding up field calculation */
@@ -526,7 +526,7 @@ namespace picongpu
                        * math::sqrt(cspeed * om0 * rho0 / helpVar2))
                     / (float_T(2.0) * cspeed * math::pow(helpVar4, float_T(1.5)));
 
-                return result.real() / UNIT_SPEED;
+                return phiPositive * result.real() / UNIT_SPEED;
             }
 
             /** Calculate the Bz(r,t) field
@@ -597,9 +597,9 @@ namespace picongpu
                 auto const yMod = float_T(pos.y() + numberOfPeriods * deltaY);
                 auto const zMod = float_T(pos.z() + numberOfPeriods * deltaZ);
 
-                auto const x = - float_T(phiPositive * pos.x() / UNIT_LENGTH);
-                auto const y = - float_T(phiPositive * yMod / UNIT_LENGTH);
-                auto const z = float_T(zMod / UNIT_LENGTH);
+                auto const x = float_T(pos.x() / UNIT_LENGTH);
+                auto const y = float_T(phiPositive * yMod / UNIT_LENGTH);
+                auto const z = float_T(phiPositive * zMod / UNIT_LENGTH);
                 auto const t = float_T(timeMod / UNIT_TIME);
 
                 /* Calculating shortcuts for speeding up field calculation */
@@ -667,7 +667,7 @@ namespace picongpu
                        * math::sqrt(om0 * rho0 / helpVar7))
                     / math::pow(helpVar9, float_T(1.5));
 
-                return 0.0 * result.real() / UNIT_SPEED;
+                return phiPositive * 0.0 * result.real() / UNIT_SPEED;
             }
 
             /** Calculate the Bx(r,t) field
@@ -752,9 +752,9 @@ namespace picongpu
                 auto const yMod = float_T(pos.y() + numberOfPeriods * deltaY);
                 auto const zMod = float_T(pos.z() + numberOfPeriods * deltaZ);
 
-                auto const x = - float_T(phiPositive * pos.x() / UNIT_LENGTH);
-                auto const y = - float_T(phiPositive * yMod / UNIT_LENGTH);
-                auto const z = float_T(zMod / UNIT_LENGTH);
+                auto const x = float_T(pos.x() / UNIT_LENGTH);
+                auto const y = float_T(phiPositive * yMod / UNIT_LENGTH);
+                auto const z = float_T(phiPositive * zMod / UNIT_LENGTH);
                 auto const t = float_T(timeMod / UNIT_TIME);
 
                 /* Shortcuts for speeding up the field calculation. */
@@ -829,7 +829,7 @@ namespace picongpu
                        * math::pow(float_T(1.0) / helpVar2, float_T(1.5)))
                     / math::sqrt(helpVar4);
 
-                return 0.0 * result.real() / UNIT_SPEED;
+                return phiPositive * 0.0 * result.real() / UNIT_SPEED;
             }
 
         } /* namespace twtsfast */

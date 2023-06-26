@@ -333,9 +333,9 @@ namespace picongpu
                 auto const yMod = float_T(pos.y() + numberOfPeriods * deltaY);
                 auto const zMod = float_T(pos.z() + numberOfPeriods * deltaZ);
 
-                auto const x = - float_T(phiPositive * pos.x() / UNIT_LENGTH);
-                auto const y = - float_T(phiPositive * yMod / UNIT_LENGTH);
-                auto const z = float_T(zMod / UNIT_LENGTH);
+                auto const x = float_T(pos.x() / UNIT_LENGTH);
+                auto const y = float_T(phiPositive * yMod / UNIT_LENGTH);
+                auto const z = float_T(phiPositive * zMod / UNIT_LENGTH);
                 auto const t = float_T(timeMod / UNIT_TIME);
 
                 /* Calculating shortcuts for speeding up field calculation */
@@ -402,7 +402,7 @@ namespace picongpu
                 complex_T const result
                     = (math::exp(helpVar3) * tauG * math::sqrt(cspeed * om0 * rho0 / helpVar2)) / math::sqrt(helpVar4);
 
-                return result.real();
+                return phiPositive * result.real();
             }
 
             /** Calculate the Ey(r,t) field here
