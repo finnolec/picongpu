@@ -564,9 +564,9 @@ namespace picongpu
                     omegaMRC.storeChunk(omegas, offset_omega, extent_omega);
 
 
-                    auto xs = std::vector<float_X>(helper->getNumT());
-                    for(int i = 0; i < helper->getNumT(); ++i){
-                        xs[i] = helper->omega(i);
+                    auto xs = std::vector<float_X>(helper->getSizeX());
+                    for(int i = 0; i < helper->getSizeX(); ++i){
+                        xs[i] = helper->coords(i, 0);
                     }
                     ::openPMD::Mesh meshX = series.iterations[currentStep].meshes["x grid"];
                     meshX.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
@@ -593,9 +593,9 @@ namespace picongpu
                     xMRC.storeChunk(xs, offset_x, extent_x);
 
 
-                    auto ys = std::vector<float_X>(helper->getNumT());
-                    for(int i = 0; i < helper->getNumT(); ++i){
-                        ys[i] = helper->omega(i);
+                    auto ys = std::vector<float_X>(helper->getSizeY());
+                    for(int i = 0; i < helper->getSizeY(); ++i){
+                        ys[i] = helper->coords(0, i);
                     }
                     ::openPMD::Mesh meshY = series.iterations[currentStep].meshes["y grid"];
                     meshY.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default

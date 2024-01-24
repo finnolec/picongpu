@@ -254,22 +254,23 @@ namespace picongpu
                 void storeField(int t, int currentStep, T_SliceBuffer sliceBuffer)
                 {
                     auto globalFieldBox = sliceBuffer->getDataBox();
-                    int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
+                    //int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
 
                     for(int i = 0; i < pluginNumX; i++)
                     {
-                        int const simI = fields::absorber::NUM_CELLS[0][0] + i * params::xRes;
+                        //int const simI = fields::absorber::NUM_CELLS[0][0] + i * params::xRes;
                         for(int j = 0; j < pluginNumY; ++j)
                         {
                             // Transform the total coordinates of the fixed shadowgraphy screen to the global
                             // coordinates of the field-buffers
-                            int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
-                                - currentSlideCount * cellsPerGpuY + j * params::yRes;
+                            //int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                            //    - currentSlideCount * cellsPerGpuY + j * params::yRes;
 
                             float_64 const wf
                                 = masks::positionWf(i, j, pluginNumX, pluginNumY) * masks::timeWf(t, duration);
 
-                            auto value = globalFieldBox(DataSpace<DIM2>{simI, simJ});
+                             //auto value = globalFieldBox(DataSpace<DIM2>{simI, simJ});
+                            auto value = coords(simI, simJ);
                             // fix yee offset
                             if constexpr(T_fieldType == FieldType::E)
                             {
@@ -602,6 +603,20 @@ namespace picongpu
                 {
                     return pluginNumX;
                 }
+
+                auto coords(int xIndex, int yIndex) const
+                {
+                    int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
+
+                    int const simI = fields::absorber::NUM_CELLS[0][0] + xIndex * params::xRes;
+
+                    int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                        - currentSlideCount * cellsPerGpuY + yIndex * params::yRes;
+
+
+                    return globalFieldBox(DataSpace<DIM2>{simI, simJ})
+                }
+
 
                 //! Get amount of shadowgram pixels in y direction
                 int getSizeY() const
