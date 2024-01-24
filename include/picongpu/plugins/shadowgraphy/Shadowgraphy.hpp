@@ -562,6 +562,64 @@ namespace picongpu
                     // write actual data
                     ::openPMD::Offset offset_omega = {0};
                     omegaMRC.storeChunk(omegas, offset_omega, extent_omega);
+
+
+                    auto xs = std::vector<float_X>(helper->getNumT());
+                    for(int i = 0; i < helper->getNumT(); ++i){
+                        xs[i] = helper->omega(i);
+                    }
+                    ::openPMD::Mesh meshX = series.iterations[currentStep].meshes["x grid"];
+                    meshX.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+                    meshX.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    meshX.setGridSpacing(std::vector<double>{1.0});
+                    meshX.setGridGlobalOffset(std::vector<double>{0.0});
+                    meshX.setGridUnitSI(1.0);
+                    meshX.setAxisLabels(std::vector<std::string>{"spatial grid x index"});
+                    meshX.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::T, -1.0}});
+                    ::openPMD::MeshRecordComponent xMRC = meshX["xs"];
+                    //const picongpu::float_64 factorX = 1.0 / UNIT_TIME;
+                    //xMRC.setUnitSI(factorX);
+                    xMRC.setPosition(std::vector<double>{0.0});
+
+                    ::openPMD::Datatype datatype_x = ::openPMD::determineDatatype<float_X>();
+                    ::openPMD::Extent extent_x = {static_cast<unsigned long int>(helper->getNumT())};
+                    ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
+                    xMRC.resetDataset(dataset_x);
+                
+                    // write actual data
+                    ::openPMD::Offset offset_x = {0};
+                    xMRC.storeChunk(xs, offset_x, extent_x);
+
+
+                    auto ys = std::vector<float_X>(helper->getNumT());
+                    for(int i = 0; i < helper->getNumT(); ++i){
+                        ys[i] = helper->omega(i);
+                    }
+                    ::openPMD::Mesh meshY = series.iterations[currentStep].meshes["y grid"];
+                    meshY.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+                    meshY.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    meshY.setGridSpacing(std::vector<double>{1.0});
+                    meshY.setGridGlobalOffset(std::vector<double>{0.0});
+                    meshY.setGridUnitSI(1.0);
+                    meshY.setAxisLabels(std::vector<std::string>{"spatial grid y index"});
+                    meshY.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::T, -1.0}});
+                    ::openPMD::MeshRecordComponent yMRC = meshY["ys"];
+                    //const picongpu::float_64 factorX = 1.0 / UNIT_TIME;
+                    //yMRC.setUnitSI(factorX);
+                    yMRC.setPosition(std::vector<double>{0.0});
+
+                    ::openPMD::Datatype datatype_y = ::openPMD::determineDatatype<float_X>();
+                    ::openPMD::Extent extent_y = {static_cast<unsigned long int>(helper->getNumT())};
+                    ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
+                    yMRC.resetDataset(dataset_y);
+                
+                    // write actual data
+                    ::openPMD::Offset offset_y = {0};
+                    yMRC.storeChunk(ys, offset_y, extent_y);
                     
                     
                     series.iterations[currentStep].close();
