@@ -27,6 +27,7 @@
 #include <pmacc/assert.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/math/Vector.hpp>
+#include "pmacc/memory/buffers/Buffer.hpp"
 
 #include <cmath> // what
 
@@ -95,6 +96,16 @@ namespace picongpu
 
                 bool fourierOutputEnabled;
                 bool intermediateOutputEnabled;
+
+                bool initializedDataBox = false;
+
+                int xMin;
+                float_X xStep;
+                int yMin;
+                float_X yStep;
+
+                //Buffer<float_X, DIM2>::DataBoxType openPMDdataBox;
+                //pmacc::DataBox<pmacc::PitchedBox<float, 2> > openPMDdataBox;
 
             public:
                 enum class FieldType : uint32_t
@@ -254,23 +265,43 @@ namespace picongpu
                 void storeField(int t, int currentStep, T_SliceBuffer sliceBuffer)
                 {
                     auto globalFieldBox = sliceBuffer->getDataBox();
-                    //int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
+                    int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
+                    if(!initializedDataBox){
+                        //openPMDdataBox = sliceBuffer->getDataBox();
+                        xMin = fields::absorber::NUM_CELLS[0][0];
+                        auto mins = globalFieldBox(DataSpace<DIM2>{
+                            fields::absorber::NUM_CELLS[0][0], 
+                            fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                                - currentSlideCount * cellsPerGpuY});
+                        xMin = mins.x();
+                        yMin = mins.y();
+
+                        auto tmp = globalFieldBox(DataSpace<DIM2>{
+                            fields::absorber::NUM_CELLS[0][0] + 1 * params::xRes, 
+                            fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                                - currentSlideCount * cellsPerGpuY + 1 * params::yRes});
+
+                        xStep = tmp.x() - mins.x();
+                        yStep = tmp.y() - mins.y();
+                        initializedDataBox = true;
+                    }
+
 
                     for(int i = 0; i < pluginNumX; i++)
                     {
-                        //int const simI = fields::absorber::NUM_CELLS[0][0] + i * params::xRes;
+                        int const simI = fields::absorber::NUM_CELLS[0][0] + i * params::xRes;
                         for(int j = 0; j < pluginNumY; ++j)
                         {
                             // Transform the total coordinates of the fixed shadowgraphy screen to the global
                             // coordinates of the field-buffers
-                            //int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
-                            //    - currentSlideCount * cellsPerGpuY + j * params::yRes;
+                            int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                                - currentSlideCount * cellsPerGpuY + j * params::yRes;
 
                             float_64 const wf
                                 = masks::positionWf(i, j, pluginNumX, pluginNumY) * masks::timeWf(t, duration);
 
-                             //auto value = globalFieldBox(DataSpace<DIM2>{simI, simJ});
-                            auto value = coords(simI, simJ);
+                            auto value = globalFieldBox(DataSpace<DIM2>{simI, simJ});
+                            //auto value = coords(i, j, currentStep, globalFieldBox);
                             // fix yee offset
                             if constexpr(T_fieldType == FieldType::E)
                             {
@@ -490,6 +521,21 @@ namespace picongpu
                     return shadowgram;
                 }
 
+                float_X getX(int i) const
+                {
+                    return xMin + i * xStep;
+                }
+
+                float_X getY(int j) const
+                {
+                    return yMin + j * yStep;
+                }
+
+                //auto getOpenPMDdataBox() const
+                //{
+                    //return openPMDdataBox;
+                //}
+
                 auto getShadowgramBuf()
                 {
                     auto retBuffer
@@ -603,9 +649,11 @@ namespace picongpu
                 {
                     return pluginNumX;
                 }
+/*
+                auto coords(int xIndex, int yIndex, int currentStep,  pmacc::DataBox<pmacc::PitchedBox<float, 2> > globalFieldBox) const
+                {                    
+                    //auto globalFieldBox = sliceBuffer->getDataBox();
 
-                auto coords(int xIndex, int yIndex) const
-                {
                     int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
 
                     int const simI = fields::absorber::NUM_CELLS[0][0] + xIndex * params::xRes;
@@ -614,9 +662,9 @@ namespace picongpu
                         - currentSlideCount * cellsPerGpuY + yIndex * params::yRes;
 
 
-                    return globalFieldBox(DataSpace<DIM2>{simI, simJ})
+                    return globalFieldBox(DataSpace<DIM2>{simI, simJ});
                 }
-
+*/
 
                 //! Get amount of shadowgram pixels in y direction
                 int getSizeY() const

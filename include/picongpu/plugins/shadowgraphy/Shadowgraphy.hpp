@@ -566,7 +566,7 @@ namespace picongpu
 
                     auto xs = std::vector<float_X>(helper->getSizeX());
                     for(int i = 0; i < helper->getSizeX(); ++i){
-                        xs[i] = helper->coords(i, 0);
+                        xs[i] = helper->getX(i);
                     }
                     ::openPMD::Mesh meshX = series.iterations[currentStep].meshes["x grid"];
                     meshX.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
@@ -595,7 +595,7 @@ namespace picongpu
 
                     auto ys = std::vector<float_X>(helper->getSizeY());
                     for(int i = 0; i < helper->getSizeY(); ++i){
-                        ys[i] = helper->coords(0, i);
+                        ys[i] = helper->getY(i);
                     }
                     ::openPMD::Mesh meshY = series.iterations[currentStep].meshes["y grid"];
                     meshY.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
