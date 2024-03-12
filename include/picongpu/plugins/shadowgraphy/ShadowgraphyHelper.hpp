@@ -99,9 +99,9 @@ namespace picongpu
 
                 bool initializedDataBox = false;
 
-                int xMin;
+                float_X xMin;
                 float_X xStep;
-                int yMin;
+                float_X yMin;
                 float_X yStep;
 
                 //Buffer<float_X, DIM2>::DataBoxType openPMDdataBox;
@@ -267,23 +267,18 @@ namespace picongpu
                     auto globalFieldBox = sliceBuffer->getDataBox();
                     int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
                     if(!initializedDataBox){
-                        //openPMDdataBox = sliceBuffer->getDataBox();
-                        xMin = fields::absorber::NUM_CELLS[0][0];
-                        auto mins = globalFieldBox(DataSpace<DIM2>{
-                            fields::absorber::NUM_CELLS[0][0], 
-                            fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
-                                - currentSlideCount * cellsPerGpuY});
-                        xMin = mins.x();
-                        yMin = mins.y();
+                        xMin = fields::absorber::NUM_CELLS[0][0] * SI::CELL_WIDTH_SI;
+                        yMin = (fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
+                                - currentSlideCount * cellsPerGpuY) * SI::CELL_HEIGHT_SI;
 
-                        auto tmp = globalFieldBox(DataSpace<DIM2>{
-                            fields::absorber::NUM_CELLS[0][0] + 1 * params::xRes, 
-                            fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
-                                - currentSlideCount * cellsPerGpuY + 1 * params::yRes});
-
-                        xStep = tmp.x() - mins.x();
-                        yStep = tmp.y() - mins.y();
+                        xStep = params::xRes * SI::CELL_WIDTH_SI;
+                        yStep = params::yRes * SI::CELL_HEIGHT_SI;
                         initializedDataBox = true;
+                        //printf();
+                        printf("xstep: %.5e\n", xStep);
+                        printf("ystep: %.5e\n", yStep);
+                        printf("xMin: %.5e\n", xMin);
+                        printf("yMin: %.5e\n", yMin);
                     }
 
 
@@ -404,7 +399,7 @@ namespace picongpu
                                 }
                             }
                            // if(intermediateOutputEnabled)
-                            writeIntermediateFile(o, fieldIndex);
+                           // writeIntermediateFile(o, fieldIndex);
 
                             fftw_execute(planForward);
 

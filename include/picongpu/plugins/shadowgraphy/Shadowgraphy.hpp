@@ -227,8 +227,6 @@ namespace picongpu
                             if(isPlaneInLocalDomain)
                                 localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
 
-                            std::cout << "global slice cellZ=" << globalPlaneIdx << " localPlaneIdx=" << localPlaneIdx
-                                      << std::endl;
 
                             gather = std::make_unique<shadowgraphy::GatherSlice>();
                             gather->participate(isPlaneInLocalDomain);
@@ -357,6 +355,8 @@ namespace picongpu
 
                                 // delete helper and free all memory
                                 helper.reset(nullptr);
+
+                                std::cout << "shadowgraphy done" << std::endl;
                             }
                             isIntegrating = false;
                         }
@@ -403,7 +403,7 @@ namespace picongpu
                     auto sliceBuffer = std::make_shared<HostBuffer<float2_X, DIM2>>(localSliceSize);
                     auto sliceBox = sliceBuffer->getDataBox();
 
-                    std::cout << " start loading slice" << std::endl;
+                    //std::cout << " start loading slice" << std::endl;
                     for(int y = 0; y < localSliceSize.y(); ++y)
                         for(int x = 0; x < localSliceSize.x(); ++x)
                         {
@@ -411,7 +411,7 @@ namespace picongpu
                             DataSpace<DIM3> srcIdx(idx.x(), idx.y(), sliceCellZ);
                             sliceBox(idx) = helper->cross<T_fieldType>(inputFieldBox.shift(srcIdx));
                         }
-                    std::cout << " end loading slice" << std::endl;
+                    //std::cout << " end loading slice" << std::endl;
 
                     return sliceBuffer;
                 }
@@ -420,9 +420,9 @@ namespace picongpu
                 {
                     std::stringstream filename;
                     filename << m_help->optionFileName.get(m_id) << "_%T." << m_help->optionFileExtention.get(m_id);
-                    printf("line 425\n");
+                    //printf("line 425\n");
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
-                    printf("427\n");
+                    //printf("427\n");
 
                     ::openPMD::Extent extent
                         = {static_cast<unsigned long int>(helper->getSizeY()),
@@ -434,8 +434,10 @@ namespace picongpu
                     auto mesh = series.iterations[currentStep].meshes["shadowgram"];
                     mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
                     mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
-                    mesh.setGridUnitSI(UNIT_LENGTH);
-                    mesh.setGridSpacing(std::vector<double>{cellSize[0] * params::xRes, cellSize[1] * params::yRes});
+                    //mesh.setGridUnitSI(UNIT_LENGTH);
+                    //mesh.setGridSpacing(std::vector<double>{cellSize[0] * params::xRes, cellSize[1] * params::yRes});
+                    mesh.setGridUnitSI(1);
+                    mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
                     mesh.setAttribute<int>("duration", m_help->optionDuration.get(m_id));
                     mesh.setAttribute<float_X>("dt", UNIT_TIME * params::tRes);
                     mesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
@@ -448,6 +450,54 @@ namespace picongpu
                     auto sharedDataPtr = std::shared_ptr<float_64>{data->getPointer(), [](auto const*) {}};
 
                     shadowgram.storeChunk(sharedDataPtr, offset, extent);
+
+
+                    ::openPMD::Mesh spatialMesh = series.iterations[currentStep].meshes["Spatial positions"];
+                    spatialMesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+                    spatialMesh.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    spatialMesh.setGridSpacing(std::vector<double>{1.0});
+                    spatialMesh.setGridGlobalOffset(std::vector<double>{0.0});
+                    spatialMesh.setGridUnitSI(1.0);
+                    spatialMesh.setAxisLabels(std::vector<std::string>{
+                        "Spatial x index", 
+                        "Spatial y index"});
+                    spatialMesh.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::L, 1.0}});
+
+                    auto xs = std::vector<float_X>(helper->getSizeX());
+                    for(int i = 0; i < helper->getSizeX(); ++i){
+                        xs[i] = helper->getX(i);
+                    }
+                    ::openPMD::MeshRecordComponent xMRC = spatialMesh["x"];
+                    xMRC.setPosition(std::vector<double>{0.0});
+                    ::openPMD::Datatype datatype_x = ::openPMD::determineDatatype<float_X>();
+                    ::openPMD::Extent extent_x = {1, static_cast<unsigned long int>(helper->getSizeX())};
+                    ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
+                    xMRC.resetDataset(dataset_x);
+                
+                    // write actual data
+                    ::openPMD::Offset offset_x = {0};
+                    xMRC.storeChunk(xs, offset_x, extent_x);
+
+
+                    auto ys = std::vector<float_X>(helper->getSizeY());
+                    for(int i = 0; i < helper->getSizeY(); ++i){
+                        ys[i] = helper->getY(i);
+                    }
+
+                    ::openPMD::MeshRecordComponent yMRC = spatialMesh["y"];
+                    yMRC.setPosition(std::vector<double>{0.0});
+
+                    ::openPMD::Datatype datatype_y = ::openPMD::determineDatatype<float_X>();
+                    ::openPMD::Extent extent_y = {static_cast<unsigned long int>(helper->getSizeY()), 1};
+                    ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
+                    yMRC.resetDataset(dataset_y);
+                
+                    // write actual data
+                    ::openPMD::Offset offset_y = {0};
+                    yMRC.storeChunk(ys, offset_y, extent_y);
+                    
 
                     series.iterations[currentStep].close();
                 }
@@ -535,9 +585,9 @@ namespace picongpu
                     }
 
                     //series.flush();
-                    auto omegas = std::vector<float_X>(helper->getNumT());
-                    for(int i = 0; i < helper->getNumT(); ++i){
-                        omegas[i] = helper->omega(i);
+                    auto omegas = std::vector<float_X>(helper->getNumOmegas());
+                    for(int i = 0; i < helper->getNumOmegas(); ++i){
+                        omegas[i] = helper->omega(helper->getOmegaIndex(i));
                     }
                     ::openPMD::Mesh meshOmega = series.iterations[currentStep].meshes["Fourier Transform Frequencies"];
                     meshOmega.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
@@ -555,7 +605,7 @@ namespace picongpu
                     omegaMRC.setPosition(std::vector<double>{0.0});
 
                     ::openPMD::Datatype datatype_omega = ::openPMD::determineDatatype<float_X>();
-                    ::openPMD::Extent extent_omega = {static_cast<unsigned long int>(helper->getNumT())};
+                    ::openPMD::Extent extent_omega = {static_cast<unsigned long int>(helper->getNumOmegas()), 1, 1};
                     ::openPMD::Dataset dataset_omega = ::openPMD::Dataset(datatype_omega, extent_omega);
                     omegaMRC.resetDataset(dataset_omega);
                 
@@ -563,28 +613,28 @@ namespace picongpu
                     ::openPMD::Offset offset_omega = {0};
                     omegaMRC.storeChunk(omegas, offset_omega, extent_omega);
 
+                    ::openPMD::Mesh spatialMesh = series.iterations[currentStep].meshes["Spatial positions"];
+                    spatialMesh.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
+                    spatialMesh.setDataOrder(::openPMD::Mesh::DataOrder::C);
+                    spatialMesh.setGridSpacing(std::vector<double>{1.0});
+                    spatialMesh.setGridGlobalOffset(std::vector<double>{0.0});
+                    spatialMesh.setGridUnitSI(1.0);
+                    spatialMesh.setAxisLabels(std::vector<std::string>{
+                        "Spatial x index", 
+                        "Spatial y index", 
+                        "None"});
+                    spatialMesh.setUnitDimension(
+                        std::map<::openPMD::UnitDimension, double>{
+                        {::openPMD::UnitDimension::L, 1.0}});
 
                     auto xs = std::vector<float_X>(helper->getSizeX());
                     for(int i = 0; i < helper->getSizeX(); ++i){
                         xs[i] = helper->getX(i);
                     }
-                    ::openPMD::Mesh meshX = series.iterations[currentStep].meshes["x grid"];
-                    meshX.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
-                    meshX.setDataOrder(::openPMD::Mesh::DataOrder::C);
-                    meshX.setGridSpacing(std::vector<double>{1.0});
-                    meshX.setGridGlobalOffset(std::vector<double>{0.0});
-                    meshX.setGridUnitSI(1.0);
-                    meshX.setAxisLabels(std::vector<std::string>{"spatial grid x index"});
-                    meshX.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
-                        {::openPMD::UnitDimension::T, -1.0}});
-                    ::openPMD::MeshRecordComponent xMRC = meshX["xs"];
-                    //const picongpu::float_64 factorX = 1.0 / UNIT_TIME;
-                    //xMRC.setUnitSI(factorX);
+                    ::openPMD::MeshRecordComponent xMRC = spatialMesh["x"];
                     xMRC.setPosition(std::vector<double>{0.0});
-
                     ::openPMD::Datatype datatype_x = ::openPMD::determineDatatype<float_X>();
-                    ::openPMD::Extent extent_x = {static_cast<unsigned long int>(helper->getNumT())};
+                    ::openPMD::Extent extent_x = {1, 1, static_cast<unsigned long int>(helper->getSizeX())};
                     ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
                     xMRC.resetDataset(dataset_x);
                 
@@ -597,23 +647,12 @@ namespace picongpu
                     for(int i = 0; i < helper->getSizeY(); ++i){
                         ys[i] = helper->getY(i);
                     }
-                    ::openPMD::Mesh meshY = series.iterations[currentStep].meshes["y grid"];
-                    meshY.setGeometry(::openPMD::Mesh::Geometry::cartesian); // set be default
-                    meshY.setDataOrder(::openPMD::Mesh::DataOrder::C);
-                    meshY.setGridSpacing(std::vector<double>{1.0});
-                    meshY.setGridGlobalOffset(std::vector<double>{0.0});
-                    meshY.setGridUnitSI(1.0);
-                    meshY.setAxisLabels(std::vector<std::string>{"spatial grid y index"});
-                    meshY.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
-                        {::openPMD::UnitDimension::T, -1.0}});
-                    ::openPMD::MeshRecordComponent yMRC = meshY["ys"];
-                    //const picongpu::float_64 factorX = 1.0 / UNIT_TIME;
-                    //yMRC.setUnitSI(factorX);
+
+                    ::openPMD::MeshRecordComponent yMRC = spatialMesh["y"];
                     yMRC.setPosition(std::vector<double>{0.0});
 
                     ::openPMD::Datatype datatype_y = ::openPMD::determineDatatype<float_X>();
-                    ::openPMD::Extent extent_y = {static_cast<unsigned long int>(helper->getNumT())};
+                    ::openPMD::Extent extent_y = {1, static_cast<unsigned long int>(helper->getSizeY()), 1};
                     ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
                     yMRC.resetDataset(dataset_y);
                 

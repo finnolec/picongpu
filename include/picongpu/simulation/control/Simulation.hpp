@@ -536,11 +536,6 @@ namespace picongpu
          */
         void runOneStep(uint32_t currentStep) override
         {
-            printf("%d ", currentStep);
-            if(currentStep % 100 == 0)
-            {
-                printf("\n");
-            }
             using namespace simulation::stage;
 
             IterationStart{}(currentStep);
