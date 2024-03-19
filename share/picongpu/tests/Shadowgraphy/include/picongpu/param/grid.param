@@ -1,4 +1,4 @@
-/* Copyright 2013-2023 Axel Huebl, Rene Widera, Benjamin Worpitz, Sergei Bastrakov
+/* Copyright 2013-2022 Axel Huebl, Rene Widera, Benjamin Worpitz, Sergei Bastrakov
  *
  * This file is part of PIConGPU.
  *
@@ -17,28 +17,6 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file
- *
- * Definition of cell sizes and time step. Our cells are defining a regular,
- * cartesian grid. Our explicit FDTD field solvers require an upper bound for
- * the time step value in relation to the cell size for convergence. Make
- * sure to resolve important wavelengths of your simulation, e.g. shortest
- * plasma wavelength, Debye length and central laser wavelength both spatially
- * and temporarily.
- *
- * **Units in reduced dimensions**
- *
- * In 2D3V simulations, the CELL_DEPTH_SI (Z) cell length
- * is still used for normalization of densities, etc..
- *
- * A 2D3V simulation in a cartesian PIC simulation such as
- * ours only changes the degrees of freedom in motion for
- * (macro) particles and all (field) information in z
- * travels instantaneously, making the 2D3V simulation
- * behave like the interaction of infinite "wire particles"
- * in fields with perfect symmetry in Z.
- *
- */
 
 #pragma once
 
@@ -54,47 +32,20 @@ namespace picongpu
          *  the simulation area, not located outside of it as in the book.
          */
 
-        constexpr float_64 CELL_SIZE_SI = 1.0e-3; // 1 mm
-
         /** equals X
          *  unit: meter */
-        constexpr float_64 CELL_WIDTH_SI = CELL_SIZE_SI;
+        constexpr float_64 CELL_WIDTH_SI = 40e-8;
         /** equals Y
          *  unit: meter */
-        constexpr float_64 CELL_HEIGHT_SI = CELL_WIDTH_SI;
+        constexpr float_64 CELL_HEIGHT_SI = 40e-8;
         /** equals Z
-         *  unit: meter */
-        constexpr float_64 CELL_DEPTH_SI = CELL_WIDTH_SI;
-
-        /** Additional CFL factor compared to the Yee solver.
-         *
-         * Has to be set for ArbitraryOrderFDTD to be >= its additional factor (see table in readthedocs).
-         * Otherwise the configuration would violate the CFL
-         */
-#ifndef PARAM_CFLFACTOR
-#    define SELECTED_CFL_FACTOR 1.0
-#else
-#    define SELECTED_CFL_FACTOR PARAM_CFLFACTOR
-#endif
+         *  unit: meter
+         * resolves the pulse wavelength 40 times */
+        constexpr float_64 CELL_DEPTH_SI = 2e-8;
 
         /** Duration of one timestep is just below the CFL limit
-         *  unit: seconds */
-        constexpr float_64 CFL_RATIO = 0.999 / SELECTED_CFL_FACTOR;
-        constexpr float_64 SQRT_3 = 1.73205080757;
-        constexpr float_64 DELTA_T_SI = CFL_RATIO * CELL_SIZE_SI / (SPEED_OF_LIGHT_SI * SQRT_3);
-
-        /** Note on units in reduced dimensions
-         *
-         * In 2D3V simulations, the CELL_DEPTH_SI (Z) cell length
-         * is still used for normalization of densities, etc.
-         *
-         * A 2D3V simulation in a cartesian PIC simulation such as
-         * ours only changes the degrees of freedom in motion for
-         * (macro) particles and all (field) information in z
-         * travels instantaneously, making the 2D3V simulation
-         * behave like the interaction of infinite "wire particles"
-         * in fields with perfect symmetry in Z.
-         */
+         *  unit: seconds */`
+        constexpr float_64 DELTA_T_SI = 6.621392653093993e-17;
 
     } // namespace SI
 } // namespace picongpu

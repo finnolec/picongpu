@@ -34,13 +34,13 @@ fi
 
 help()
 {
-  echo "Validate field absorber test output data."
+  echo "Validate shadowgraphy plugin output data."
   echo ""
   echo "Usage:"
   echo "    validate.sh [-d dataPath] [inputSetPath]"
   echo ""
   echo "  -d | --data dataPath                 - path to simulation output data"
-  echo "                                         Default: inputPath/simOutput/simData_%T.h5"
+  echo "                                         Default: inputPath/simOutput/shadowgraphy_%T.bp"
   echo "  -h | --help                          - show help"
 }
 
@@ -71,10 +71,10 @@ while true ; do
     shift
 done
 
-MAINTEST="./lib/python/test/FieldAbsorber"
+MAINTEST="./lib/python/test/Shadowgraphy"
 
 if [ -z "$dataPath" ]; then
-    dataPath="$( dirname -- "${currentDir}" )/simOutput/openPMD/"
+    dataPath="$( dirname -- "${currentDir}" )/simOutput/"
     if [ ! -d "$dataPath" ]; then
         echo "Directory $dataPath not existent."
         echo "Please provide path to data with option -d!"
@@ -88,11 +88,11 @@ test_return=$?
 
 if [ ! -z $picongpuPrefix ]; then
     if [ $test_return -ne 0 ]; then
-        echo -e $testSuite`echo_r "Absorbing boundaries have bad performance!"`
-        echo -e $testSuite`echo_r "Check absorbing boundaries implementation!"`
+        echo -e $testSuite`echo_r "Shadowgraphy plugin has bad performance!"`
+        echo -e $testSuite`echo_r "Check shadowgraphy plugin implementation!"`
         echo -e $testSuite"`thumbs_down`"
     else
-        echo -e $testSuite`echo_g "Absorbing boundaries implementation successfully validated!"`
+        echo -e $testSuite`echo_g "Shadowgraphy plugin implementation successfully validated!"`
         echo -e $testSuite"`thumbs_up`"
     fi
 fi

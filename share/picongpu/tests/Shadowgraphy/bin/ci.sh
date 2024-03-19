@@ -80,38 +80,19 @@ mkdir -p $simPath
 # use absolut path's
 simPath=$(absolute_path $simPath)
 
-for i in {0..1}; do
-  ## i=0: build and run the small volume 60x60x60 sim w/ absorbers
-  ## i=1: build and run the large volume 1060x1060x1060 reference simulation
-  pic-build -t $i
-  ret_build=$?
+pic-build
+ret_build=$?
 
-  if [ $ret_build -eq 0 ] ; then
-    cd $simPath
-    echo "Run setup ${i}!"
-    if [ $i -eq 0 ]; then
-      # make sure that the grid size along z matches
-      # the grid size along z of the reference simulation below
-      mpiexec -n 1 ../bin/picongpu -d 1 1 1 -g 60 60 660 --periodic 0 0 1 -s 600 \
-        --fields_energy.period 10 \
-        --openPMD.period 100 --openPMD.ext bp --openPMD.file simData_test
-
-    elif [ $i -eq 1 ]; then
-      # match the grid size with the grid size defined in `flags[1]` of cmakeFlags
-      mpiexec -n 1 ../bin/picongpu -d 1 1 1 -g 660 660 660 --periodic 0 0 1 -s 600 \
-        --fields_energy.period 10 \
-        --openPMD.period 100 --openPMD.ext bp --openPMD.file simData_ref
-
-    else
-      echo "There should be no values for i other than 0,1"
-    fi
-
-    cd ..
-  fi
-done
+if [ $ret_build -eq 0 ] ; then
+  cd $simPath
+  echo "Run shadowgraphy simulation"
+  mpiexec -n 1 ../bin/picongpu -d 1 1 1 -g 208 208 64 -s 1415 \
+    --shadowgraphy.start 1075 --shadowgraphy.file shadowgraphy --shadowgraphy.slicePoint 0.5 \
+    --shadowgraphy.focusPos 0 --shadowgraphy.duration 330 --shadowgraphy.fourierOutput true
+  cd ..
+fi
 
 dataPath=$(absolute_path "$simPath/openPMD")
-
 
 #################################
 ## validate simulation results ##

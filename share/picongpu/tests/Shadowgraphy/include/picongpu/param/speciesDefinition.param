@@ -1,4 +1,5 @@
-/* Copyright 2013-2023 Rene Widera, Benjamin Worpitz, Heiko Burau
+/* Copyright 2013-2022 Rene Widera, Marco Garten, Richard Pausch,
+ *                     Benjamin Worpitz, Axel Huebl
  *
  * This file is part of PIConGPU.
  *
@@ -17,19 +18,6 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file
- *
- * Define particle species.
- *
- * This file collects all previous declarations of base (reference) quantities
- * and configured solvers for species and defines particle species. This
- * includes "attributes" (lvalues to store with each species) and "flags"
- * (rvalues & aliases for solvers to perform with the species for each timestep
- * and ratios to base quantities). With those information, a `Particles` class
- * is defined for each species and then collected in the list
- * `VectorAllSpecies`.
- */
-
 #pragma once
 
 #include "picongpu/simulation_defines.hpp"
@@ -42,6 +30,7 @@
 #include <pmacc/particles/Identifier.hpp>
 #include <pmacc/particles/traits/FilterByFlag.hpp>
 
+
 namespace picongpu
 {
     /*########################### define particle attributes #####################*/
@@ -49,56 +38,7 @@ namespace picongpu
     /** describe attributes of a particle*/
     using DefaultParticleAttributes = MakeSeq_t<position<position_pic>, momentum, weighting>;
 
-    /*########################### end particle attributes ########################*/
-
-    /*########################### define species #################################*/
-
-    /*--------------------------- electrons --------------------------------------*/
-
-    /* ratio relative to BASE_CHARGE and BASE_MASS */
-    value_identifier(float_X, MassRatioElectrons, 1.0);
-    value_identifier(float_X, ChargeRatioElectrons, 1.0);
-
-    using ParticleFlagsElectrons = MakeSeq_t<
-        particlePusher<UsedParticlePusher>,
-        shape<UsedParticleShape>,
-        interpolation<UsedField2Particle>,
-        current<UsedParticleCurrentSolver>,
-        massRatio<MassRatioElectrons>,
-        chargeRatio<ChargeRatioElectrons>>;
-
-    /* define species electrons */
-    using PIC_Electrons = Particles<PMACC_CSTRING("e"), ParticleFlagsElectrons, DefaultParticleAttributes>;
-
-    /*--------------------------- ions -------------------------------------------*/
-
-    /* ratio relative to BASE_CHARGE and BASE_MASS */
-    value_identifier(float_X, MassRatioIons, 1836.152672);
-    value_identifier(float_X, ChargeRatioIons, -1.0);
-
-    /* ratio relative to BASE_DENSITY */
-    value_identifier(float_X, DensityRatioIons, 1.0);
-
-    using ParticleFlagsIons = MakeSeq_t<
-        particlePusher<UsedParticlePusher>,
-        shape<UsedParticleShape>,
-        interpolation<UsedField2Particle>,
-        current<UsedParticleCurrentSolver>,
-        massRatio<MassRatioIons>,
-        chargeRatio<ChargeRatioIons>,
-        densityRatio<DensityRatioIons>,
-        atomicNumbers<ionization::atomicNumbers::Hydrogen_t>>;
-
-    /* define species ions */
-    using PIC_Ions = Particles<PMACC_CSTRING("i"), ParticleFlagsIons, DefaultParticleAttributes>;
-
-    /*########################### end species ####################################*/
-
-    /** All known particle species of the simulation
-     *
-     * List all defined particle species from above in this list
-     * to make them available to the PIC algorithm.
-     */
-    using VectorAllSpecies = pmacc::mp_list<>;
+    using VectorAllSpecies = MakeSeq_t<
+        >;
 
 } // namespace picongpu
