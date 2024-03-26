@@ -44,7 +44,7 @@ namespace picongpu
         constexpr float_64 CELL_DEPTH_SI = 2e-8;
 
         /** Duration of one timestep is just below the CFL limit
-         *  unit: seconds */`
+         *  unit: seconds */
         constexpr float_64 DELTA_T_SI = 6.621392653093993e-17;
 
     } // namespace SI

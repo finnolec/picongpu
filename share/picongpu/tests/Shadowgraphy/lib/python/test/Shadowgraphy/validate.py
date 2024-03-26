@@ -6,11 +6,13 @@ Authors: Klaus Steiniger, Finn-Ole Carstens
 License: GPLv3+
 """
 
+import itertools
 import sys
+
 import numpy as np
 import openpmd_api as io
 import scipy.constants as const
-import itertools
+import scipy.optimize as optimize
 
 def gauss(x, amplitude, sigma, mean):
     """Gaussian function
@@ -41,13 +43,12 @@ def test_deviation(val_simulation, val_theory, thresh, parameter_name):
         print(f"{parameter_name} failed the test with {val_simulation:.5e} compared to {val_theory:.5e}")
         return False
     
-
 def main(path):
     """ Evaluate shadowgraphy plugin performance
 
         path: Path to simulation output
     """
-    ret_value = True
+    test_results = {}
 
     # Test parameters
     energy_thresh = 0.01
@@ -83,7 +84,7 @@ def main(path):
     focus_y = ny * dy
 
     # Bandwidth in theory
-    bandwidth_sigma_intensity = 2 * np.pi * 0.441 / tau0 # for Gaussian pulses
+    bandwidth_sigma_intensity = 2 * np.pi * 0.441 / tau # for Gaussian pulses
     bandwidth_theory = bandwidth_sigma_intensity * np.sqrt(2) # intensity -> field
 
     #########################################
@@ -91,7 +92,7 @@ def main(path):
     #########################################
 
     # Load data from simulation
-    series = io.Series(path + "/shadowgraphy_" + "%T." + "bp", io.Access.read_only)
+    series = io.Series(path + "/shadowgraphy_" + "%T." + "bp5", io.Access.read_only)
     i = series.iterations[[i for i in series.iterations][0]]
 
     chunkdata = i.meshes["shadowgram"][io.Mesh_Record_Component.SCALAR].load_chunk()
@@ -115,7 +116,7 @@ def main(path):
 
     # Test energy in shadowgram
     energy_shadowgram = np.sum(shadowgram) * dx * dy
-    ret_value = ret_value and test_deviation(energy_shadowgram, energy_theory, 0.01, "Energy")
+    test_results["Energy"] = test_deviation(energy_shadowgram, energy_theory, 0.01, "Energy")
 
     # Find position of maximum for lineouts
     max_position = np.unravel_index(np.argmax(shadowgram.transpose()), shadowgram.transpose().shape)
@@ -128,8 +129,8 @@ def main(path):
     poptx, pcovx = optimize.curve_fit(gauss, xdata, 
             shadowgram_x_lineout, bounds=xbounds)
 
-    ret_value = ret_value and test_deviation(poptx[1], w0, 0.01, "w0_x")
-    ret_value = ret_value and test_deviation(poptx[2], focus_x, 0.01, "pos_x")
+    test_results["w0_x"] =  test_deviation(poptx[1], w0, 0.01, "w0_x")
+    test_results["pos_x"] =  test_deviation(poptx[2], focus_x, 0.01, "pos_x")
 
     # Test y lineout of shadowgram
     ydata = yspace[:,0]
@@ -139,8 +140,8 @@ def main(path):
     popty, pcovy = optimize.curve_fit(gauss, ydata, 
             shadowgram_y_lineout, bounds=ybounds)
 
-    ret_value = ret_value and test_deviation(popty[1], w0, 0.01, "w0_y")
-    ret_value = ret_value and test_deviation(popty[2], focus_y, 0.01, "pos_y")
+    test_results["w0_y"] = test_deviation(popty[1], w0, 0.01, "w0_y")
+    test_results["pos_y"] = test_deviation(popty[2], focus_y, 0.01, "pos_y")
 
     #########################################
     ###### Calculate Fourier properties #####
@@ -148,11 +149,11 @@ def main(path):
     possible_signs = ["positive", "negative"]
     possible_fields = ["Ex", "Ey", "Bx", "By"]
     for sf in itertools.product(possible_signs, possible_fields):
-        series = io.Series(path + "/simOutput/shadowgraphy_fourierdata_" + "%T." + "bp", io.Access.read_only)
+        series = io.Series(path + "/shadowgraphy_fourierdata_" + "%T." + "bp5", io.Access.read_only)
         i = series.iterations[[i for i in series.iterations][0]]
 
-        chunkdata = i.meshes[f"Fourier Domain Fields - {sf[1]}"][sf[0]].load_chunk()
-        unit = i.meshes[f"Fourier Domain Fields - {sf[1]}"][sf[0]].get_attribute("unitSI")
+        chunkdata = i.meshes[f"Fourier Domain Fields - {sf[0]}"][sf[1]].load_chunk()
+        unit = i.meshes[f"Fourier Domain Fields - {sf[0]}"][sf[1]].get_attribute("unitSI")
         series.flush()
 
         fourier_field_raw = chunkdata * unit
@@ -168,7 +169,7 @@ def main(path):
         omegaspace_raw = i.meshes["Fourier Transform Frequencies"]["omegas"].load_chunk()
         omegaunit = i.meshes["Fourier Transform Frequencies"]["omegas"].get_attribute("unitSI")
 
-        if sf[1] == "positive":
+        if sf[0] == "positive":
             omegaspace = omegaspace_raw[len(omegaspace_raw)//2:]
         else:
             omegaspace = omegaspace_raw[:len(omegaspace_raw)//2]
@@ -188,22 +189,28 @@ def main(path):
             fourier_field.shape)
 
         odata = omegaspace[:,0,0]
+        print(odata)
+        print(sf[0])
+        print(sf[1])
         fourier_field_lineout = fourier_field[:,max_position[1],max_position[2]]
-
+        
         if sf[0] == "positive":
             fit_bounds = [[0, domega/100, min(odata)], [1e40, max(odata), max(odata)]]
         else:
             fit_bounds = [[0, np.abs(domega)/100, min(odata)], [1e40, max(np.abs(odata)), max(odata)]]
-
+        print(sf, flush=True)
+        print(fit_bounds, flush=True)
+    
         popt, pcov = optimize.curve_fit(
             gauss, odata, fourier_field_lineout, 
             bounds=fit_bounds)
 
-        ret_value = ret_value and test_deviation(popt[1], bandwidth_theory, 0.01, f"[{field}-{sign}] bandwidth")
-        ret_value = ret_value and test_deviation(popt[2], omega, 0.01, f"[{field}-{sign}] omega")
-
-
-    sys.exit(retValue)
+        test_results[f"[{sf[1]}-{sf[0]}] bandwidth"] = test_deviation(popt[1], bandwidth_theory, 0.01, f"[{sf[1]}-{sf[0]}] bandwidth")
+        sign_omega = omega if (sf[0] == "positive") else -omega
+        test_results[f"[{sf[1]}-{sf[0]}] omega"] = test_deviation(popt[2], sign_omega, 0.01, f"[{sf[1]}-{sf[0]}] omega")
+    
+    ret_value = np.array([test_results[test] for test in test_results.keys()]).all()
+    sys.exit(ret_value)
 
 
 if __name__ == '__main__':
