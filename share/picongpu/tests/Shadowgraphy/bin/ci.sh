@@ -86,9 +86,9 @@ ret_build=$?
 if [ $ret_build -eq 0 ] ; then
   cd $simPath
   echo "Run shadowgraphy simulation"
-  mpiexec -n 1 ../bin/picongpu -d 1 1 1 -g 208 208 64 -s 1415 \
-    --shadowgraphy.start 1075 --shadowgraphy.file shadowgraphy --shadowgraphy.slicePoint 0.5 \
-    --shadowgraphy.focusPos 0 --shadowgraphy.duration 330 --shadowgraphy.fourierOutput true
+  mpiexec -n 1 ../bin/picongpu -d 1 1 1 -g 208 208 64 -s 1865 \
+    --shadowgraphy.start 625 --shadowgraphy.file shadowgraphy --shadowgraphy.slicePoint 0.5 \
+    --shadowgraphy.focusPos 0 --shadowgraphy.duration 1230 --shadowgraphy.fourierOutput true
   cd ..
 fi
 

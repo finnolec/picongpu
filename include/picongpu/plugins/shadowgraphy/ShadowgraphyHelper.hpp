@@ -926,7 +926,7 @@ namespace picongpu
                 }
 
 
-                 //! Return minimum omega index for trimmed arrays in omega dimension
+                 //! Return minimum omega index for trimmed arrays in omega dimensionuiae
                 int getOmegaMinIndex() const
                 {
                     float_64 const actualStep = params::tRes * SI::DELTA_T_SI;

@@ -22,9 +22,8 @@ def gauss(x, amplitude, sigma, mean):
         sigma: standard deviation
         mean: mean value
     """
-    factor = amplitude / (sigma * np.sqrt(2.0 * np.pi))
     exp = -((x - mean)**2) / (2 * sigma**2)
-    return factor * np.exp(exp)
+    return amplitude * np.exp(exp)
 
 
 def test_deviation(val_simulation, val_theory, thresh, parameter_name):
@@ -54,10 +53,12 @@ def main(path):
     energy_thresh = 0.01
     w0_thresh = 0.01
     position_thresh = 0.01
+    omega_thresh = 0.01
+    bandwidth_thresh = 0.02
 
     # Simulation parameters
     wavelength = 800e-9
-    w0 = 10e-6
+    w0 = 10e-6 # 2 times sigma
     tau = 10e-15 # sigma of intensity
     a0 = 1.0
 
@@ -80,12 +81,14 @@ def main(path):
     energy_theory = power * tau * np.sqrt(np.pi * 2)
 
     # Focus position
-    focus_x = nx * dx
-    focus_y = ny * dy
-
-    # Bandwidth in theory
-    bandwidth_sigma_intensity = 2 * np.pi * 0.441 / tau # for Gaussian pulses
-    bandwidth_theory = bandwidth_sigma_intensity * np.sqrt(2) # intensity -> field
+    focus_x = nx * dx / 2
+    focus_y = ny * dy / 2
+    
+    # Bandwidth
+    tau_fwhm_intensity = 2 * np.sqrt( 2 * np.log(2) ) * tau
+    bandwidth_fwhm_intensity = 2 * np.pi * 0.441 / tau_fwhm_intensity
+    bandwidth_sigma_intensity = bandwidth_fwhm_intensity / (2 * np.sqrt(2 * np.log(2)))
+    bandwidth_expected = bandwidth_sigma_intensity * np.sqrt(2)
 
     #########################################
     #### Calculate Shadowgram properties ####
@@ -116,7 +119,10 @@ def main(path):
 
     # Test energy in shadowgram
     energy_shadowgram = np.sum(shadowgram) * dx * dy
-    test_results["Energy"] = test_deviation(energy_shadowgram, energy_theory, 0.01, "Energy")
+    print("dx: ",dx)
+    print("dy: ", dy)
+    print("Energy: ", energy_shadowgram)
+    test_results["Energy"] = test_deviation(energy_shadowgram, energy_theory, energy_thresh, "Energy")
 
     # Find position of maximum for lineouts
     max_position = np.unravel_index(np.argmax(shadowgram.transpose()), shadowgram.transpose().shape)
@@ -125,23 +131,23 @@ def main(path):
     xdata = xspace[0,:]
     shadowgram_x_lineout = shadowgram[max_position[0], :]
 
-    xbounds = [[0, dx, np.min(xdata)], [1e10, np.max(xdata), np.max(xdata)]]
+    xbounds = [[0, dx, np.min(xdata)], [2 * np.max(shadowgram_x_lineout), np.max(xdata), np.max(xdata)]]
     poptx, pcovx = optimize.curve_fit(gauss, xdata, 
             shadowgram_x_lineout, bounds=xbounds)
 
-    test_results["w0_x"] =  test_deviation(poptx[1], w0, 0.01, "w0_x")
-    test_results["pos_x"] =  test_deviation(poptx[2], focus_x, 0.01, "pos_x")
+    test_results["w0_x"] =  test_deviation(2 * poptx[1] , w0, w0_thresh, "w0_x")
+    test_results["pos_x"] =  test_deviation(poptx[2], focus_x, position_thresh, "pos_x")
 
     # Test y lineout of shadowgram
     ydata = yspace[:,0]
     shadowgram_y_lineout = shadowgram[:, max_position[1]]
     
-    ybounds = [[0, dy, np.min(ydata)], [1e10, np.max(ydata), np.max(ydata)]]
+    ybounds = [[0, dy, np.min(ydata)], [2 * np.max(shadowgram_y_lineout), np.max(ydata), np.max(ydata)]]
     popty, pcovy = optimize.curve_fit(gauss, ydata, 
             shadowgram_y_lineout, bounds=ybounds)
 
-    test_results["w0_y"] = test_deviation(popty[1], w0, 0.01, "w0_y")
-    test_results["pos_y"] = test_deviation(popty[2], focus_y, 0.01, "pos_y")
+    test_results["w0_y"] = test_deviation(2 * popty[1], w0, w0_thresh, "w0_y")
+    test_results["pos_y"] = test_deviation(popty[2], focus_y, position_thresh, "pos_y")
 
     #########################################
     ###### Calculate Fourier properties #####
@@ -189,28 +195,23 @@ def main(path):
             fourier_field.shape)
 
         odata = omegaspace[:,0,0]
-        print(odata)
-        print(sf[0])
-        print(sf[1])
         fourier_field_lineout = fourier_field[:,max_position[1],max_position[2]]
         
         if sf[0] == "positive":
-            fit_bounds = [[0, domega/100, min(odata)], [1e40, max(odata), max(odata)]]
+            fit_bounds = [[0, domega/100, min(odata)], [2 * np.max(fourier_field_lineout), max(odata), max(odata)]]
         else:
-            fit_bounds = [[0, np.abs(domega)/100, min(odata)], [1e40, max(np.abs(odata)), max(odata)]]
-        print(sf, flush=True)
-        print(fit_bounds, flush=True)
+            fit_bounds = [[0, np.abs(domega)/100, min(odata)], [2 * np.max(fourier_field_lineout), max(np.abs(odata)), max(odata)]]
     
         popt, pcov = optimize.curve_fit(
             gauss, odata, fourier_field_lineout, 
             bounds=fit_bounds)
-
-        test_results[f"[{sf[1]}-{sf[0]}] bandwidth"] = test_deviation(popt[1], bandwidth_theory, 0.01, f"[{sf[1]}-{sf[0]}] bandwidth")
+#(x, amplitude, sigma, mean)
+        test_results[f"[{sf[1]}-{sf[0]}] bandwidth"] = test_deviation(popt[1], bandwidth_expected, bandwidth_thresh, f"[{sf[1]}-{sf[0]}] bandwidth")
         sign_omega = omega if (sf[0] == "positive") else -omega
-        test_results[f"[{sf[1]}-{sf[0]}] omega"] = test_deviation(popt[2], sign_omega, 0.01, f"[{sf[1]}-{sf[0]}] omega")
+        test_results[f"[{sf[1]}-{sf[0]}] omega"] = test_deviation(popt[2], sign_omega, omega_thresh, f"[{sf[1]}-{sf[0]}] omega")
     
     ret_value = np.array([test_results[test] for test in test_results.keys()]).all()
-    sys.exit(ret_value)
+    sys.exit(int(not ret_value))
 
 
 if __name__ == '__main__':

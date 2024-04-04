@@ -8,13 +8,13 @@
 
 
 #ifndef PARAM_TRES
-#    define PARAM_TRES 1
+#    define PARAM_TRES 4
 #endif
 #ifndef PARAM_BANDWIDTH
 #    define PARAM_BANDWIDTH 400
 #endif
 #ifndef PARAM_XRES
-#    define PARAM_XRES 1
+#    define PARAM_XRES 4
 #endif
 #ifndef PARAM_NA
 #    define PARAM_NA 0.3
