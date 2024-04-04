@@ -279,7 +279,6 @@ namespace picongpu
 
                             if(gather->isMaster() && helper == nullptr)
                             {
-                                //std::cout << "master init " << currentStep << std::endl;
                                 auto slicePoint = m_help->optionSlicePoint.get(m_id);
                                 helper = std::make_unique<Helper>(
                                     currentStep,
@@ -296,8 +295,6 @@ namespace picongpu
                         // convert currentStep (simulation time-step) into localStep for time domain DFT
                         int localStep = (currentStep - startTime) / params::tRes;
 
-                        //std::cout << "try calculate " << localStep << std::endl;
-
                         bool const dumpFinalData = localStep == (adjustedDuration / params::tRes);
                         if(!dumpFinalData)
                         {
@@ -308,7 +305,6 @@ namespace picongpu
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
                             if(gather->isMaster())
                             {
-                                //std::cout << " finish preparing global slice" << std::endl;
                                 helper->storeField<shadowgraphy::Helper::FieldType::E>(
                                     localStep,
                                     currentStep,
@@ -321,7 +317,6 @@ namespace picongpu
                                 = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
                             if(gather->isMaster())
                             {
-                                //std::cout << " finish preparing global slice" << std::endl;
                                 helper->storeField<shadowgraphy::Helper::FieldType::B>(
                                     localStep,
                                     currentStep,
@@ -337,8 +332,6 @@ namespace picongpu
                         {
                             if(gather->isMaster())
                             {
-                                //std::cout << "dump " << currentStep << std::endl;
-
                                 if(m_help->optionFourierOutput.get(m_id)){
                                     writeFourierOutputToOpenPMDFile(currentStep);
                                 }
@@ -355,8 +348,6 @@ namespace picongpu
 
                                 // delete helper and free all memory
                                 helper.reset(nullptr);
-
-                                std::cout << "shadowgraphy done" << std::endl;
                             }
                             isIntegrating = false;
                         }
@@ -403,7 +394,6 @@ namespace picongpu
                     auto sliceBuffer = std::make_shared<HostBuffer<float2_X, DIM2>>(localSliceSize);
                     auto sliceBox = sliceBuffer->getDataBox();
 
-                    //std::cout << " start loading slice" << std::endl;
                     for(int y = 0; y < localSliceSize.y(); ++y)
                         for(int x = 0; x < localSliceSize.x(); ++x)
                         {
@@ -411,7 +401,6 @@ namespace picongpu
                             DataSpace<DIM3> srcIdx(idx.x(), idx.y(), sliceCellZ);
                             sliceBox(idx) = helper->cross<T_fieldType>(inputFieldBox.shift(srcIdx));
                         }
-                    //std::cout << " end loading slice" << std::endl;
 
                     return sliceBuffer;
                 }
@@ -420,9 +409,7 @@ namespace picongpu
                 {
                     std::stringstream filename;
                     filename << m_help->optionFileName.get(m_id) << "_%T." << m_help->optionFileExtention.get(m_id);
-                    //printf("line 425\n");
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
-                    //printf("427\n");
 
                     ::openPMD::Extent extent
                         = {static_cast<unsigned long int>(helper->getSizeY()),
@@ -434,8 +421,6 @@ namespace picongpu
                     auto mesh = series.iterations[currentStep].meshes["shadowgram"];
                     mesh.setAxisLabels(std::vector<std::string>{"x", "y"});
                     mesh.setDataOrder(::openPMD::Mesh::DataOrder::F);
-                    //mesh.setGridUnitSI(UNIT_LENGTH);
-                    //mesh.setGridSpacing(std::vector<double>{cellSize[0] * params::xRes, cellSize[1] * params::yRes});
                     mesh.setGridUnitSI(1);
                     mesh.setGridSpacing(std::vector<double>{1.0, 1.0});
                     mesh.setAttribute<int>("duration", m_help->optionDuration.get(m_id));
@@ -600,8 +585,6 @@ namespace picongpu
                         std::map<::openPMD::UnitDimension, double>{
                         {::openPMD::UnitDimension::T, -1.0}});
                     ::openPMD::MeshRecordComponent omegaMRC = meshOmega["omegas"];
-                    //const picongpu::float_64 factorOmega = 1.0 / UNIT_TIME;
-                    //omegaMRC.setUnitSI(factorOmega);
                     omegaMRC.setPosition(std::vector<double>{0.0});
 
                     ::openPMD::Datatype datatype_omega = ::openPMD::determineDatatype<float_X>();

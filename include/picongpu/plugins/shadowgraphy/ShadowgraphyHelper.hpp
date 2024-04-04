@@ -104,9 +104,6 @@ namespace picongpu
                 float_X yMin;
                 float_X yStep;
 
-                //Buffer<float_X, DIM2>::DataBoxType openPMDdataBox;
-                //pmacc::DataBox<pmacc::PitchedBox<float, 2> > openPMDdataBox;
-
             public:
                 enum class FieldType : uint32_t
                 {
@@ -201,9 +198,6 @@ namespace picongpu
                         = (MovingWindow::getInstance().getWindow(currentStep).globalDimensions.offset)[1];
                     int const yTotalOffset = int(startSlideCount * globalGridSize[1] / nGpus);
 
-                    std::cout << "size vector " << pluginNumX << "x" << pluginNumY << " num omegas=" << numOmegas
-                              << std::endl;
-
                     // The total domain indices of the integration slice are constant, because the screen is not
                     // co-propagating with the moving window
 
@@ -228,7 +222,7 @@ namespace picongpu
                 template<FieldType T_fieldType, typename T_FieldDataBox>
                 float2_X cross(T_FieldDataBox field)
                 {
-                    // fix yee offset
+                    // adjust for yee offset
                     if constexpr(T_fieldType == FieldType::E)
                     {
                         return float2_X(
@@ -253,13 +247,12 @@ namespace picongpu
                     ALPAKA_UNREACHABLE(float2_X{});
                 }
 
-                /** Store fields in helper class with proper resolution and fixed Yee offset
+                /** Store fields in helper class with proper resolution
                  *
                  * @tparam F Field
                  * @param t current plugin timestep (simulation timestep - plugin start)
                  * @param currentStep current simulation timestep
                  * @param field 3D data box shifted the the local simulation origin (no guard)
-                 * @param fieldBuffer2 2D array of field at slicePos with 1 offset (to fix Yee offset)
                  */
                 template<FieldType T_fieldType, typename T_SliceBuffer>
                 void storeField(int t, int currentStep, T_SliceBuffer sliceBuffer)
@@ -296,8 +289,7 @@ namespace picongpu
                                 = masks::positionWf(i, j, pluginNumX, pluginNumY) * masks::timeWf(t, duration);
 
                             auto value = globalFieldBox(DataSpace<DIM2>{simI, simJ});
-                            //auto value = coords(i, j, currentStep, globalFieldBox);
-                            // fix yee offset
+
                             if constexpr(T_fieldType == FieldType::E)
                             {
                                 tmpEx[i][j] = UNIT_EFIELD * wf * value.x();
@@ -366,7 +358,6 @@ namespace picongpu
                         {
                             int const omegaIndex = getOmegaIndex(o);
                             float_64 const omegaSI = omega(omegaIndex);
-                            // printf("%.5e\n", omegaSI);
                             float_64 const kSI = omegaSI / float_64(SI::SPEED_OF_LIGHT_SI);
 
                             // put field into fftw array
@@ -398,33 +389,9 @@ namespace picongpu
                                     }
                                 }
                             }
-                           // if(intermediateOutputEnabled)
-                           // writeIntermediateFile(o, fieldIndex);
 
                             fftw_execute(planForward);
-
-                            // if(fourierOutputEnabled)
-                            //    writeFourierFile(o, fieldIndex, false);
-                            /*
-                                                        for(int i = 0; i < pluginNumX; ++i){
-                                                            int const iffs = (i + pluginNumX / 2) % pluginNumX;
-
-                                                            for(int j = 0; j < pluginNumY; ++j)
-                                                            {
-                                                                int const jffs = (j + pluginNumY / 2) % pluginNumY;
-
-                                                                if(i == 0){
-                                                                    std::cout << jffs << " ";
-                                                                }
-                                                            }
-
-                                                            if(i == 0){
-                                                                std::cout << std::endl;
-                                                            }
-                                                            std::cout << iffs << " ";
-                                                        }
-                                                        std::cout << std::endl;
-                            */
+ 
                             // put field into fftw array
                             for(int i = 0; i < pluginNumX; ++i)
                             {
@@ -467,9 +434,6 @@ namespace picongpu
                                     }
                                 }
                             }
-
-                            // if(fourierOutputEnabled)
-                            //    writeFourierFile(o, fieldIndex, true);
 
                             fftw_execute(planBackward);
 
@@ -526,10 +490,6 @@ namespace picongpu
                     return yMin + j * yStep;
                 }
 
-                //auto getOpenPMDdataBox() const
-                //{
-                    //return openPMDdataBox;
-                //}
 
                 auto getShadowgramBuf()
                 {
@@ -554,7 +514,7 @@ namespace picongpu
                     auto dataBox = retBufferF->getDataBox();
 
                     // The fields are split into 2 parts in the output, because the omega-domain
-                    // is not necessarily continues due to band-pass filters
+                    // is not necessarily continuous due to band-pass filters
                     vec3c * retField;
                     if(index  <= 1)
                         retField = &ExOmega;
@@ -567,21 +527,9 @@ namespace picongpu
 
                     for (int i = 0; i < getSizeX(); ++i){
                         for (int j = 0; j < getSizeY(); ++j){
-                            for (int o = 0; o < getNumOmegas() / 2; ++o){
-                                
+                            for (int o = 0; o < getNumOmegas() / 2; ++o){                                
                                 int const oSigned = ((index % 2) == 0) ? o : o + getNumOmegas()/2;
                                 dataBox({i, j, o}) = static_cast<std::complex<float_64>>((*retField)[i][j][oSigned]);
-/*
-                                if (isElectricField && isX){
-                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(ExOmega[i][j][oSigned]);
-                                } else if (isElectricField && (!isX)) {
-                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(EyOmega[i][j][oSigned]);
-                                } else if ((!isElectricField) && isX) {
-                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(BxOmega[i][j][oSigned]);
-                                } else if ((!isElectricField) && (!isX)) {
-                                    dataBox({i, j, o}) = static_cast<std::complex<float_64>>(ByOmega[i][j][oSigned]);
-                                }
-*/
                             }
                         }
                     }
@@ -644,22 +592,6 @@ namespace picongpu
                 {
                     return pluginNumX;
                 }
-/*
-                auto coords(int xIndex, int yIndex, int currentStep,  pmacc::DataBox<pmacc::PitchedBox<float, 2> > globalFieldBox) const
-                {                    
-                    //auto globalFieldBox = sliceBuffer->getDataBox();
-
-                    int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
-
-                    int const simI = fields::absorber::NUM_CELLS[0][0] + xIndex * params::xRes;
-
-                    int const simJ = fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
-                        - currentSlideCount * cellsPerGpuY + yIndex * params::yRes;
-
-
-                    return globalFieldBox(DataSpace<DIM2>{simI, simJ});
-                }
-*/
 
                 //! Get amount of shadowgram pixels in y direction
                 int getSizeY() const
@@ -672,16 +604,6 @@ namespace picongpu
                  *
                  */
                 std::string dataLabelsFieldComponent(int index) const {
-                    /*const std::string dataLabelList[] = {
-                        "Ex-negative",
-                        "Ex-positive",
-                        "Ey-negative",
-                        "Ey-positive",
-                        "Bx-negative",
-                        "Bx-positive",
-                        "By-negative",
-                        "By-positive",
-                    };*/
                     const int localIndex = index/2;
                     const std::string dataLabelList[] = {
                         "Ex",
@@ -781,7 +703,7 @@ namespace picongpu
 
 
 
-                /** Store fields in helper class with proper resolution and fixed Yee offset in (k_x, k_y,
+                /** Store fields in helper class with proper resolution in (k_x, k_y,
                  * \omega)-domain
                  *
                  * @param o omega index from trimmed array in plugin
@@ -835,7 +757,6 @@ namespace picongpu
                                 int const index = i + j * pluginNumX;
                                 int const jffs = (j + pluginNumY / 2) % pluginNumY;
                                 int const indexffs = iffs + jffs * pluginNumX;
-                                // std::cout << indexffs << " ";
                                 if(!masksApplied)
                                 {
                                     outFile << fftwOutF[indexffs][0] << "+" << fftwOutF[indexffs][1] << "j"
@@ -847,7 +768,6 @@ namespace picongpu
                                             << "\t";
                                 }
                             } // for loop over all y
-                            // std::cout << std::endl;
 
                             outFile << std::endl;
                         } // for loop over all x
@@ -862,7 +782,7 @@ namespace picongpu
                     }
                 }
 
-                /** Store fields in helper class with proper resolution and fixed Yee offset in (x, y, \omega)-domain
+                /** Store fields in helper class with proper resolution in (x, y, \omega)-domain
                  * directly after loading the field
                  *
                  * @param o omega index from trimmed array in plugin
