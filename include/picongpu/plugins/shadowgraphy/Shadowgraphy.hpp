@@ -386,10 +386,10 @@ namespace picongpu
                 {
                     auto bufferGridLayout = inputFieldBuffer->getGridLayout();
                     DataSpace<DIM2> localSliceSize
-                        = bufferGridLayout.getDataSpaceWithoutGuarding().template shrink<DIM2>(0);
+                        = bufferGridLayout.sizeWithoutGuardND().template shrink<DIM2>(0);
 
                     // skip guard cells
-                    auto inputFieldBox = inputFieldBuffer->getHostDataBox().shift(bufferGridLayout.getGuard());
+                    auto inputFieldBox = inputFieldBuffer->getHostDataBox().shift(bufferGridLayout.guardSizeND());
 
                     auto sliceBuffer = std::make_shared<HostBuffer<float2_X, DIM2>>(localSliceSize);
                     auto sliceBox = sliceBuffer->getDataBox();
@@ -432,7 +432,7 @@ namespace picongpu
 
                     // do not delete this object before dataPtr is not required anymore
                     auto data = helper->getShadowgramBuf();
-                    auto sharedDataPtr = std::shared_ptr<float_64>{data->getPointer(), [](auto const*) {}};
+                    auto sharedDataPtr = std::shared_ptr<float_64>{data->data(), [](auto const*) {}};
 
                     shadowgram.storeChunk(sharedDataPtr, offset, extent);
 
@@ -527,7 +527,7 @@ namespace picongpu
                         // do not delete this object before dataPtr is not required anymore
                         auto data = helper->getFourierBuf(i);
                         auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
-                        data->getPointer(), [](auto const*) {}};
+                        data->data(), [](auto const*) {}};
                         meshNeg[dir].setUnitSI(1.0);
                         meshNeg[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
                         ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
@@ -560,7 +560,7 @@ namespace picongpu
                         // do not delete this object before dataPtr is not required anymore
                         auto data = helper->getFourierBuf(i);
                         auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
-                        data->getPointer(), [](auto const*) {}};
+                        data->data(), [](auto const*) {}};
                         meshPos[dir].setUnitSI(1.0);
                         meshPos[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
                         ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
