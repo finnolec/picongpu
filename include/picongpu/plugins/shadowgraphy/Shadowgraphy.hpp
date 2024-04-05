@@ -89,7 +89,7 @@ namespace picongpu
                         = {"focusPos", "focus position relative to slice point [in meter]", 0.0};
                     plugins::multi::Option<bool> optionFourierOutput
                         = {"fourierOutput",
-                           "optional output: E and B fields in (kx, ky, omega) Fourier space, 1==enabled",
+                           "optional output: E and B fields in (x, y, omega) Fourier space, 1==enabled",
                            0};
                     plugins::multi::Option<bool> optionIntermediateOutput
                         = {"intermediateOutput",
@@ -121,7 +121,15 @@ namespace picongpu
 
                     void validateOptions() override
                     {
-                        ///@todo verify options
+                        PMACC_VERIFY_MSG(
+                            m_help->optionStart.get(m_id) >= 0,
+                            "Shadowgraphy: plugin must start after the simulation was started");
+                        PMACC_VERIFY_MSG(
+                            m_help->optionDuration.get(m_id) > 0,
+                            "Shadowgraphy: plugin duration must be larger than 0");
+                        PMACC_VERIFY_MSG(
+                            (m_help->optionSlicePoint.get(m_id) >= 0) && (m_help->optionSlicePoint.get(m_id) <= 1.0),
+                            "Shadowgraphy: the plugin slice point must be between 0 and 1");
                     }
 
                     size_t getNumPlugins() const override
@@ -156,8 +164,6 @@ namespace picongpu
             private:
                 MappingDesc* m_cellDescription = nullptr;
 
-                bool sliceIsOK = false;
-
                 // do not change the plane, code is only supporting a plane in z direction
                 int plane = 2;
 
@@ -170,9 +176,6 @@ namespace picongpu
 
                 std::unique_ptr<shadowgraphy::Helper> helper;
                 std::unique_ptr<shadowgraphy::GatherSlice> gather;
-
-                bool fourierOutputEnabled = false;
-                bool intermediateOutputEnabled = false;
 
                 std::shared_ptr<Help> m_help;
                 size_t m_id;
@@ -192,58 +195,40 @@ namespace picongpu
 
                 void init()
                 {
+                    validateOptions();
+
                     auto duration = m_help->optionDuration.get(m_id);
                     // adjust to be a multiple of params::tRes
                     adjustedDuration = (duration / params::tRes) * params::tRes;
                     auto startStep = m_help->optionStart.get(m_id);
                     auto slicePoint = m_help->optionSlicePoint.get(m_id);
-                    /* called when plugin is loaded, command line flags are available here
-                     * set notification period for our plugin at the PluginConnector */
-                    if(adjustedDuration > 0)
-                    {
-                        if(float_X(0.0) <= slicePoint && slicePoint < float_X(1.0))
-                        {
-                            /* in case the slice point is inside of [0.0,1.0) */
-                            sliceIsOK = true;
+                    // called when plugin is loaded, command line flags are available here
+                    // set notification period for our plugin at the PluginConnector
 
-                            /* The plugin integrates the Pointing vectors over time and must thus be called every
-                             * tRes-th time-step of the simulation until the integration is done */
-                            int lastStep = startStep + adjustedDuration;
+                    // The plugin integrates the Pointing vectors over time and must thus be called every
+                    // tRes-th time-step of the simulation until the integration is done
+                    int lastStep = startStep + adjustedDuration;
 
-                            std::string internalNotifyPeriod = std::to_string(startStep) + ":"
-                                + std::to_string(lastStep) + ":" + std::to_string(params::tRes);
+                    std::string internalNotifyPeriod = std::to_string(startStep) + ":"
+                        + std::to_string(lastStep) + ":" + std::to_string(params::tRes);
 
-                            Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
+                    Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
 
-                            const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
-                            auto globalDomain = subGrid.getGlobalDomain();
-                            auto globalPlaneExtent = globalDomain.size[plane];
-                            auto localDomain = subGrid.getLocalDomain();
+                    const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
+                    auto globalDomain = subGrid.getGlobalDomain();
+                    auto globalPlaneExtent = globalDomain.size[plane];
+                    auto localDomain = subGrid.getLocalDomain();
 
-                            auto globalPlaneIdx = globalPlaneExtent * slicePoint;
+                    auto globalPlaneIdx = globalPlaneExtent * slicePoint;
 
-                            auto isPlaneInLocalDomain = globalPlaneIdx >= localDomain.offset[plane]
-                                && globalPlaneIdx < localDomain.offset[plane] + localDomain.size[plane];
-                            if(isPlaneInLocalDomain)
-                                localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
+                    auto isPlaneInLocalDomain = globalPlaneIdx >= localDomain.offset[plane]
+                        && globalPlaneIdx < localDomain.offset[plane] + localDomain.size[plane];
+                    if(isPlaneInLocalDomain)
+                        localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
 
 
-                            gather = std::make_unique<shadowgraphy::GatherSlice>();
-                            gather->participate(isPlaneInLocalDomain);
-                        }
-                        else
-                        {
-                            /* in case the slice point is outside of [0.0,1.0) */
-                            sliceIsOK = false;
-                            std::cerr << "In the Shadowgraphy plugin the slice point"
-                                      << " (slicePoint=" << slicePoint << ") is outside of [0.0, 1.0). " << std::endl
-                                      << "The request will be ignored. " << std::endl;
-                        }
-                    }
-                    else
-                    {
-                        sliceIsOK = false;
-                    }
+                    gather = std::make_unique<shadowgraphy::GatherSlice>();
+                    gather->participate(isPlaneInLocalDomain);
                 }
 
                 void restart(uint32_t restartStep, std::string const& restartDirectory) override
@@ -270,87 +255,83 @@ namespace picongpu
                         return;
                     /* notification callback for simulation step currentStep
                      * called every notifyPeriod steps */
-                    if(sliceIsOK)
+                    // First time the plugin is called:
+                    if(isIntegrating == false)
                     {
-                        // First time the plugin is called:
-                        if(isIntegrating == false)
-                        {
-                            startTime = currentStep;
+                        startTime = currentStep;
 
-                            if(gather->isMaster() && helper == nullptr)
-                            {
-                                auto slicePoint = m_help->optionSlicePoint.get(m_id);
-                                helper = std::make_unique<Helper>(
-                                    currentStep,
-                                    slicePoint,
-                                    m_help->optionFocusPosition.get(m_id),
-                                    adjustedDuration,
-                                    m_help->optionFourierOutput.get(m_id),
-                                    m_help->optionIntermediateOutput.get(m_id));
-                            }
-                            // Create Integrator object %TODO
-                            isIntegrating = true;
+                        if(gather->isMaster() && helper == nullptr)
+                        {
+                            auto slicePoint = m_help->optionSlicePoint.get(m_id);
+                            helper = std::make_unique<Helper>(
+                                currentStep,
+                                slicePoint,
+                                m_help->optionFocusPosition.get(m_id),
+                                adjustedDuration,
+                                m_help->optionFourierOutput.get(m_id));
+                        }
+                        // Create Integrator object %TODO
+                        isIntegrating = true;
+                    }
+
+                    // Convert currentStep (simulation time-step) into localStep for time domain DFT
+                    int localStep = (currentStep - startTime) / params::tRes;
+
+                    bool const dumpFinalData = localStep == (adjustedDuration / params::tRes);
+                    if(!dumpFinalData)
+                    {
+                        DataConnector& dc = Environment<>::get().DataConnector();
+                        auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName());
+                        inputFieldBufferE->synchronize();
+                        auto sliceBufferE
+                            = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
+                        if(gather->isMaster())
+                        {
+                            helper->storeField<shadowgraphy::Helper::FieldType::E>(
+                                localStep,
+                                currentStep,
+                                sliceBufferE);
                         }
 
-                        // convert currentStep (simulation time-step) into localStep for time domain DFT
-                        int localStep = (currentStep - startTime) / params::tRes;
-
-                        bool const dumpFinalData = localStep == (adjustedDuration / params::tRes);
-                        if(!dumpFinalData)
+                        auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName());
+                        inputFieldBufferB->synchronize();
+                        auto sliceBufferB
+                            = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
+                        if(gather->isMaster())
                         {
-                            DataConnector& dc = Environment<>::get().DataConnector();
-                            auto inputFieldBufferE = dc.get<FieldE>(FieldE::getName());
-                            inputFieldBufferE->synchronize();
-                            auto sliceBufferE
-                                = getGlobalSlice<shadowgraphy::Helper::FieldType::E>(inputFieldBufferE, localPlaneIdx);
-                            if(gather->isMaster())
-                            {
-                                helper->storeField<shadowgraphy::Helper::FieldType::E>(
-                                    localStep,
-                                    currentStep,
-                                    sliceBufferE);
-                            }
-
-                            auto inputFieldBufferB = dc.get<FieldB>(FieldB::getName());
-                            inputFieldBufferB->synchronize();
-                            auto sliceBufferB
-                                = getGlobalSlice<shadowgraphy::Helper::FieldType::B>(inputFieldBufferB, localPlaneIdx);
-                            if(gather->isMaster())
-                            {
-                                helper->storeField<shadowgraphy::Helper::FieldType::B>(
-                                    localStep,
-                                    currentStep,
-                                    sliceBufferB);
-                            }
-
-                            if(gather->isMaster())
-                            {
-                                helper->calculate_dft(localStep);
-                            }
+                            helper->storeField<shadowgraphy::Helper::FieldType::B>(
+                                localStep,
+                                currentStep,
+                                sliceBufferB);
                         }
-                        else
+
+                        if(gather->isMaster())
                         {
-                            if(gather->isMaster())
-                            {
-                                if(m_help->optionFourierOutput.get(m_id)){
-                                    writeFourierOutputToOpenPMDFile(currentStep);
-                                }
-
-                                helper->propagateFieldsAndCalculateShadowgram();
-
-                                std::ostringstream filename;
-                                filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
-                                         << ".dat";
-
-                                writeFile(helper->getShadowgram(), filename.str());
-
-                                writeToOpenPMDFile(currentStep);
-
-                                // delete helper and free all memory
-                                helper.reset(nullptr);
-                            }
-                            isIntegrating = false;
+                            helper->computeDFT(localStep);
                         }
+                    }
+                    else
+                    {
+                        if(gather->isMaster())
+                        {
+                            if(m_help->optionFourierOutput.get(m_id)){
+                                writeFourierOutputToOpenPMDFile(currentStep);
+                            }
+
+                            helper->propagateFieldsAndCalculateShadowgram();
+
+                            std::ostringstream filename;
+                            filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
+                                        << ".dat";
+
+                            writeFile(helper->getShadowgram(), filename.str());
+
+                            writeToOpenPMDFile(currentStep);
+
+                            // delete helper and free all memory
+                            helper.reset(nullptr);
+                        }
+                        isIntegrating = false;
                     }
                 }
 
@@ -405,6 +386,7 @@ namespace picongpu
                     return sliceBuffer;
                 }
 
+                //! Write shadowgram to openPMD file
                 void writeToOpenPMDFile(uint32_t currentStep)
                 {
                     std::stringstream filename;
@@ -430,7 +412,7 @@ namespace picongpu
                     auto shadowgram = mesh[::openPMD::RecordComponent::SCALAR];
                     shadowgram.resetDataset(dataset);
 
-                    // do not delete this object before dataPtr is not required anymore
+                    // Do not delete this object before dataPtr is not required anymore
                     auto data = helper->getShadowgramBuf();
                     auto sharedDataPtr = std::shared_ptr<float_64>{data->data(), [](auto const*) {}};
 
@@ -461,7 +443,7 @@ namespace picongpu
                     ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
                     xMRC.resetDataset(dataset_x);
                 
-                    // write actual data
+                    // Write actual data
                     ::openPMD::Offset offset_x = {0};
                     xMRC.storeChunk(xs, offset_x, extent_x);
 
@@ -479,7 +461,7 @@ namespace picongpu
                     ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
                     yMRC.resetDataset(dataset_y);
                 
-                    // write actual data
+                    // Write actual data
                     ::openPMD::Offset offset_y = {0};
                     yMRC.storeChunk(ys, offset_y, extent_y);
                     
@@ -487,6 +469,7 @@ namespace picongpu
                     series.iterations[currentStep].close();
                 }
 
+                //! Write Fourier output to openPMD file
                 void writeFourierOutputToOpenPMDFile(uint32_t currentStep)
                 {
                     std::stringstream filename;
@@ -513,7 +496,7 @@ namespace picongpu
                         {::openPMD::UnitDimension::T, -3.0},
                         {::openPMD::UnitDimension::I, -1.0}});
                     
-                    // reshape abstract MeshRecordComponent
+                    // Reshape abstract MeshRecordComponent
                     ::openPMD::Datatype datatype = ::openPMD::determineDatatype<std::complex<float_64>>();
                     ::openPMD::Extent extent 
                             = {static_cast<unsigned long int>(helper->getNumOmegas() / 2),
@@ -521,10 +504,10 @@ namespace picongpu
                            static_cast<unsigned long int>(helper->getSizeX())}; 
                     ::openPMD::Offset offset = {0, 0, 0};
 
-                    // go through all 8 different fields components
+                    // Go through all 8 different fields components
                     for(int i=0; i<8; i+=2){
                         std::string dir = helper->dataLabelsFieldComponent(i);
-                        // do not delete this object before dataPtr is not required anymore
+                        // Do not delete this object before dataPtr is not required anymore
                         auto data = helper->getFourierBuf(i);
                         auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
                         data->data(), [](auto const*) {}};
@@ -569,7 +552,6 @@ namespace picongpu
                         series.flush();
                     }
 
-                    //series.flush();
                     auto omegas = std::vector<float_X>(helper->getNumOmegas());
                     for(int i = 0; i < helper->getNumOmegas(); ++i){
                         omegas[i] = helper->omega(helper->getOmegaIndex(i));
@@ -592,7 +574,7 @@ namespace picongpu
                     ::openPMD::Dataset dataset_omega = ::openPMD::Dataset(datatype_omega, extent_omega);
                     omegaMRC.resetDataset(dataset_omega);
                 
-                    // write actual data
+                    // Write actual data
                     ::openPMD::Offset offset_omega = {0};
                     omegaMRC.storeChunk(omegas, offset_omega, extent_omega);
 
@@ -621,7 +603,7 @@ namespace picongpu
                     ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
                     xMRC.resetDataset(dataset_x);
                 
-                    // write actual data
+                    // Write actual data
                     ::openPMD::Offset offset_x = {0};
                     xMRC.storeChunk(xs, offset_x, extent_x);
 
@@ -639,7 +621,7 @@ namespace picongpu
                     ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
                     yMRC.resetDataset(dataset_y);
                 
-                    // write actual data
+                    // Write actual data
                     ::openPMD::Offset offset_y = {0};
                     yMRC.storeChunk(ys, offset_y, extent_y);
                     

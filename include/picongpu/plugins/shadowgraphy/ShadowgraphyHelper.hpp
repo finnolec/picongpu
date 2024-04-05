@@ -83,6 +83,12 @@ namespace picongpu
                 int pluginNumX, pluginNumY;
                 int numOmegas;
 
+                float_X xMin;
+                float_X xStep;
+                float_X yMin;
+                float_X yStep;
+
+                // Variables to adjust window size for moving windows
                 int yTotalMinIndex;
                 int cellsPerGpuY;
                 bool isSlidingWindowActive;
@@ -95,14 +101,8 @@ namespace picongpu
                 float_X propagationDistance;
 
                 bool fourierOutputEnabled;
-                bool intermediateOutputEnabled;
 
                 bool initializedDataBox = false;
-
-                float_X xMin;
-                float_X xStep;
-                float_X yMin;
-                float_X yStep;
 
             public:
                 enum class FieldType : uint32_t
@@ -119,34 +119,29 @@ namespace picongpu
                  * @param focusPos focus position of lens system, e.g. the propagation distance of the vacuum
                  * propagator
                  * @param duration duration of time extraction in simulation time steps
+                 * @param fourierOutputEnabled whether to output the fourier transform of the fields
                  */
                 Helper(
                     int currentStep,
                     float_X slicePoint,
                     float_X focusPos,
                     int duration,
-                    bool fourierOutputEnabled,
-                    bool intermediateOutputEnabled)
+                    bool fourierOutputEnabled)
                     : duration(duration)
                     , fourierOutputEnabled(fourierOutputEnabled)
-                    , intermediateOutputEnabled(intermediateOutputEnabled)
                 {
                     dt = params::tRes * SI::DELTA_T_SI;
                     pluginNumT = duration / params::tRes;
-
                     numOmegas = getNumOmegas();
 
                     propagationDistance = focusPos;
 
                     const SubGrid<simDim>& subGrid = Environment<simDim>::get().SubGrid();
-
                     pmacc::math::Size_t<simDim> globalGridSize = subGrid.getGlobalDomain().size;
 
                     pmacc::GridController<simDim>& con = pmacc::Environment<simDim>::get().GridController();
                     int const nGpus = con.getGpuNodes()[1];
                     cellsPerGpuY = int(globalGridSize[1] / nGpus);
-
-                    pluginNumX = globalGridSize[0] / params::xRes - 2;
 
                     int const startSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
 
@@ -180,9 +175,11 @@ namespace picongpu
                         slidingWindowCorrection = 0.0;
                     }
 
+                    pluginNumX = globalGridSize[0] / params::xRes;
+
                     // @todo Why '-2'??????
                     pluginNumY = math::floor(
-                        (yWindowSize - slidingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::yRes) -2);
+                        (yWindowSize - slidingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::yRes));
 
                     // Don't use fields inside the field absorber
                     pluginNumX
@@ -194,13 +191,13 @@ namespace picongpu
                     pluginNumX = pluginNumX % 2 == 0 ? pluginNumX : pluginNumX - 1;
                     pluginNumY = pluginNumY % 2 == 0 ? pluginNumY : pluginNumY - 1;
 
+                    // Offsets for the moving window
                     int const yGlobalOffset
                         = (MovingWindow::getInstance().getWindow(currentStep).globalDimensions.offset)[1];
                     int const yTotalOffset = int(startSlideCount * globalGridSize[1] / nGpus);
 
                     // The total domain indices of the integration slice are constant, because the screen is not
                     // co-propagating with the moving window
-
                     yTotalMinIndex
                         = yTotalOffset + yGlobalOffset + math::floor(slidingWindowCorrection / SI::CELL_HEIGHT_SI);
 
@@ -219,18 +216,29 @@ namespace picongpu
                 }
 
 
+                /** Compute cross product of a field
+                 *
+                 * @tparam T_fieldType Field type (E or B)
+                 * @tparam T_FieldDataBox Field data box type
+                 *
+                 * @param field Field data box
+                 *
+                 * @return Cross product of the field
+                 */
                 template<FieldType T_fieldType, typename T_FieldDataBox>
                 float2_X cross(T_FieldDataBox field)
                 {
-                    // adjust for yee offset
+                    // Adjust for Yee offset
                     if constexpr(T_fieldType == FieldType::E)
                     {
+                        // Calculate cross product of electric field at (0, 0, 0)
                         return float2_X(
                             (field(DataSpace<DIM3>(0, 0, 0)).x() + field(DataSpace<DIM3>(-1, 0, 0)).x()) / 2.0_X,
                             (field(DataSpace<DIM3>(0, 0, 0)).y() + field(DataSpace<DIM3>(0, -1, 0)).y()) / 2.0_X);
                     }
                     else if constexpr(T_fieldType == FieldType::B)
                     {
+                        // Calculate cross product of magnetic field at (0, 0, 0)
                         return float2_X(
                             (field(DataSpace<DIM3>(0, 0, 0)).x() + field(DataSpace<DIM3>(0, -1, 0)).x()
                              + field(DataSpace<DIM3>(0, 0, -1)).x() + field(DataSpace<DIM3>(0, -1, -1)).x())
@@ -249,10 +257,12 @@ namespace picongpu
 
                 /** Store fields in helper class with proper resolution
                  *
-                 * @tparam F Field
+                 * @tparam T_fieldType Field type (E or B)
+                 * @tparam T_SliceBuffer 3D data box type
+                 * 
                  * @param t current plugin timestep (simulation timestep - plugin start)
                  * @param currentStep current simulation timestep
-                 * @param field 3D data box shifted the the local simulation origin (no guard)
+                 * @param sliceBuffer 3D data box shifted to the local simulation origin (no guard)
                  */
                 template<FieldType T_fieldType, typename T_SliceBuffer>
                 void storeField(int t, int currentStep, T_SliceBuffer sliceBuffer)
@@ -261,17 +271,11 @@ namespace picongpu
                     int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
                     if(!initializedDataBox){
                         xMin = fields::absorber::NUM_CELLS[0][0] * SI::CELL_WIDTH_SI;
-                        yMin = (fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex
-                                - currentSlideCount * cellsPerGpuY) * SI::CELL_HEIGHT_SI;
+                        yMin = (fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex) * SI::CELL_HEIGHT_SI;
 
                         xStep = params::xRes * SI::CELL_WIDTH_SI;
                         yStep = params::yRes * SI::CELL_HEIGHT_SI;
                         initializedDataBox = true;
-                        //printf();
-                        printf("xstep: %.5e\n", xStep);
-                        printf("ystep: %.5e\n", yStep);
-                        printf("xMin: %.5e\n", xMin);
-                        printf("yMin: %.5e\n", yMin);
                     }
 
 
@@ -304,13 +308,11 @@ namespace picongpu
                     }
                 }
 
-                /** Time domain window function that will be multiplied with the electric and magnetic fields
-                 * in time-position domain to reduce ringing artifacts in the omega domain after the DFT.
-                 * The implemented window function is a Tukey-Window with sinusoidal slopes.
+                /** Calculate Discrete Fourier Transform (DFT) from time domain to omega domain.
                  *
                  * @param t timestep from 0 to t_n
                  */
-                void calculate_dft(int t)
+                void computeDFT(int t)
                 {
                     float_64 const tSI = t * int(params::tRes) * float_64(picongpu::SI::DELTA_T_SI);
 
@@ -344,7 +346,7 @@ namespace picongpu
                  */
                 void propagateFieldsAndCalculateShadowgram()
                 {
-                    init_fftw();
+                    initFFTW();
 
                     // Arrays for propagated fields
                     auto ExOmegaPropagated = vec3c(pluginNumX, vec2c(pluginNumY, vec1c(numOmegas)));
@@ -360,7 +362,7 @@ namespace picongpu
                             float_64 const omegaSI = omega(omegaIndex);
                             float_64 const kSI = omegaSI / float_64(SI::SPEED_OF_LIGHT_SI);
 
-                            // put field into fftw array
+                            // Put field into fftw array
                             for(int i = 0; i < pluginNumX; ++i)
                             {
                                 for(int j = 0; j < pluginNumY; ++j)
@@ -392,7 +394,7 @@ namespace picongpu
 
                             fftw_execute(planForward);
  
-                            // put field into fftw array
+                            // Put field into fftw array
                             for(int i = 0; i < pluginNumX; ++i)
                             {
                                 // Put origin into center of array with this, necessary due to FFT
@@ -437,7 +439,7 @@ namespace picongpu
 
                             fftw_execute(planBackward);
 
-                            // yoink fields from fftw array
+                            // Yoink fields from fftw array
                             for(int i = 0; i < pluginNumX; ++i)
                             {
                                 for(int j = 0; j < pluginNumY; ++j)
@@ -469,9 +471,9 @@ namespace picongpu
                         }
                     }
 
-                    calculate_shadowgram(ExOmegaPropagated, EyOmegaPropagated, BxOmegaPropagated, ByOmegaPropagated);
+                    computeShadowgram(ExOmegaPropagated, EyOmegaPropagated, BxOmegaPropagated, ByOmegaPropagated);
 
-                    free_fftw();
+                    freeFFTW();
                 }
 
                 //! Get shadowgram as a 2D image
@@ -480,17 +482,19 @@ namespace picongpu
                     return shadowgram;
                 }
 
+                //! Get x coordinate in SI units for openPMD output
                 float_X getX(int i) const
                 {
                     return xMin + i * xStep;
                 }
 
+                //! Get y coordinate in SI units for openPMD output
                 float_X getY(int j) const
                 {
                     return yMin + j * yStep;
                 }
 
-
+                //! Return Shadowgram buffer for openPMD output
                 auto getShadowgramBuf()
                 {
                     auto retBuffer
@@ -508,6 +512,20 @@ namespace picongpu
                     return retBuffer;
                 }
 
+                /** Return Fourier domain buffer for openPMD output
+                 *
+                 * @param index description of parameter from 0 to 7. The indices stand for:
+                 * 0: Ex positive
+                 * 1: Ex negative
+                 * 2: Ey positive
+                 * 3: Ey negative
+                 * 4: Bx positive
+                 * 5: Bx negative
+                 * 6: By positive
+                 * 7: By negative
+                 *
+                 * @return description of return value
+                 */
                 auto getFourierBuf(int index)
                 {
                     auto retBufferF = std::make_shared<HostBuffer<std::complex<float_64>, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
@@ -538,7 +556,7 @@ namespace picongpu
                 }
 
 
-                /** angular frequency in SI units
+                /** Calculate angular frequency in SI units
                  *
                  * @param i frequency index for trimmed plugin array
                  *
@@ -560,9 +578,7 @@ namespace picongpu
                     return 2 * (getOmegaMaxIndex() - getOmegaMinIndex());
                 }
 
-               
-
-                /** Return omega index for a matrix that doesn't remove the zero-valued frequencies.
+                /** Return omega index for a non trimmed frequency array.
                  * Used for properly treating raw Fourier space data of this plugin.
                  *
                  * @param i frequency index for trimmed plugin array
@@ -599,10 +615,7 @@ namespace picongpu
                     return pluginNumY;
                 }
 
-                /** This method returns openPMD data structure names for detector directions
-                 *
-                 *
-                 */
+                //! Returns openPMD data structure names for detector directions
                 std::string dataLabelsFieldComponent(int index) const {
                     const int localIndex = index/2;
                     const std::string dataLabelList[] = {
@@ -615,10 +628,16 @@ namespace picongpu
                 }
 
             private:
-                //! Initialize fftw memory things, supposed to be called once at the start of the plugin loop
-                void init_fftw()
+                /**
+                 * Initialize FFTW, supposed to be called once at the start of the plugin loop.
+                 *
+                 * This function allocates memory for the input and output arrays for the FFT transforms,
+                 * and creates the FFTW plans for transverse fft for real to complex and transverse ifft
+                 * for complex to complex.
+                 */
+                void initFFTW()
                 {
-                    // Input and output arrays for the FFT transforms
+                    // Allocate memory for the input and output arrays for the FFT transforms
                     fftwInF = fftw_alloc_complex(pluginNumX * pluginNumY);
                     fftwOutF = fftw_alloc_complex(pluginNumX * pluginNumY);
 
@@ -627,16 +646,20 @@ namespace picongpu
 
                     // Create fftw plan for transverse fft for real to complex
                     // Many ffts will be performed -> use FFTW_MEASURE as flag
-                    planForward
-                        = fftw_plan_dft_2d(pluginNumY, pluginNumX, fftwInF, fftwOutF, FFTW_FORWARD, FFTW_MEASURE);
+                    planForward = fftw_plan_dft_2d(pluginNumY, pluginNumX, 
+                                                   fftwInF, fftwOutF, 
+                                                   FFTW_FORWARD, FFTW_MEASURE);
 
                     // Create fftw plan for transverse ifft for complex to complex
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag
-                    planBackward
-                        = fftw_plan_dft_2d(pluginNumY, pluginNumX, fftwInB, fftwOutB, FFTW_BACKWARD, FFTW_MEASURE);
+                    planBackward = fftw_plan_dft_2d(pluginNumY, pluginNumX, 
+                                                    fftwInB, fftwOutB, 
+                                                    FFTW_BACKWARD, FFTW_MEASURE);
                 }
 
-                void free_fftw()
+
+                //! Free the memory allocated for the input and output arrays of FFTW.
+                void freeFFTW()
                 {
                     fftw_free(fftwInF);
                     fftw_free(fftwOutF);
@@ -646,9 +669,13 @@ namespace picongpu
 
                 /** Perform an inverse Fourier transform into time domain of both the electric and magnetic field
                  * and then perform a time integration to generate a 2D image out of the 3D array.
+                 * 
++                * @param ExOmegaPropagated vector of Ex-fields in (x, y, omega)-domain
++                * @param EyOmegaPropagated vector of Ey-fields in (x, y, omega)-domain
++                * @param BxOmegaPropagated vector of Bx-fields in (x, y, omega)-domain
++                * @param ByOmegaPropagated vector of By-fields in (x, y, omega)-domain
                  */
-                void calculate_shadowgram(
-                    vec3c const& ExOmegaPropagated,
+                void computeShadowgram(
                     vec3c const& EyOmegaPropagated,
                     vec3c const& BxOmegaPropagated,
                     vec3c const& ByOmegaPropagated)
@@ -846,24 +873,20 @@ namespace picongpu
                 }
 
 
-                 //! Return minimum omega index for trimmed arrays in omega dimensionuiae
+                //! Returns the minimum index for trimmed arrays in the omega dimension
                 int getOmegaMinIndex() const
                 {
-                    float_64 const actualStep = params::tRes * SI::DELTA_T_SI;
-                    int const tmpIndex
-                        = math::floor(pluginNumT * ((actualStep * params::omegaWfMin) / (2.0 * PI) + 0.5));
-                    int retIndex = tmpIndex > pluginNumT / 2 + 1 ? tmpIndex : pluginNumT / 2 + 1;
-                    return retIndex;
+                    double const stepSize = params::tRes * SI::DELTA_T_SI;
+                    int const tmpIndex = static_cast<int>(std::floor(pluginNumT * ((stepSize * params::omegaWfMin) / (2.0 * PI) + 0.5)));
+                    return std::max(tmpIndex, pluginNumT / 2 + 1);
                 }
 
-                //! Return maximum omega index for trimmed arrays in omega dimension
+                //! Return maximum omega index for trimmed arrays in the omega dimension.
                 int getOmegaMaxIndex() const
                 {
                     float_64 const actualStep = params::tRes * SI::DELTA_T_SI;
-                    int const tmpIndex
-                        = math::ceil(pluginNumT * ((actualStep * params::omegaWfMax) / (2.0 * PI) + 0.5));
-                    int retIndex = tmpIndex <= pluginNumT ? tmpIndex : pluginNumT;
-                    return retIndex + 1;
+                    int const tmpIndex = math::ceil(pluginNumT * ((actualStep * params::omegaWfMax) / (2.0 * PI) + 0.5));
+                    return std::min(tmpIndex, pluginNumT) + 1;
                 }
 
 
