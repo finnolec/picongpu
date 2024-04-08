@@ -22,12 +22,12 @@
 #include "picongpu/simulation_defines.hpp"
 
 #include "picongpu/simulation/control/Window.hpp"
-#include "pmacc/memory/buffers/Buffer.hpp"
 
 #include <pmacc/algorithms/math/defines/pi.hpp>
 #include <pmacc/assert.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/math/Vector.hpp>
+#include <pmacc/memory/buffers/Buffer.hpp>
 
 #include <chrono>
 #include <cmath> // what
