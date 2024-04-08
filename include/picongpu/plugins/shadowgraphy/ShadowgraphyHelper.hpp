@@ -177,7 +177,6 @@ namespace picongpu
 
                     pluginNumX = globalGridSize[0] / params::xRes;
 
-                    // @todo Why '-2'??????
                     pluginNumY = math::floor(
                         (yWindowSize - slidingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::yRes));
 
