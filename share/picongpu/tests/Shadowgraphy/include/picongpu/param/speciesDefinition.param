@@ -38,7 +38,6 @@ namespace picongpu
     /** describe attributes of a particle*/
     using DefaultParticleAttributes = MakeSeq_t<position<position_pic>, momentum, weighting>;
 
-    using VectorAllSpecies = MakeSeq_t<
-        >;
+    using VectorAllSpecies = MakeSeq_t<>;
 
 } // namespace picongpu

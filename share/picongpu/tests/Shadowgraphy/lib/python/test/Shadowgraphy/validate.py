@@ -14,25 +14,26 @@ import openpmd_api as io
 import scipy.constants as const
 import scipy.optimize as optimize
 
+
 def gauss(x, amplitude, sigma, mean):
     """Gaussian function
 
-        x: coordinate
-        amplitude: amplitude
-        sigma: standard deviation
-        mean: mean value
+    x: coordinate
+    amplitude: amplitude
+    sigma: standard deviation
+    mean: mean value
     """
-    exp = -((x - mean)**2) / (2 * sigma**2)
+    exp = -((x - mean) ** 2) / (2 * sigma**2)
     return amplitude * np.exp(exp)
 
 
 def test_deviation(val_simulation, val_theory, thresh, parameter_name):
     """Test function
 
-        val_simulation: the value that should be tested
-        val_theory: the value it's tested against
-        thresh: the threshold to pass the test
-        parameter_name: name of parameter
+    val_simulation: the value that should be tested
+    val_theory: the value it's tested against
+    thresh: the threshold to pass the test
+    parameter_name: name of parameter
     """
     relative_deviation = np.abs((val_theory - val_simulation) / (val_theory))
     if relative_deviation < thresh:
@@ -41,11 +42,12 @@ def test_deviation(val_simulation, val_theory, thresh, parameter_name):
     else:
         print(f"{parameter_name} failed the test with {val_simulation:.5e} compared to {val_theory:.5e}")
         return False
-    
-def main(path):
-    """ Evaluate shadowgraphy plugin performance
 
-        path: Path to simulation output
+
+def main(path):
+    """Evaluate shadowgraphy plugin performance
+
+    path: Path to simulation output
     """
     test_results = {}
 
@@ -58,8 +60,8 @@ def main(path):
 
     # Simulation parameters
     wavelength = 800e-9
-    w0 = 10e-6 # 2 times sigma
-    tau = 10e-15 # sigma of intensity
+    w0 = 10e-6  # 2 times sigma
+    tau = 10e-15  # sigma of intensity
     a0 = 1.0
 
     nx = 208
@@ -83,9 +85,9 @@ def main(path):
     # Focus position
     focus_x = nx * dx / 2
     focus_y = ny * dy / 2
-    
+
     # Bandwidth
-    tau_fwhm_intensity = 2 * np.sqrt( 2 * np.log(2) ) * tau
+    tau_fwhm_intensity = 2 * np.sqrt(2 * np.log(2)) * tau
     bandwidth_fwhm_intensity = 2 * np.pi * 0.441 / tau_fwhm_intensity
     bandwidth_sigma_intensity = bandwidth_fwhm_intensity / (2 * np.sqrt(2 * np.log(2)))
     bandwidth_expected = bandwidth_sigma_intensity * np.sqrt(2)
@@ -104,22 +106,25 @@ def main(path):
 
     shadowgram = chunkdata * unit
 
-    xspace = i.meshes["Spatial positions"]["x"].load_chunk()
+    xspace_tmp = i.meshes["Spatial positions"]["x"].load_chunk()
     xunit = i.meshes["Spatial positions"]["x"].get_attribute("unitSI")
     series.flush()
 
-    yspace = i.meshes["Spatial positions"]["y"].load_chunk()
+    yspace_tmp = i.meshes["Spatial positions"]["y"].load_chunk()
     yunit = i.meshes["Spatial positions"]["y"].get_attribute("unitSI")
     series.flush()
 
-    dx = xspace[0,1]-xspace[0,0]
-    dy = yspace[1,0]-yspace[0,0]
+    xspace = xspace_tmp * xunit
+    yspace = yspace_tmp * yunit
+
+    dx = xspace[0, 1] - xspace[0, 0]
+    dy = yspace[1, 0] - yspace[0, 0]
 
     xm, ym = np.meshgrid(xspace, yspace)
 
     # Test energy in shadowgram
     energy_shadowgram = np.sum(shadowgram) * dx * dy
-    print("dx: ",dx)
+    print("dx: ", dx)
     print("dy: ", dy)
     print("Energy: ", energy_shadowgram)
     test_results["Energy"] = test_deviation(energy_shadowgram, energy_theory, energy_thresh, "Energy")
@@ -128,23 +133,21 @@ def main(path):
     max_position = np.unravel_index(np.argmax(shadowgram.transpose()), shadowgram.transpose().shape)
 
     # Test x lineout of shadowgram
-    xdata = xspace[0,:]
+    xdata = xspace[0, :]
     shadowgram_x_lineout = shadowgram[max_position[0], :]
 
     xbounds = [[0, dx, np.min(xdata)], [2 * np.max(shadowgram_x_lineout), np.max(xdata), np.max(xdata)]]
-    poptx, pcovx = optimize.curve_fit(gauss, xdata, 
-            shadowgram_x_lineout, bounds=xbounds)
+    poptx, pcovx = optimize.curve_fit(gauss, xdata, shadowgram_x_lineout, bounds=xbounds)
 
-    test_results["w0_x"] =  test_deviation(2 * poptx[1] , w0, w0_thresh, "w0_x")
-    test_results["pos_x"] =  test_deviation(poptx[2], focus_x, position_thresh, "pos_x")
+    test_results["w0_x"] = test_deviation(2 * poptx[1], w0, w0_thresh, "w0_x")
+    test_results["pos_x"] = test_deviation(poptx[2], focus_x, position_thresh, "pos_x")
 
     # Test y lineout of shadowgram
-    ydata = yspace[:,0]
+    ydata = yspace[:, 0]
     shadowgram_y_lineout = shadowgram[:, max_position[1]]
-    
+
     ybounds = [[0, dy, np.min(ydata)], [2 * np.max(shadowgram_y_lineout), np.max(ydata), np.max(ydata)]]
-    popty, pcovy = optimize.curve_fit(gauss, ydata, 
-            shadowgram_y_lineout, bounds=ybounds)
+    popty, pcovy = optimize.curve_fit(gauss, ydata, shadowgram_y_lineout, bounds=ybounds)
 
     test_results["w0_y"] = test_deviation(2 * popty[1], w0, w0_thresh, "w0_y")
     test_results["pos_y"] = test_deviation(popty[2], focus_y, position_thresh, "pos_y")
@@ -164,57 +167,63 @@ def main(path):
 
         fourier_field_raw = chunkdata * unit
 
-        xspace = i.meshes["Spatial positions"]["x"].load_chunk()
+        xspace_tmp = i.meshes["Spatial positions"]["x"].load_chunk()
         xunit = i.meshes["Spatial positions"]["x"].get_attribute("unitSI")
         series.flush()
 
-        yspace = i.meshes["Spatial positions"]["y"].load_chunk()
+        yspace_tmp = i.meshes["Spatial positions"]["y"].load_chunk()
         yunit = i.meshes["Spatial positions"]["y"].get_attribute("unitSI")
         series.flush()
 
-        omegaspace_raw = i.meshes["Fourier Transform Frequencies"]["omegas"].load_chunk()
+        xspace = xspace_tmp * xunit
+        yspace = yspace_tmp * yunit
+
+        omegaspace_tmp = i.meshes["Fourier Transform Frequencies"]["omegas"].load_chunk()
         omegaunit = i.meshes["Fourier Transform Frequencies"]["omegas"].get_attribute("unitSI")
 
         if sf[0] == "positive":
-            omegaspace = omegaspace_raw[len(omegaspace_raw)//2:]
+            omegaspace = omegaspace_tmp[len(omegaspace_tmp) // 2 :] * omegaunit
         else:
-            omegaspace = omegaspace_raw[:len(omegaspace_raw)//2]
+            omegaspace = omegaspace_tmp[: len(omegaspace_tmp) // 2] * omegaunit
 
         series.flush()
         series.close()
 
-        dx = xspace[0,0,1]-xspace[0,0,0]
-        dy = yspace[0,1,0]-yspace[0,0,0]
-        domega = omegaspace[1,0,0]-omegaspace[0,0,0]
+        dx = xspace[0, 0, 1] - xspace[0, 0, 0]
+        dy = yspace[0, 1, 0] - yspace[0, 0, 0]
+        domega = omegaspace[1, 0, 0] - omegaspace[0, 0, 0]
 
         # Only take absolute values from Fourier field
         fourier_field = np.abs(fourier_field_raw)
 
-        max_position = np.unravel_index(
-            np.argmax(fourier_field), 
-            fourier_field.shape)
+        max_position = np.unravel_index(np.argmax(fourier_field), fourier_field.shape)
 
-        odata = omegaspace[:,0,0]
-        fourier_field_lineout = fourier_field[:,max_position[1],max_position[2]]
-        
+        odata = omegaspace[:, 0, 0]
+        fourier_field_lineout = fourier_field[:, max_position[1], max_position[2]]
+
         if sf[0] == "positive":
-            fit_bounds = [[0, domega/100, min(odata)], [2 * np.max(fourier_field_lineout), max(odata), max(odata)]]
+            fit_bounds = [[0, domega / 100, min(odata)], [2 * np.max(fourier_field_lineout), max(odata), max(odata)]]
         else:
-            fit_bounds = [[0, np.abs(domega)/100, min(odata)], [2 * np.max(fourier_field_lineout), max(np.abs(odata)), max(odata)]]
-    
-        popt, pcov = optimize.curve_fit(
-            gauss, odata, fourier_field_lineout, 
-            bounds=fit_bounds)
-#(x, amplitude, sigma, mean)
-        test_results[f"[{sf[1]}-{sf[0]}] bandwidth"] = test_deviation(popt[1], bandwidth_expected, bandwidth_thresh, f"[{sf[1]}-{sf[0]}] bandwidth")
+            fit_bounds = [
+                [0, np.abs(domega) / 100, min(odata)],
+                [2 * np.max(fourier_field_lineout), max(np.abs(odata)), max(odata)],
+            ]
+
+        popt, pcov = optimize.curve_fit(gauss, odata, fourier_field_lineout, bounds=fit_bounds)
+        # (x, amplitude, sigma, mean)
+        test_results[f"[{sf[1]}-{sf[0]}] bandwidth"] = test_deviation(
+            popt[1], bandwidth_expected, bandwidth_thresh, f"[{sf[1]}-{sf[0]}] bandwidth"
+        )
         sign_omega = omega if (sf[0] == "positive") else -omega
-        test_results[f"[{sf[1]}-{sf[0]}] omega"] = test_deviation(popt[2], sign_omega, omega_thresh, f"[{sf[1]}-{sf[0]}] omega")
-    
+        test_results[f"[{sf[1]}-{sf[0]}] omega"] = test_deviation(
+            popt[2], sign_omega, omega_thresh, f"[{sf[1]}-{sf[0]}] omega"
+        )
+
     ret_value = np.array([test_results[test] for test in test_results.keys()]).all()
     sys.exit(int(not ret_value))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         arg = sys.argv[1]
     except IndexError:

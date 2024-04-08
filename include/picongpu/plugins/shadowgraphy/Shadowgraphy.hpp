@@ -121,15 +121,22 @@ namespace picongpu
 
                     void validateOptions() override
                     {
-                        PMACC_VERIFY_MSG(
-                            m_help->optionStart.get(m_id) >= 0,
-                            "Shadowgraphy: plugin must start after the simulation was started");
-                        PMACC_VERIFY_MSG(
-                            m_help->optionDuration.get(m_id) > 0,
-                            "Shadowgraphy: plugin duration must be larger than 0");
-                        PMACC_VERIFY_MSG(
-                            (m_help->optionSlicePoint.get(m_id) >= 0) && (m_help->optionSlicePoint.get(m_id) <= 1.0),
-                            "Shadowgraphy: the plugin slice point must be between 0 and 1");
+                        for(int i = 0; i < optionStart.size(); ++i)
+                        {
+                            if(optionStart.get(i) < 0)
+                                throw std::runtime_error(
+                                    name + ": plugin must start after the simulation was started");
+                        }
+                        for(int i = 0; i < optionDuration.size(); ++i)
+                        {
+                            if(optionDuration.get(i) <= 0)
+                                throw std::runtime_error(name + ": plugin duration must be larger than 0");
+                        }
+                        for(int i = 0; i < optionSlicePoint.size(); ++i)
+                        {
+                            if((optionSlicePoint.get(i) < 0) || (optionSlicePoint.get(i) > 1.0))
+                                throw std::runtime_error(name + ": the plugin slice point must be between 0 and 1");
+                        }
                     }
 
                     size_t getNumPlugins() const override
@@ -195,8 +202,6 @@ namespace picongpu
 
                 void init()
                 {
-                    validateOptions();
-
                     auto duration = m_help->optionDuration.get(m_id);
                     // adjust to be a multiple of params::tRes
                     adjustedDuration = (duration / params::tRes) * params::tRes;
@@ -209,8 +214,8 @@ namespace picongpu
                     // tRes-th time-step of the simulation until the integration is done
                     int lastStep = startStep + adjustedDuration;
 
-                    std::string internalNotifyPeriod = std::to_string(startStep) + ":"
-                        + std::to_string(lastStep) + ":" + std::to_string(params::tRes);
+                    std::string internalNotifyPeriod = std::to_string(startStep) + ":" + std::to_string(lastStep) + ":"
+                        + std::to_string(params::tRes);
 
                     Environment<>::get().PluginConnector().setNotificationPeriod(this, internalNotifyPeriod);
 
@@ -314,7 +319,8 @@ namespace picongpu
                     {
                         if(gather->isMaster())
                         {
-                            if(m_help->optionFourierOutput.get(m_id)){
+                            if(m_help->optionFourierOutput.get(m_id))
+                            {
                                 writeFourierOutputToOpenPMDFile(currentStep);
                             }
 
@@ -322,7 +328,7 @@ namespace picongpu
 
                             std::ostringstream filename;
                             filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
-                                        << ".dat";
+                                     << ".dat";
 
                             writeFile(helper->getShadowgram(), filename.str());
 
@@ -366,8 +372,7 @@ namespace picongpu
                 auto createSlice(std::shared_ptr<T_FieldBuffer> inputFieldBuffer, int sliceCellZ) const
                 {
                     auto bufferGridLayout = inputFieldBuffer->getGridLayout();
-                    DataSpace<DIM2> localSliceSize
-                        = bufferGridLayout.sizeWithoutGuardND().template shrink<DIM2>(0);
+                    DataSpace<DIM2> localSliceSize = bufferGridLayout.sizeWithoutGuardND().template shrink<DIM2>(0);
 
                     // skip guard cells
                     auto inputFieldBox = inputFieldBuffer->getHostDataBox().shift(bufferGridLayout.guardSizeND());
@@ -425,15 +430,13 @@ namespace picongpu
                     spatialMesh.setGridSpacing(std::vector<double>{1.0});
                     spatialMesh.setGridGlobalOffset(std::vector<double>{0.0});
                     spatialMesh.setGridUnitSI(1.0);
-                    spatialMesh.setAxisLabels(std::vector<std::string>{
-                        "Spatial x index", 
-                        "Spatial y index"});
+                    spatialMesh.setAxisLabels(std::vector<std::string>{"Spatial x index", "Spatial y index"});
                     spatialMesh.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
-                        {::openPMD::UnitDimension::L, 1.0}});
+                        std::map<::openPMD::UnitDimension, double>{{::openPMD::UnitDimension::L, 1.0}});
 
                     auto xs = std::vector<float_X>(helper->getSizeX());
-                    for(int i = 0; i < helper->getSizeX(); ++i){
+                    for(int i = 0; i < helper->getSizeX(); ++i)
+                    {
                         xs[i] = helper->getX(i);
                     }
                     ::openPMD::MeshRecordComponent xMRC = spatialMesh["x"];
@@ -442,14 +445,15 @@ namespace picongpu
                     ::openPMD::Extent extent_x = {1, static_cast<unsigned long int>(helper->getSizeX())};
                     ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
                     xMRC.resetDataset(dataset_x);
-                
+
                     // Write actual data
                     ::openPMD::Offset offset_x = {0};
                     xMRC.storeChunk(xs, offset_x, extent_x);
 
 
                     auto ys = std::vector<float_X>(helper->getSizeY());
-                    for(int i = 0; i < helper->getSizeY(); ++i){
+                    for(int i = 0; i < helper->getSizeY(); ++i)
+                    {
                         ys[i] = helper->getY(i);
                     }
 
@@ -460,11 +464,11 @@ namespace picongpu
                     ::openPMD::Extent extent_y = {static_cast<unsigned long int>(helper->getSizeY()), 1};
                     ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
                     yMRC.resetDataset(dataset_y);
-                
+
                     // Write actual data
                     ::openPMD::Offset offset_y = {0};
                     yMRC.storeChunk(ys, offset_y, extent_y);
-                    
+
 
                     series.iterations[currentStep].close();
                 }
@@ -473,44 +477,43 @@ namespace picongpu
                 void writeFourierOutputToOpenPMDFile(uint32_t currentStep)
                 {
                     std::stringstream filename;
-                    filename << m_help->optionFileName.get(m_id) << "_fourierdata_%T." << m_help->optionFileExtention.get(m_id);
+                    filename << m_help->optionFileName.get(m_id) << "_fourierdata_%T."
+                             << m_help->optionFileExtention.get(m_id);
                     ::openPMD::Series series(filename.str(), ::openPMD::Access::CREATE);
 
                     auto meshNeg = series.iterations[currentStep].meshes["Fourier Domain Fields - negative"];
                     meshNeg.setGeometry(::openPMD::Mesh::Geometry::cartesian);
                     meshNeg.setDataOrder(::openPMD::Mesh::DataOrder::C);
                     meshNeg.setGridSpacing(std::vector<double>{1.0, 1.0, 1.0});
-                    meshNeg.setGridGlobalOffset(std::vector<double>{
-                        static_cast<double>(helper->getOmegaIndex(0)), 
-                        0.0, 
-                        0.0});
+                    meshNeg.setGridGlobalOffset(
+                        std::vector<double>{static_cast<double>(helper->getOmegaIndex(0)), 0.0, 0.0});
                     meshNeg.setGridUnitSI(1.0);
                     meshNeg.setAxisLabels(std::vector<std::string>{
-                        "Spatial x index", 
-                        "Spatial y index", 
+                        "Spatial x index",
+                        "Spatial y index",
                         "Fourier transform frequency index"});
-                    meshNeg.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
+                    meshNeg.setUnitDimension(std::map<::openPMD::UnitDimension, double>{
                         {::openPMD::UnitDimension::L, 1.0},
                         {::openPMD::UnitDimension::M, 1.0},
                         {::openPMD::UnitDimension::T, -3.0},
                         {::openPMD::UnitDimension::I, -1.0}});
-                    
+
                     // Reshape abstract MeshRecordComponent
                     ::openPMD::Datatype datatype = ::openPMD::determineDatatype<std::complex<float_64>>();
-                    ::openPMD::Extent extent 
-                            = {static_cast<unsigned long int>(helper->getNumOmegas() / 2),
+                    ::openPMD::Extent extent
+                        = {static_cast<unsigned long int>(helper->getNumOmegas() / 2),
                            static_cast<unsigned long int>(helper->getSizeY()),
-                           static_cast<unsigned long int>(helper->getSizeX())}; 
+                           static_cast<unsigned long int>(helper->getSizeX())};
                     ::openPMD::Offset offset = {0, 0, 0};
 
                     // Go through all 8 different fields components
-                    for(int i=0; i<8; i+=2){
+                    for(int i = 0; i < 8; i += 2)
+                    {
                         std::string dir = helper->dataLabelsFieldComponent(i);
                         // Do not delete this object before dataPtr is not required anymore
                         auto data = helper->getFourierBuf(i);
-                        auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
-                        data->data(), [](auto const*) {}};
+                        auto sharedDataPtr
+                            = std::shared_ptr<std::complex<picongpu::float_64>>{data->data(), [](auto const*) {}};
                         meshNeg[dir].setUnitSI(1.0);
                         meshNeg[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
                         ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
@@ -524,26 +527,26 @@ namespace picongpu
                     meshPos.setDataOrder(::openPMD::Mesh::DataOrder::C);
                     meshPos.setGridSpacing(std::vector<double>{1.0, 1.0, 1.0});
                     meshPos.setGridGlobalOffset(std::vector<double>{
-                        static_cast<double>(helper->getOmegaIndex(helper->getNumOmegas() / 2)), 
-                        0.0, 
+                        static_cast<double>(helper->getOmegaIndex(helper->getNumOmegas() / 2)),
+                        0.0,
                         0.0});
                     meshPos.setGridUnitSI(1.0);
                     meshPos.setAxisLabels(std::vector<std::string>{
-                        "Spatial x index", 
-                        "Spatial y index", 
+                        "Spatial x index",
+                        "Spatial y index",
                         "Fourier transform frequency index"});
-                    meshPos.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
+                    meshPos.setUnitDimension(std::map<::openPMD::UnitDimension, double>{
                         {::openPMD::UnitDimension::L, 1.0},
                         {::openPMD::UnitDimension::M, 1.0},
                         {::openPMD::UnitDimension::T, -3.0},
                         {::openPMD::UnitDimension::I, -1.0}});
-                    for(int i=1; i<8; i+=2){
+                    for(int i = 1; i < 8; i += 2)
+                    {
                         std::string dir = helper->dataLabelsFieldComponent(i);
                         // do not delete this object before dataPtr is not required anymore
                         auto data = helper->getFourierBuf(i);
-                        auto sharedDataPtr = std::shared_ptr<std::complex<picongpu::float_64>>{
-                        data->data(), [](auto const*) {}};
+                        auto sharedDataPtr
+                            = std::shared_ptr<std::complex<picongpu::float_64>>{data->data(), [](auto const*) {}};
                         meshPos[dir].setUnitSI(1.0);
                         meshPos[dir].setPosition(std::vector<double>{0.0, 0.0, 0.0});
                         ::openPMD::Dataset dataset = ::openPMD::Dataset(datatype, extent);
@@ -553,7 +556,8 @@ namespace picongpu
                     }
 
                     auto omegas = std::vector<float_X>(helper->getNumOmegas());
-                    for(int i = 0; i < helper->getNumOmegas(); ++i){
+                    for(int i = 0; i < helper->getNumOmegas(); ++i)
+                    {
                         omegas[i] = helper->omega(helper->getOmegaIndex(i));
                     }
                     ::openPMD::Mesh meshOmega = series.iterations[currentStep].meshes["Fourier Transform Frequencies"];
@@ -564,8 +568,7 @@ namespace picongpu
                     meshOmega.setGridUnitSI(1.0);
                     meshOmega.setAxisLabels(std::vector<std::string>{"Fourier transform frequency index"});
                     meshOmega.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
-                        {::openPMD::UnitDimension::T, -1.0}});
+                        std::map<::openPMD::UnitDimension, double>{{::openPMD::UnitDimension::T, -1.0}});
                     ::openPMD::MeshRecordComponent omegaMRC = meshOmega["omegas"];
                     omegaMRC.setPosition(std::vector<double>{0.0});
 
@@ -573,7 +576,7 @@ namespace picongpu
                     ::openPMD::Extent extent_omega = {static_cast<unsigned long int>(helper->getNumOmegas()), 1, 1};
                     ::openPMD::Dataset dataset_omega = ::openPMD::Dataset(datatype_omega, extent_omega);
                     omegaMRC.resetDataset(dataset_omega);
-                
+
                     // Write actual data
                     ::openPMD::Offset offset_omega = {0};
                     omegaMRC.storeChunk(omegas, offset_omega, extent_omega);
@@ -584,16 +587,13 @@ namespace picongpu
                     spatialMesh.setGridSpacing(std::vector<double>{1.0});
                     spatialMesh.setGridGlobalOffset(std::vector<double>{0.0});
                     spatialMesh.setGridUnitSI(1.0);
-                    spatialMesh.setAxisLabels(std::vector<std::string>{
-                        "Spatial x index", 
-                        "Spatial y index", 
-                        "None"});
+                    spatialMesh.setAxisLabels(std::vector<std::string>{"Spatial x index", "Spatial y index", "None"});
                     spatialMesh.setUnitDimension(
-                        std::map<::openPMD::UnitDimension, double>{
-                        {::openPMD::UnitDimension::L, 1.0}});
+                        std::map<::openPMD::UnitDimension, double>{{::openPMD::UnitDimension::L, 1.0}});
 
                     auto xs = std::vector<float_X>(helper->getSizeX());
-                    for(int i = 0; i < helper->getSizeX(); ++i){
+                    for(int i = 0; i < helper->getSizeX(); ++i)
+                    {
                         xs[i] = helper->getX(i);
                     }
                     ::openPMD::MeshRecordComponent xMRC = spatialMesh["x"];
@@ -602,14 +602,15 @@ namespace picongpu
                     ::openPMD::Extent extent_x = {1, 1, static_cast<unsigned long int>(helper->getSizeX())};
                     ::openPMD::Dataset dataset_x = ::openPMD::Dataset(datatype_x, extent_x);
                     xMRC.resetDataset(dataset_x);
-                
+
                     // Write actual data
                     ::openPMD::Offset offset_x = {0};
                     xMRC.storeChunk(xs, offset_x, extent_x);
 
 
                     auto ys = std::vector<float_X>(helper->getSizeY());
-                    for(int i = 0; i < helper->getSizeY(); ++i){
+                    for(int i = 0; i < helper->getSizeY(); ++i)
+                    {
                         ys[i] = helper->getY(i);
                     }
 
@@ -620,16 +621,15 @@ namespace picongpu
                     ::openPMD::Extent extent_y = {1, static_cast<unsigned long int>(helper->getSizeY()), 1};
                     ::openPMD::Dataset dataset_y = ::openPMD::Dataset(datatype_y, extent_y);
                     yMRC.resetDataset(dataset_y);
-                
+
                     // Write actual data
                     ::openPMD::Offset offset_y = {0};
                     yMRC.storeChunk(ys, offset_y, extent_y);
-                    
-                    
+
+
                     series.iterations[currentStep].close();
                 }
 
-                
 
                 void writeFile(std::vector<std::vector<float_64>> values, std::string name)
                 {

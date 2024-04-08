@@ -22,21 +22,20 @@
 #include "picongpu/simulation_defines.hpp"
 
 #include "picongpu/simulation/control/Window.hpp"
+#include "pmacc/memory/buffers/Buffer.hpp"
 
 #include <pmacc/algorithms/math/defines/pi.hpp>
 #include <pmacc/assert.hpp>
 #include <pmacc/mappings/simulation/GridController.hpp>
 #include <pmacc/math/Vector.hpp>
-#include "pmacc/memory/buffers/Buffer.hpp"
 
+#include <chrono>
 #include <cmath> // what
+#include <complex>
+#include <iostream>
 
 #include <fftw3.h>
 #include <stdio.h>
-#include <iostream>
-#include <chrono>
-
-#include <complex>
 
 namespace picongpu
 {
@@ -121,12 +120,7 @@ namespace picongpu
                  * @param duration duration of time extraction in simulation time steps
                  * @param fourierOutputEnabled whether to output the fourier transform of the fields
                  */
-                Helper(
-                    int currentStep,
-                    float_X slicePoint,
-                    float_X focusPos,
-                    int duration,
-                    bool fourierOutputEnabled)
+                Helper(int currentStep, float_X slicePoint, float_X focusPos, int duration, bool fourierOutputEnabled)
                     : duration(duration)
                     , fourierOutputEnabled(fourierOutputEnabled)
                 {
@@ -177,8 +171,8 @@ namespace picongpu
 
                     pluginNumX = globalGridSize[0] / params::xRes;
 
-                    pluginNumY = math::floor(
-                        (yWindowSize - slidingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::yRes));
+                    pluginNumY
+                        = math::floor((yWindowSize - slidingWindowCorrection / SI::CELL_HEIGHT_SI) / (params::yRes));
 
                     // Don't use fields inside the field absorber
                     pluginNumX
@@ -258,7 +252,7 @@ namespace picongpu
                  *
                  * @tparam T_fieldType Field type (E or B)
                  * @tparam T_SliceBuffer 3D data box type
-                 * 
+                 *
                  * @param t current plugin timestep (simulation timestep - plugin start)
                  * @param currentStep current simulation timestep
                  * @param sliceBuffer 3D data box shifted to the local simulation origin (no guard)
@@ -268,7 +262,8 @@ namespace picongpu
                 {
                     auto globalFieldBox = sliceBuffer->getDataBox();
                     int const currentSlideCount = MovingWindow::getInstance().getSlideCounter(currentStep);
-                    if(!initializedDataBox){
+                    if(!initializedDataBox)
+                    {
                         xMin = fields::absorber::NUM_CELLS[0][0] * SI::CELL_WIDTH_SI;
                         yMin = (fields::absorber::NUM_CELLS[1][0] + yTotalMinIndex) * SI::CELL_HEIGHT_SI;
 
@@ -392,7 +387,7 @@ namespace picongpu
                             }
 
                             fftw_execute(planForward);
- 
+
                             // Put field into fftw array
                             for(int i = 0; i < pluginNumX; ++i)
                             {
@@ -527,13 +522,14 @@ namespace picongpu
                  */
                 auto getFourierBuf(int index)
                 {
-                    auto retBufferF = std::make_shared<HostBuffer<std::complex<float_64>, DIM3>>(DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas()/2));
+                    auto retBufferF = std::make_shared<HostBuffer<std::complex<float_64>, DIM3>>(
+                        DataSpace<DIM3>(getSizeX(), getSizeY(), getNumOmegas() / 2));
                     auto dataBox = retBufferF->getDataBox();
 
                     // The fields are split into 2 parts in the output, because the omega-domain
                     // is not necessarily continuous due to band-pass filters
-                    vec3c * retField;
-                    if(index  <= 1)
+                    vec3c* retField;
+                    if(index <= 1)
                         retField = &ExOmega;
                     else if(index <= 3)
                         retField = &EyOmega;
@@ -542,10 +538,13 @@ namespace picongpu
                     else if(index <= 7)
                         retField = &ByOmega;
 
-                    for (int i = 0; i < getSizeX(); ++i){
-                        for (int j = 0; j < getSizeY(); ++j){
-                            for (int o = 0; o < getNumOmegas() / 2; ++o){                                
-                                int const oSigned = ((index % 2) == 0) ? o : o + getNumOmegas()/2;
+                    for(int i = 0; i < getSizeX(); ++i)
+                    {
+                        for(int j = 0; j < getSizeY(); ++j)
+                        {
+                            for(int o = 0; o < getNumOmegas() / 2; ++o)
+                            {
+                                int const oSigned = ((index % 2) == 0) ? o : o + getNumOmegas() / 2;
                                 dataBox({i, j, o}) = static_cast<std::complex<float_64>>((*retField)[i][j][oSigned]);
                             }
                         }
@@ -564,7 +563,8 @@ namespace picongpu
                 float_X omega(int i) const
                 {
                     float_X const actualStep = dt;
-                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT) / actualStep;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumT) / 2.0_X) / float_X(pluginNumT)
+                        / actualStep;
                 }
 
 
@@ -615,8 +615,9 @@ namespace picongpu
                 }
 
                 //! Returns openPMD data structure names for detector directions
-                std::string dataLabelsFieldComponent(int index) const {
-                    const int localIndex = index/2;
+                std::string dataLabelsFieldComponent(int index) const
+                {
+                    const int localIndex = index / 2;
                     const std::string dataLabelList[] = {
                         "Ex",
                         "Ey",
@@ -645,15 +646,13 @@ namespace picongpu
 
                     // Create fftw plan for transverse fft for real to complex
                     // Many ffts will be performed -> use FFTW_MEASURE as flag
-                    planForward = fftw_plan_dft_2d(pluginNumY, pluginNumX, 
-                                                   fftwInF, fftwOutF, 
-                                                   FFTW_FORWARD, FFTW_MEASURE);
+                    planForward
+                        = fftw_plan_dft_2d(pluginNumY, pluginNumX, fftwInF, fftwOutF, FFTW_FORWARD, FFTW_MEASURE);
 
                     // Create fftw plan for transverse ifft for complex to complex
                     // Even more iffts will be performed -> use FFTW_MEASURE as flag
-                    planBackward = fftw_plan_dft_2d(pluginNumY, pluginNumX, 
-                                                    fftwInB, fftwOutB, 
-                                                    FFTW_BACKWARD, FFTW_MEASURE);
+                    planBackward
+                        = fftw_plan_dft_2d(pluginNumY, pluginNumX, fftwInB, fftwOutB, FFTW_BACKWARD, FFTW_MEASURE);
                 }
 
 
@@ -668,13 +667,14 @@ namespace picongpu
 
                 /** Perform an inverse Fourier transform into time domain of both the electric and magnetic field
                  * and then perform a time integration to generate a 2D image out of the 3D array.
-                 * 
+                 *
 +                * @param ExOmegaPropagated vector of Ex-fields in (x, y, omega)-domain
 +                * @param EyOmegaPropagated vector of Ey-fields in (x, y, omega)-domain
 +                * @param BxOmegaPropagated vector of Bx-fields in (x, y, omega)-domain
 +                * @param ByOmegaPropagated vector of By-fields in (x, y, omega)-domain
                  */
                 void computeShadowgram(
+                    vec3c const& ExOmegaPropagated,
                     vec3c const& EyOmegaPropagated,
                     vec3c const& BxOmegaPropagated,
                     vec3c const& ByOmegaPropagated)
@@ -726,7 +726,6 @@ namespace picongpu
                         }
                     }
                 }
-
 
 
                 /** Store fields in helper class with proper resolution in (k_x, k_y,
@@ -876,7 +875,8 @@ namespace picongpu
                 int getOmegaMinIndex() const
                 {
                     double const stepSize = params::tRes * SI::DELTA_T_SI;
-                    int const tmpIndex = static_cast<int>(std::floor(pluginNumT * ((stepSize * params::omegaWfMin) / (2.0 * PI) + 0.5)));
+                    int const tmpIndex = static_cast<int>(
+                        std::floor(pluginNumT * ((stepSize * params::omegaWfMin) / (2.0 * PI) + 0.5)));
                     return std::max(tmpIndex, pluginNumT / 2 + 1);
                 }
 
@@ -884,7 +884,8 @@ namespace picongpu
                 int getOmegaMaxIndex() const
                 {
                     float_64 const actualStep = params::tRes * SI::DELTA_T_SI;
-                    int const tmpIndex = math::ceil(pluginNumT * ((actualStep * params::omegaWfMax) / (2.0 * PI) + 0.5));
+                    int const tmpIndex
+                        = math::ceil(pluginNumT * ((actualStep * params::omegaWfMax) / (2.0 * PI) + 0.5));
                     return std::min(tmpIndex, pluginNumT) + 1;
                 }
 
@@ -898,7 +899,8 @@ namespace picongpu
                 float_X kx(int i) const
                 {
                     float_X const actualStep = params::xRes * SI::CELL_WIDTH_SI;
-                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumX) / 2.0_X) / float_X(pluginNumX) / actualStep;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumX) / 2.0_X) / float_X(pluginNumX)
+                        / actualStep;
                 }
 
                 /** y component of k vector in SI units for FFTs
@@ -910,7 +912,8 @@ namespace picongpu
                 float_X ky(int i) const
                 {
                     float_X const actualStep = params::yRes * SI::CELL_HEIGHT_SI;
-                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumY) / 2.0_X) / float_X(pluginNumY) / actualStep;
+                    return 2.0_X * float_X(PI) * (float_X(i) - float_X(pluginNumY) / 2.0_X) / float_X(pluginNumY)
+                        / actualStep;
                 }
             }; // class Helper
         } // namespace shadowgraphy
