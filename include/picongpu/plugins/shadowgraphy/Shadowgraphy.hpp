@@ -329,8 +329,6 @@ namespace picongpu
                             filename << m_help->optionFileName.get(m_id) << "_" << startTime << ":" << currentStep
                                      << ".dat";
 
-                            writeFile(helper->getShadowgram(), filename.str());
-
                             writeToOpenPMDFile(currentStep);
 
                             // delete helper and free all memory
@@ -627,39 +625,6 @@ namespace picongpu
 
 
                     series.iterations[currentStep].close();
-                }
-
-
-                void writeFile(std::vector<std::vector<float_64>> values, std::string name)
-                {
-                    std::ofstream outFile;
-                    outFile.open(name.c_str(), std::ofstream::out | std::ostream::trunc);
-
-                    if(!outFile)
-                    {
-                        std::cerr << "Can't open file [" << name << "] for output, disable plugin output. "
-                                  << std::endl;
-                    }
-                    else
-                    {
-                        for(unsigned int i = 0; i < helper->getSizeX(); ++i) // over all x
-                        {
-                            for(unsigned int j = 0; j < helper->getSizeY(); ++j) // over all y
-                            {
-                                outFile << values[i][j] << "\t";
-                            } // for loop over all y
-
-                            outFile << std::endl;
-                        } // for loop over all x
-
-                        outFile.flush();
-                        outFile << std::endl; // now all data are written to file
-
-                        if(outFile.fail())
-                            std::cerr << "Error on flushing file [" << name << "]. " << std::endl;
-
-                        outFile.close();
-                    }
                 }
             };
 
