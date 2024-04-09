@@ -275,7 +275,6 @@ namespace picongpu
                                 adjustedDuration,
                                 m_help->optionFourierOutput.get(m_id));
                         }
-                        // Create Integrator object %TODO
                         isIntegrating = true;
                     }
 
