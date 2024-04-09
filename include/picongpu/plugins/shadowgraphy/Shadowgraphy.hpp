@@ -28,11 +28,11 @@
 #include "picongpu/plugins/common/openPMDVersion.def"
 #include "picongpu/plugins/common/openPMDWriteMeta.hpp"
 #include "picongpu/plugins/multi/multi.hpp"
-#include "picongpu/plugins/shadowgraphy/GatherSlice.hpp"
 #include "picongpu/plugins/shadowgraphy/ShadowgraphyHelper.hpp"
 
 #include <pmacc/dataManagement/DataConnector.hpp>
 #include <pmacc/math/Vector.hpp>
+#include <pmacc/mpi/GatherSlice.hpp>
 
 #include <iostream>
 #include <sstream>
@@ -182,7 +182,7 @@ namespace picongpu
                 int localPlaneIdx = -1;
 
                 std::unique_ptr<shadowgraphy::Helper> helper;
-                std::unique_ptr<shadowgraphy::GatherSlice> gather;
+                std::unique_ptr<pmacc::mpi::GatherSlice> gather;
 
                 std::shared_ptr<Help> m_help;
                 size_t m_id;
@@ -232,7 +232,7 @@ namespace picongpu
                         localPlaneIdx = globalPlaneIdx - localDomain.offset[plane];
 
 
-                    gather = std::make_unique<shadowgraphy::GatherSlice>();
+                    gather = std::make_unique<pmacc::mpi::GatherSlice>();
                     gather->participate(isPlaneInLocalDomain);
                 }
 
@@ -364,7 +364,7 @@ namespace picongpu
                     auto globalDomainSliceSize = subGrid.getGlobalDomain().size.shrink<DIM2>(0);
 
                     auto fieldSlice = createSlice<T_fieldType>(inputFieldBuffer, cellIdxZ);
-                    return gather->gatherSlice(fieldSlice, globalDomainSliceSize, localDomainOffset);
+                    return gather->gatherSlice(*fieldSlice, globalDomainSliceSize, localDomainOffset);
                 }
 
                 template<typename shadowgraphy::Helper::FieldType T_fieldType, typename T_FieldBuffer>
