@@ -2,7 +2,7 @@
 #
 # This file is part of PIConGPU.
 # Copyright 2023 PIConGPU contributors
-# Authors: Mika Soren Voss, Rene Widera, Hannes Wolf, Klaus Steiniger
+# Authors: Mika Soren Voss, Rene Widera, Hannes Wolf, Klaus Steiniger, Finn-Ole Carstens
 # License: GPLv3+
 #
 

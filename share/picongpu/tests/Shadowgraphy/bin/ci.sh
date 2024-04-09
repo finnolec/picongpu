@@ -2,7 +2,7 @@
 #
 # This file is part of PIConGPU.
 # Copyright 2023 PIConGPU contributors
-# Authors: Mika Soren Voss, Hannes Wolf, Klaus Steiniger
+# Authors: Mika Soren Voss, Hannes Wolf, Klaus Steiniger, Finn-Ole Carstens
 # License: GPLv3+
 #
 
@@ -15,8 +15,9 @@ function absolute_path()
 
 help()
 {
-  echo "Simulate a current-carrying wire in a small and large volume in order to quantify PML performance by"
-  echo "comparing values of the electric field close to the wire between both simulations after many timesteps."
+  echo "Simulate a Gaussian pulse propagating in z direction to quantify the Shadowgraphy plugin performance"
+  echo "the following values to the expectation value: energy in shadowgram, position of peak in shadowgram,"
+  echo "width of Gaussian pulse, bandwidth of all field components, and mean frequency of all field components."
   echo ""
   echo "Usage:"
   echo "    (1) Change current working directory to direcectory where the include directory of the setup is located"

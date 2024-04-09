@@ -124,9 +124,6 @@ def main(path):
 
     # Test energy in shadowgram
     energy_shadowgram = np.sum(shadowgram) * dx * dy
-    print("dx: ", dx)
-    print("dy: ", dy)
-    print("Energy: ", energy_shadowgram)
     test_results["Energy"] = test_deviation(energy_shadowgram, energy_theory, energy_thresh, "Energy")
 
     # Find position of maximum for lineouts
@@ -180,13 +177,13 @@ def main(path):
 
         omegaspace_tmp = i.meshes["Fourier Transform Frequencies"]["omegas"].load_chunk()
         omegaunit = i.meshes["Fourier Transform Frequencies"]["omegas"].get_attribute("unitSI")
+        series.flush()
 
         if sf[0] == "positive":
             omegaspace = omegaspace_tmp[len(omegaspace_tmp) // 2 :] * omegaunit
         else:
             omegaspace = omegaspace_tmp[: len(omegaspace_tmp) // 2] * omegaunit
 
-        series.flush()
         series.close()
 
         dx = xspace[0, 0, 1] - xspace[0, 0, 0]
