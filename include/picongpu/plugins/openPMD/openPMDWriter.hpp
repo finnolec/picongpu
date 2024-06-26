@@ -859,7 +859,8 @@ make sure that environment variable OPENPMD_BP_BACKEND is not set to ADIOS1.
                         /* logBeginWriteField = */ false);
                 }
             };
-private:
+
+        private:
             /** Write random number generator states as a unitless scalar field
              *
              * Note: writeField() cannot be easily used inside this function, since states are custom types.

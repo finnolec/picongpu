@@ -22,25 +22,28 @@
 
 #include "picongpu/simulation_defines.hpp"
 
+#include <pmacc/algorithms/math/defines/pi.hpp>
 #include <pmacc/lockstep.hpp>
 #include <pmacc/mappings/threads/ThreadCollective.hpp>
 #include <pmacc/math/Vector.hpp>
 #include <pmacc/math/operation.hpp>
 #include <pmacc/memory/boxes/CachedBox.hpp>
 
-namespace picongpu {
-    
+
+namespace picongpu
+{
     // template<typename T_BlockDescription>
     struct Stencil
     {
         /** run a 4 point stencil for a supercell
-        */
+         */
         template<typename T_Box, typename T_Mapping, typename T_Worker>
         DINLINE void operator()(
             const T_Worker& worker,
             T_Box field,
             uint32_t currentStep,
-            const T_Mapping& mapper) const
+            const T_Mapping& mapper,
+            DataSpace<simDim> gpuCellOffsetToTotalOrigin) const
         {
             using SuperCellSize = typename T_Mapping::SuperCellSize;
             constexpr uint32_t cellsPerSuperCell = pmacc::math::CT::volume<SuperCellSize>::type::value;
@@ -59,14 +62,28 @@ namespace picongpu {
                     auto index = cellIdxInSupercell + blockCell;
                     auto pos = cellIdxInSupercell + blockCell - SuperCellSize::toRT();
 
-                    double fieldValue = pmacc::math::sin(currentStep * 0.4);
+                    auto wavelength = 40.0_X * CELL_DEPTH;
+                    auto omega = 2.0_X * PI * SPEED_OF_LIGHT / wavelength;
 
-                    if (index.x() - SuperCellSizeValue.x() == 300 && index.y() - SuperCellSizeValue.y() == 300)
+                    double fieldValue
+                        = 0.1 * pmacc::math::sin(currentStep * UNIT_TIME * omega); // should be roughly 10TV/m
+
+                    auto xPos = 2048;
+                    auto yPos1 = 1968;
+                    auto yPos2 = 2128;
+                    auto zPos = 32;
+
+                    if((index.y() - SuperCellSizeValue.y() + gpuCellOffsetToTotalOrigin.y() == yPos1
+                        || index.y() - SuperCellSizeValue.y() + gpuCellOffsetToTotalOrigin.y() == yPos2)
+                       && index.z() - SuperCellSizeValue.z() + gpuCellOffsetToTotalOrigin.z() == zPos
+                       && index.x() - SuperCellSizeValue.x() + gpuCellOffsetToTotalOrigin.x() == xPos)
                     {
-                        field(index) = {0, 0, fieldValue};
+                        field(index) = {0, fieldValue, 0};
+                        printf("fieldValue: %.3e \n", fieldValue);
+                        printf("sine content: %.3e \n", currentStep * UNIT_TIME * omega);
+                        // field(index) += {0, fieldValue, 0};
                     }
                 });
-
         };
     };
 } // namespace picongpu

@@ -60,8 +60,8 @@ namespace picongpu
         /** Duration of one timestep
          *  unit: seconds */
         constexpr float_64 DELTA_T_SI = 0.5 * CELL_HEIGHT_SI / SPEED_OF_LIGHT_SI;
-        
-        
+
+
         /** Note on units in reduced dimensions
          *
          * In 2D3V simulations, the CELL_DEPTH_SI (Z) cell length

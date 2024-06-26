@@ -36,8 +36,6 @@ namespace picongpu
      * The functors must be default-constructible and take the current time iteration as the only parameter.
      * These are the same requirements as for functors in particles::InitPipeline.
      */
-    using IterationStartPipeline = pmacc::mp_list<
-                                                    particles::ExecuteIfTimeStepLe<50u, particles::PoissonSolver<1u>>
-                                                    >;
+    using IterationStartPipeline = pmacc::mp_list<particles::ExecuteIfTimeStepLe<5000u, particles::PoissonSolver<1u>>>;
 
 } // namespace picongpu
