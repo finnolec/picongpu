@@ -75,10 +75,10 @@ namespace picongpu
 
                     if((index.y() - SuperCellSizeValue.y() + gpuCellOffsetToTotalOrigin.y() == yPos1
                         || index.y() - SuperCellSizeValue.y() + gpuCellOffsetToTotalOrigin.y() == yPos2)
-                       && index.z() - SuperCellSizeValue.z() + gpuCellOffsetToTotalOrigin.z() == zPos
-                       && index.x() - SuperCellSizeValue.x() + gpuCellOffsetToTotalOrigin.x() == xPos)
+                       && index.z() - SuperCellSizeValue.z() + gpuCellOffsetToTotalOrigin.z() == zPos)
+                    //&& index.x() - SuperCellSizeValue.x() + gpuCellOffsetToTotalOrigin.x() == xPos)
                     {
-                        field(index) = {0, fieldValue, 0};
+                        field(index) = {fieldValue, 0, 0};
                         printf("fieldValue: %.3e \n", fieldValue);
                         printf("sine content: %.3e \n", currentStep * UNIT_TIME * omega);
                         // field(index) += {0, fieldValue, 0};
