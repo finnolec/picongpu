@@ -163,9 +163,9 @@ namespace picongpu
                     float_X slidingWindowCorrection;
                     if(isSlidingWindowActive)
                     {
-                        int const cellsUntilIntegrationPlane = slicePoint * globalGridSize[2];
-                        slidingWindowCorrection = cellsUntilIntegrationPlane * sim.si.getCellSize().z()
-                                                  + pluginNumT * dt * float_64(sim.si.getSpeedOfLight());
+                        int const cellsUntilIntegrationPlane = slicePoint * globalGridSize[2] * 0;
+                        slidingWindowCorrection = cellsUntilIntegrationPlane * SI::CELL_DEPTH_SI
+                            + pluginNumT * dt * float_64(SI::SPEED_OF_LIGHT_SI);
                     }
                     else
                     {
