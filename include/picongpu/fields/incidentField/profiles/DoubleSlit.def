@@ -1,0 +1,42 @@
+#pragma once
+
+#include "picongpu/fields/incidentField/profiles/BaseParam.def"
+#include "picongpu/fields/incidentField/profiles/PlaneWave.def"
+#include "picongpu/fields/incidentField/profiles/Traits.hpp"
+
+namespace picongpu
+{
+    namespace fields
+    {
+        namespace incidentField
+        {
+            namespace profiles
+            {
+                namespace defaults
+                {
+                    struct DoubleSlitParam : public PlaneWaveParam
+                    {
+                        /** Stretch temporal profile by a constant plateau between the up and downramp
+                         *  unit: seconds */
+                        static constexpr float_64 LASER_NOFOCUS_CONSTANT_SI = 13.34e-15;
+
+                        /** The laser pulse will be initialized after TIME_DELAY_SI half of PULSE_INIT times of the
+                         * PULSE_DURATION before and after the plateau unit: none */
+                        static constexpr float_64 RAMP_INIT = 20.6146;
+
+
+                        static constexpr float_64 SLIT_DISTANCE_SI = 1.0e-6;
+
+                        static constexpr float_64 SLIT_WIDTH_SI = 0.1e-6;
+
+                        template<typename My = DoubleSlitParam>
+                        static nlohmann::json metadata()
+                        {
+                            return DoubleSlitParam::metadata<My>();
+                        }
+                    };
+                } // namespace defaults
+            } // namespace profiles
+        } // namespace incidentField
+    } // namespace fields
+} // namespace picongpu

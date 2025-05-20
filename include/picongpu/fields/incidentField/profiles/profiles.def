@@ -26,6 +26,7 @@
 #if (ENABLE_OPENPMD == 1)
 #    include "picongpu/fields/incidentField/profiles/FromOpenPMDPulse.def"
 #endif
+#include "picongpu/fields/incidentField/profiles/DoubleSlit.def"
 #include "picongpu/fields/incidentField/profiles/None.def"
 #include "picongpu/fields/incidentField/profiles/PlaneWave.def"
 #include "picongpu/fields/incidentField/profiles/Polynom.def"
