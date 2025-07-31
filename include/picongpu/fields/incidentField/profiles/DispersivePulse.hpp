@@ -21,6 +21,7 @@
 
 #include "picongpu/defines.hpp"
 #include "picongpu/fields/incidentField/Functors.hpp"
+#include "picongpu/fields/incidentField/profiles/BaseParam.hpp"
 
 #include <pmacc/algorithms/math/defines/pi.hpp>
 #include <pmacc/math/Complex.hpp>

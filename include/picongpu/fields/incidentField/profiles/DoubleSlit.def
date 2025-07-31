@@ -36,6 +36,16 @@ namespace picongpu
                         }
                     };
                 } // namespace defaults
+
+
+                template<typename T_Params = defaults::DoubleSlitParam>
+                struct DoubleSlit;
+
+                template<typename T_Params>
+                struct MakePeriodicTransversalHuygensSurfaceContiguous<DoubleSlit<T_Params>>
+                {
+                    static constexpr bool value = true;
+                };
             } // namespace profiles
         } // namespace incidentField
     } // namespace fields

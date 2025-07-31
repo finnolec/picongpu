@@ -66,7 +66,7 @@ namespace picongpu
                         using Unitless = DoubleSlitUnitless<T_Params>;
 
                         //! Base class
-                        using Base = incidentField::detail::BaseSeparableFunctorE<T_Params>;
+                        using Base = PlaneWaveFunctorIncidentE<T_Params>;
 
                         /** Create a functor on the host side for the given time step
                          *
@@ -77,6 +77,20 @@ namespace picongpu
                         HINLINE DoubleSlitFunctorIncidentE(float_X const currentStep, float3_64 const unitField)
                             : Base(currentStep, unitField)
                         {
+                        }
+
+                        /** Calculate incident field E value for the given position
+                         *
+                         * Interface required by Base.
+                         *
+                         * @param totalCellIdx cell index in the total domain (including all moving window slides)
+                         * @return incident field E value in internal units
+                         */
+                        HDINLINE float3_X operator()(floatD_X const& totalCellIdx) const
+                        {
+                            return incidentField::detail::BaseSeparableFunctorE<T_Params>::operator()(
+                                *this,
+                                totalCellIdx);
                         }
 
                         /** Get position-dependent transversal scalar factor for the given position
@@ -91,15 +105,18 @@ namespace picongpu
 
                             // pos[0] is propagation direction
                             // pos[1] is polarization direction
-                            auto const transversalDistanceSquared = pos[2] * pos[2];
+                            auto const distanceLeft = pos[2] - Unitless::SLIT_DISTANCE / 2.0_X;
+                            auto const distanceRight = pos[2] + Unitless::SLIT_DISTANCE / 2.0_X;
 
-                            if(transversalDistanceSquared < Unitless::SLIT_WIDTH * Unitless::SLIT_WIDTH)
+                            if(math::abs(distanceLeft) < Unitless::SLIT_WIDTH / 2.0_X
+                               || math::abs(distanceRight) < Unitless::SLIT_WIDTH / 2.0_X)
+                            // if (math::abs(pos[2]) < Unitless::SLIT_WIDTH / 2.0_X)
                             {
-                                return 1.0;
+                                return 1.0_X;
                             }
                             else
                             {
-                                return 0.0;
+                                return 0.0_X;
                             }
                         }
                     };
@@ -128,6 +145,7 @@ namespace picongpu
                     using type = incidentField::detail::ApproximateIncidentB<
                         typename GetFunctorIncidentE<profiles::DoubleSlit<T_Params>>::type>;
                 };
-            } // namespace incidentField
-        } // namespace fields
-    }
+            } // namespace traits::detail
+        } // namespace incidentField
+    } // namespace fields
+} // namespace picongpu
