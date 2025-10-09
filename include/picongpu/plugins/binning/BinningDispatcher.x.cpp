@@ -91,7 +91,7 @@ namespace picongpu
                  * will be called only once per simulation and before notify() */
                 for(auto&& binner : binnerVector)
                 {
-                    binner->restart(restartStep, restartDirectory);
+                    // binner->restart(restartStep, restartDirectory);
                 }
             }
 

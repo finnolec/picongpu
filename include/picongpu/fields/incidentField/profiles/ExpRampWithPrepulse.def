@@ -82,7 +82,7 @@ namespace picongpu
                          *
                          * unit: none
                          */
-                        static constexpr float_64 RAMP_INIT = 8.0;
+                        static constexpr float_64 RAMP_INIT = 16.0;
                     };
 
                     /** Default param set for ExpRampWithPrepulse profile
