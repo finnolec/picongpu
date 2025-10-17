@@ -165,7 +165,7 @@ namespace picongpu
                     {
                         int const cellsUntilIntegrationPlane = slicePoint * globalGridSize[2] * 0;
                         slidingWindowCorrection = cellsUntilIntegrationPlane * SI::CELL_DEPTH_SI
-                            + pluginNumT * dt * float_64(SI::SPEED_OF_LIGHT_SI);
+                                                  + pluginNumT * dt * float_64(SI::SPEED_OF_LIGHT_SI);
                     }
                     else
                     {
